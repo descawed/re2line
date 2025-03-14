@@ -7,6 +7,7 @@ mod collision;
 mod rdt;
 mod view;
 mod math;
+mod script;
 
 fn main() -> eframe::Result {
     let file = FileDialog::new()
