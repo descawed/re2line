@@ -155,6 +155,7 @@ impl Rdt {
                     collider.x, collider.z, collider.w, collider.h,
                     [(0.0, 1.0), (0.0, 0.0), (1.0, 1.0)],
                 )) as Box<dyn collision::Collider>,
+                CollisionShape::Diamond => Box::new(collision::DiamondCollider::new(collider.x, collider.z, collider.w, collider.h)) as Box<dyn collision::Collider>,
                 CollisionShape::Circle => Box::new(collision::EllipseCollider::new(collider.x, collider.z, collider.w, collider.h)) as Box<dyn collision::Collider>,
                 _ => continue,
             });

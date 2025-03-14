@@ -56,6 +56,44 @@ impl Collider for RectCollider {
 }
 
 #[derive(Debug)]
+pub struct DiamondCollider {
+    x: Fixed12,
+    z: Fixed12,
+    width: UFixed12,
+    height: UFixed12,
+}
+
+impl DiamondCollider {
+    pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12) -> Self {
+        Self { x, z, width, height }
+    }
+}
+
+impl Collider for DiamondCollider {
+    fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
+        let (x, y, width, height) = draw_params.transform(self.x, self.z, self.width, self.height);
+        let x_radius = width / 2.0;
+        let y_radius = height / 2.0;
+
+        egui::Shape::Path(epaint::PathShape {
+            points: vec![
+                egui::Pos2::new(x + x_radius, y),
+                egui::Pos2::new(x + width, y + y_radius),
+                egui::Pos2::new(x + x_radius, y + height),
+                egui::Pos2::new(x, y + y_radius),
+            ],
+            closed: true,
+            fill: draw_params.fill_color,
+            stroke: epaint::PathStroke {
+                width: draw_params.stroke.width,
+                color: epaint::ColorMode::Solid(draw_params.stroke.color),
+                kind: draw_params.stroke_kind,
+            },
+        })
+    }
+}
+
+#[derive(Debug)]
 pub struct EllipseCollider {
     x: Fixed12,
     z: Fixed12,
