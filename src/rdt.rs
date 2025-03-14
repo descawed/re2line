@@ -105,34 +105,83 @@ struct Collision {
     colliders: Vec<Collider>,
 }
 
+impl Default for Collision {
+    fn default() -> Self {
+        Self {
+            cell_x: Fixed12(0),
+            cell_z: Fixed12(0),
+            count: 0,
+            ceiling: 0,
+            dummy: 0,
+            colliders: Vec::new(),
+        }
+    }
+}
+
 #[binrw]
 #[derive(Debug)]
 struct Floor {
-    x1: Fixed12,
-    z1: Fixed12,
-    x2: Fixed12,
-    z2: Fixed12,
-    x_size: Fixed12,
-    z_size: Fixed12,
+    x: Fixed12,
+    z: Fixed12,
+    width: UFixed12,
+    height: UFixed12,
+    unknown: u16,
+    level: u16,
+}
+
+#[binrw]
+#[derive(Debug)]
+struct FloorData {
+    num_floors: u16,
+    #[br(count = num_floors)]
+    floors: Vec<Floor>,
+    unknown: u16,
 }
 
 #[derive(Debug)]
 pub struct Rdt {
     collision: Collision,
+    floors: Vec<Floor>,
 }
 
 impl Rdt {
     pub fn read<T: Read + Seek>(mut f: T) -> Result<Self> {
         let header: RdtHeader = f.read_le().context("RDT header")?;
-        f.seek(SeekFrom::Start(header.collision_offset as u64))?;
+
+        let collision = if header.collision_offset == 0 {
+            Collision::default()
+        } else {
+            f.seek(SeekFrom::Start(header.collision_offset as u64))?;
+            f.read_le().context("RDT collision")?
+        };
+
+        let floors = if header.floor_offset == 0 {
+            Vec::new()
+        } else {
+            f.seek(SeekFrom::Start(header.floor_offset as u64))?;
+
+            let floor_data: FloorData = f.read_le().context("RDT floor data")?;
+            floor_data.floors
+        };
 
         Ok(Self {
-            collision: f.read_le().context("RDT collision")?,
+            collision,
+            floors,
         })
     }
 
     pub fn get_center(&self) -> (Fixed12, Fixed12) {
         (self.collision.cell_x, self.collision.cell_z)
+    }
+
+    pub fn get_floors(&self) -> Vec<collision::RectCollider> {
+        let mut floors = Vec::with_capacity(self.floors.len());
+
+        for floor in &self.floors {
+            floors.push(collision::RectCollider::new(floor.x, floor.z, floor.width, floor.height, 0.0));
+        }
+
+        floors
     }
 
     pub fn get_colliders(&self) -> Vec<Box<dyn collision::Collider>> {
