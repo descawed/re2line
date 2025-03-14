@@ -1,10 +1,11 @@
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use anyhow::{anyhow, Context, Result};
 use binrw::{binrw, BinReaderExt};
 
 use crate::collision;
 use crate::math::{Fixed12, UFixed12};
+use crate::script::Instruction;
 
 const CORNER_RADIUS: f32 = Fixed12(400).to_f32();
 
@@ -75,6 +76,54 @@ struct RdtHeader {
     animation_offset: u32,
 }
 
+impl RdtHeader {
+    fn init_script_size(&self) -> usize {
+        if self.init_script_offset == 0 {
+            return 0;
+        }
+
+        let next_offset = if self.exec_script_offset > 0 {
+            self.exec_script_offset
+        } else if self.sprite_id_offset > 0 {
+            self.sprite_id_offset
+        } else if self.sprite_data_offset > 0 {
+            self.sprite_data_offset
+        } else if self.sprite_texture_offset > 0 {
+            self.sprite_texture_offset
+        } else if self.model_texture_offset > 0 {
+            self.model_texture_offset
+        } else if self.animation_offset > 0 {
+            self.animation_offset
+        } else {
+            return 0;
+        };
+
+        (next_offset - self.init_script_offset) as usize
+    }
+
+    fn exec_script_size(&self) -> usize {
+        if self.exec_script_offset == 0 {
+            return 0;
+        }
+
+        let next_offset = if self.sprite_id_offset > 0 {
+            self.sprite_id_offset
+        } else if self.sprite_data_offset > 0 {
+            self.sprite_data_offset
+        } else if self.sprite_texture_offset > 0 {
+            self.sprite_texture_offset
+        } else if self.model_texture_offset > 0 {
+            self.model_texture_offset
+        } else if self.animation_offset > 0 {
+            self.animation_offset
+        } else {
+            return 0;
+        };
+
+        (next_offset - self.exec_script_offset) as usize
+    }
+}
+
 #[binrw]
 #[derive(Debug)]
 struct Collider {
@@ -142,6 +191,8 @@ struct FloorData {
 pub struct Rdt {
     collision: Collision,
     floors: Vec<Floor>,
+    init_script: Vec<Instruction>,
+    exec_script: Vec<Instruction>,
 }
 
 impl Rdt {
@@ -164,9 +215,45 @@ impl Rdt {
             floor_data.floors
         };
 
+        let init_script = if header.init_script_offset == 0 {
+            Vec::new()
+        } else {
+            f.seek(SeekFrom::Start(header.init_script_offset as u64))?;
+            let script_size = header.init_script_size();
+            let mut buf = vec![0u8; script_size];
+            f.read_exact(&mut buf)?;
+
+            let mut script = Vec::new();
+            let mut reader = Cursor::new(buf);
+            while reader.position() < script_size as u64 {
+                script.push(reader.read_le::<Instruction>()?);
+            }
+
+            script
+        };
+
+        let exec_script = if header.exec_script_offset == 0 {
+            Vec::new()
+        } else {
+            f.seek(SeekFrom::Start(header.exec_script_offset as u64))?;
+            let script_size = header.exec_script_size();
+            let mut buf = vec![0u8; script_size];
+            f.read_exact(&mut buf)?;
+
+            let mut script = Vec::new();
+            let mut reader = Cursor::new(buf);
+            while reader.position() < script_size as u64 {
+                script.push(reader.read_le::<Instruction>()?);
+            }
+
+            script
+        };
+
         Ok(Self {
             collision,
             floors,
+            init_script,
+            exec_script,
         })
     }
 
