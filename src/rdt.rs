@@ -9,10 +9,10 @@ use crate::math::{Fixed12, UFixed12};
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum CollisionShape {
     Rectangle,
-    TrianglePXPZ, // name indicates which quadrant the corner is in
-    TriangleNXPZ,
-    TrianglePXNZ,
-    TriangleNXNZ,
+    TriangleTopRight, // name indicates which quadrant the corner is in
+    TriangleTopLeft,
+    TriangleBottomRight,
+    TriangleBottomLeft,
     Diamond,
     Circle,
     RoundedRectangle,
@@ -24,10 +24,10 @@ impl TryFrom<u32> for CollisionShape {
     fn try_from(value: u32) -> std::result::Result<Self, Self::Error> {
         match value {
             0 | 9 | 10 | 11 | 12 | 13 | 14 | 15 => Ok(Self::Rectangle),
-            1 => Ok(Self::TrianglePXPZ),
-            2 => Ok(Self::TriangleNXPZ),
-            3 => Ok(Self::TrianglePXNZ),
-            4 => Ok(Self::TriangleNXNZ),
+            1 => Ok(Self::TriangleTopRight),
+            2 => Ok(Self::TriangleTopLeft),
+            3 => Ok(Self::TriangleBottomRight),
+            4 => Ok(Self::TriangleBottomLeft),
             5 => Ok(Self::Diamond),
             6 => Ok(Self::Circle),
             7 | 8 => Ok(Self::RoundedRectangle),
@@ -139,6 +139,22 @@ impl Rdt {
         for collider in &self.collision.colliders {
             colliders.push(match collider.shape() {
                 CollisionShape::Rectangle => Box::new(collision::RectCollider::new(collider.x, collider.z, collider.w, collider.h)) as Box<dyn collision::Collider>,
+                CollisionShape::TriangleTopRight => Box::new(collision::TriangleCollider::new(
+                    collider.x, collider.z, collider.w, collider.h,
+                    [(1.0, 1.0), (1.0, 0.0), (0.0, 0.0)],
+                )) as Box<dyn collision::Collider>,
+                CollisionShape::TriangleTopLeft => Box::new(collision::TriangleCollider::new(
+                    collider.x, collider.z, collider.w, collider.h,
+                    [(0.0, 1.0), (0.0, 0.0), (1.0, 0.0)],
+                )) as Box<dyn collision::Collider>,
+                CollisionShape::TriangleBottomRight => Box::new(collision::TriangleCollider::new(
+                    collider.x, collider.z, collider.w, collider.h,
+                    [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0)],
+                )) as Box<dyn collision::Collider>,
+                CollisionShape::TriangleBottomLeft => Box::new(collision::TriangleCollider::new(
+                    collider.x, collider.z, collider.w, collider.h,
+                    [(0.0, 1.0), (0.0, 0.0), (1.0, 1.0)],
+                )) as Box<dyn collision::Collider>,
                 CollisionShape::Circle => Box::new(collision::EllipseCollider::new(collider.x, collider.z, collider.w, collider.h)) as Box<dyn collision::Collider>,
                 _ => continue,
             });

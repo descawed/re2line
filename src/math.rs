@@ -179,6 +179,14 @@ impl PartialOrd<f32> for UFixed12 {
     }
 }
 
+impl std::ops::Neg for UFixed12 {
+    type Output = Fixed12;
+
+    fn neg(self) -> Self::Output {
+        Fixed12(-(self.0 as i16))
+    }
+}
+
 impl std::ops::Add<UFixed12> for Fixed12 {
     type Output = Self;
 

@@ -9,6 +9,17 @@ pub struct DrawParams {
     pub stroke_kind: egui::StrokeKind,
 }
 
+impl DrawParams {
+    fn transform(&self, x: Fixed12, z: Fixed12, w: UFixed12, h: UFixed12) -> (f32, f32, f32, f32) {
+        (
+            x * self.scale - self.origin.x,
+            -(z + h) * self.scale - self.origin.y,
+            w * self.scale,
+            h * self.scale,
+        )
+    }
+}
+
 pub trait Collider {
     fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape;
 }
@@ -29,10 +40,7 @@ impl RectCollider {
 
 impl Collider for RectCollider {
     fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
-        let x = self.x * draw_params.scale - draw_params.origin.x;
-        let y = -(self.z + self.height) * draw_params.scale - draw_params.origin.y;
-        let width = self.width * draw_params.scale;
-        let height = self.height * draw_params.scale;
+        let (x, y, width, height) = draw_params.transform(self.x, self.z, self.width, self.height);
 
         egui::Shape::Rect(epaint::RectShape::new(
             egui::Rect {
@@ -63,10 +71,7 @@ impl EllipseCollider {
 
 impl Collider for EllipseCollider {
     fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
-        let x = self.x * draw_params.scale - draw_params.origin.x;
-        let y = -(self.z + self.height) * draw_params.scale - draw_params.origin.y;
-        let width = self.width * draw_params.scale;
-        let height = self.height * draw_params.scale;
+        let (x, y, width, height) = draw_params.transform(self.x, self.z, self.width, self.height);
 
         let radius_x = width / 2.0;
         let radius_y = height / 2.0;
@@ -78,6 +83,49 @@ impl Collider for EllipseCollider {
             radius: egui::Vec2::new(radius_x, radius_y),
             fill: draw_params.fill_color,
             stroke: draw_params.stroke,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct TriangleCollider {
+    x: Fixed12,
+    z: Fixed12,
+    width: UFixed12,
+    height: UFixed12,
+    offsets: [(f32, f32); 3],
+}
+
+impl TriangleCollider {
+    pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, offsets: [(f32, f32); 3]) -> Self {
+        Self { x, z, width, height, offsets }
+    }
+}
+
+impl Collider for TriangleCollider {
+    fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
+        let (x, y, width, height) = draw_params.transform(self.x, self.z, self.width, self.height);
+
+        let x1 = x + self.offsets[0].0 * width;
+        let y1 = y + self.offsets[0].1 * height;
+        let x2 = x + self.offsets[1].0 * width;
+        let y2 = y + self.offsets[1].1 * height;
+        let x3 = x + self.offsets[2].0 * width;
+        let y3 = y + self.offsets[2].1 * height;
+
+        egui::Shape::Path(epaint::PathShape {
+            points: vec![
+                egui::Pos2::new(x1, y1),
+                egui::Pos2::new(x2, y2),
+                egui::Pos2::new(x3, y3),
+            ],
+            closed: true,
+            fill: draw_params.fill_color,
+            stroke: epaint::PathStroke {
+                width: draw_params.stroke.width,
+                color: epaint::ColorMode::Solid(draw_params.stroke.color),
+                kind: draw_params.stroke_kind,
+            },
         })
     }
 }
