@@ -3,6 +3,7 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 use anyhow::{anyhow, Context, Result};
 use binrw::{binrw, BinReaderExt};
 
+use crate::aot::Entity;
 use crate::collision;
 use crate::math::{Fixed12, UFixed12};
 use crate::script::Instruction;
@@ -192,11 +193,14 @@ pub struct Rdt {
     collision: Collision,
     floors: Vec<Floor>,
     init_script: Vec<Instruction>,
-    exec_script: Vec<Instruction>,
+    exec_script: Vec<Vec<Instruction>>,
 }
 
 impl Rdt {
     pub fn read<T: Read + Seek>(mut f: T) -> Result<Self> {
+        let file_size = f.seek(SeekFrom::End(0))?;
+        f.seek(SeekFrom::Start(0))?;
+
         let header: RdtHeader = f.read_le().context("RDT header")?;
 
         let collision = if header.collision_offset == 0 {
@@ -227,6 +231,11 @@ impl Rdt {
             let mut reader = Cursor::new(buf);
             while reader.position() < script_size as u64 {
                 script.push(reader.read_le::<Instruction>()?);
+                // the size calculation may not be reliable, so if we see the end-of-function
+                // instruction, we'll go ahead and bail
+                if matches!(script.last().unwrap(), Instruction::EvtEnd(_)) {
+                    break;
+                }
             }
 
             script
@@ -235,18 +244,55 @@ impl Rdt {
         let exec_script = if header.exec_script_offset == 0 {
             Vec::new()
         } else {
-            f.seek(SeekFrom::Start(header.exec_script_offset as u64))?;
-            let script_size = header.exec_script_size();
-            let mut buf = vec![0u8; script_size];
-            f.read_exact(&mut buf)?;
+            let exec_script_offset = header.exec_script_offset as u64;
+            f.seek(SeekFrom::Start(exec_script_offset))?;
 
-            let mut script = Vec::new();
-            let mut reader = Cursor::new(buf);
-            while reader.position() < script_size as u64 {
-                script.push(reader.read_le::<Instruction>()?);
+            let mut script_size = header.exec_script_size();
+            if exec_script_offset + script_size as u64 > file_size {
+                script_size = (file_size - exec_script_offset) as usize;
             }
 
-            script
+            if script_size == 0 {
+                Vec::new()
+            } else {
+                let mut buf = vec![0u8; script_size];
+                f.read_exact(&mut buf)?;
+
+                let mut reader = Cursor::new(buf);
+
+                let offset: u16 = reader.read_le()?;
+                let num_functions = (offset >> 1) as usize;
+
+                let mut offsets = Vec::with_capacity(num_functions + 1);
+                offsets.push(offset as u64);
+                while offsets.len() < num_functions {
+                    let offset = reader.read_le::<u16>()? as u64;
+                    offsets.push(offset);
+                }
+                offsets.push(script_size as u64);
+
+                let mut script = Vec::with_capacity(num_functions);
+                for pair in offsets.windows(2) {
+                    let offset = pair[0];
+                    let next_offset = pair[1];
+
+                    reader.seek(SeekFrom::Start(offset))?;
+
+                    let mut function = Vec::new();
+                    while reader.position() < next_offset {
+                        function.push(reader.read_le::<Instruction>()?);
+                        // the size calculation may not be reliable, so if we see the end-of-function
+                        // instruction, we'll go ahead and bail
+                        if matches!(function.last().unwrap(), Instruction::EvtEnd(_)) {
+                            break;
+                        }
+                    }
+
+                    script.push(function);
+                }
+
+                script
+            }
         };
 
         Ok(Self {
@@ -271,34 +317,51 @@ impl Rdt {
         floors
     }
 
-    pub fn get_colliders(&self) -> Vec<Box<dyn collision::Collider>> {
+    pub fn get_colliders(&self) -> Vec<collision::Collider> {
         let mut colliders = Vec::with_capacity(self.collision.colliders.len());
 
         for collider in &self.collision.colliders {
             colliders.push(match collider.shape() {
-                CollisionShape::Rectangle => Box::new(collision::RectCollider::new(collider.x, collider.z, collider.w, collider.h, 0.0)) as Box<dyn collision::Collider>,
-                CollisionShape::TriangleTopRight => Box::new(collision::TriangleCollider::new(
+                CollisionShape::Rectangle => collision::Collider::Rect(collision::RectCollider::new(collider.x, collider.z, collider.w, collider.h, 0.0)),
+                CollisionShape::TriangleTopRight => collision::Collider::Triangle(collision::TriangleCollider::new(
                     collider.x, collider.z, collider.w, collider.h,
                     [(1.0, 1.0), (1.0, 0.0), (0.0, 0.0)],
-                )) as Box<dyn collision::Collider>,
-                CollisionShape::TriangleTopLeft => Box::new(collision::TriangleCollider::new(
+                )),
+                CollisionShape::TriangleTopLeft => collision::Collider::Triangle(collision::TriangleCollider::new(
                     collider.x, collider.z, collider.w, collider.h,
                     [(0.0, 1.0), (0.0, 0.0), (1.0, 0.0)],
-                )) as Box<dyn collision::Collider>,
-                CollisionShape::TriangleBottomRight => Box::new(collision::TriangleCollider::new(
+                )),
+                CollisionShape::TriangleBottomRight => collision::Collider::Triangle(collision::TriangleCollider::new(
                     collider.x, collider.z, collider.w, collider.h,
                     [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0)],
-                )) as Box<dyn collision::Collider>,
-                CollisionShape::TriangleBottomLeft => Box::new(collision::TriangleCollider::new(
+                )),
+                CollisionShape::TriangleBottomLeft => collision::Collider::Triangle(collision::TriangleCollider::new(
                     collider.x, collider.z, collider.w, collider.h,
                     [(0.0, 1.0), (0.0, 0.0), (1.0, 1.0)],
-                )) as Box<dyn collision::Collider>,
-                CollisionShape::Diamond => Box::new(collision::DiamondCollider::new(collider.x, collider.z, collider.w, collider.h)) as Box<dyn collision::Collider>,
-                CollisionShape::Circle => Box::new(collision::EllipseCollider::new(collider.x, collider.z, collider.w, collider.h)) as Box<dyn collision::Collider>,
-                CollisionShape::RoundedRectangle => Box::new(collision::RectCollider::new(collider.x, collider.z, collider.w, collider.h, CORNER_RADIUS)) as Box<dyn collision::Collider>,
+                )),
+                CollisionShape::Diamond => collision::Collider::Diamond(collision::DiamondCollider::new(collider.x, collider.z, collider.w, collider.h)),
+                CollisionShape::Circle => collision::Collider::Ellipse(collision::EllipseCollider::new(collider.x, collider.z, collider.w, collider.h)),
+                CollisionShape::RoundedRectangle => collision::Collider::Rect(collision::RectCollider::new(collider.x, collider.z, collider.w, collider.h, CORNER_RADIUS)),
             });
         }
 
         colliders
+    }
+
+    fn get_script_entities(vec: &mut Vec<Entity>, script: &[Instruction]) {
+        for entity in script.iter().filter_map(Instruction::to_entity) {
+            vec.push(entity);
+        }
+    }
+
+    pub fn get_entities(&self) -> Vec<Entity> {
+        let mut entities = Vec::new();
+
+        Self::get_script_entities(&mut entities, &self.init_script);
+        for function in &self.exec_script {
+            Self::get_script_entities(&mut entities, function.as_slice());
+        }
+
+        entities
     }
 }

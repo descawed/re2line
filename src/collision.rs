@@ -20,10 +20,6 @@ impl DrawParams {
     }
 }
 
-pub trait Collider {
-    fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape;
-}
-
 #[derive(Debug)]
 pub struct RectCollider {
     x: Fixed12,
@@ -37,10 +33,8 @@ impl RectCollider {
     pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, corner_radius: f32) -> Self {
         Self { x, z, width, height, corner_radius }
     }
-}
 
-impl Collider for RectCollider {
-    fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
+    pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
         let (x, y, width, height) = draw_params.transform(self.x, self.z, self.width, self.height);
         // TODO: verify in-game whether the corners are actually rounded or if they're sharply cut the way they appear
         //  in RE2RDTE
@@ -71,10 +65,8 @@ impl DiamondCollider {
     pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12) -> Self {
         Self { x, z, width, height }
     }
-}
 
-impl Collider for DiamondCollider {
-    fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
+    pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
         let (x, y, width, height) = draw_params.transform(self.x, self.z, self.width, self.height);
         let x_radius = width / 2.0;
         let y_radius = height / 2.0;
@@ -109,10 +101,8 @@ impl EllipseCollider {
     pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12) -> Self {
         Self { x, z, width, height }
     }
-}
 
-impl Collider for EllipseCollider {
-    fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
+    pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
         let (x, y, width, height) = draw_params.transform(self.x, self.z, self.width, self.height);
 
         let radius_x = width / 2.0;
@@ -142,10 +132,8 @@ impl TriangleCollider {
     pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, offsets: [(f32, f32); 3]) -> Self {
         Self { x, z, width, height, offsets }
     }
-}
 
-impl Collider for TriangleCollider {
-    fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
+    pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
         let (x, y, width, height) = draw_params.transform(self.x, self.z, self.width, self.height);
 
         let x1 = x + self.offsets[0].0 * width;
@@ -169,5 +157,71 @@ impl Collider for TriangleCollider {
                 kind: draw_params.stroke_kind,
             },
         })
+    }
+}
+
+#[derive(Debug)]
+pub struct QuadCollider {
+    x1: Fixed12,
+    z1: Fixed12,
+    x2: Fixed12,
+    z2: Fixed12,
+    x3: Fixed12,
+    z3: Fixed12,
+    x4: Fixed12,
+    z4: Fixed12,
+}
+
+impl QuadCollider {
+    pub fn new(x1: Fixed12, z1: Fixed12, x2: Fixed12, z2: Fixed12, x3: Fixed12, z3: Fixed12, x4: Fixed12, z4: Fixed12) -> Self {
+        Self { x1, z1, x2, z2, x3, z3, x4, z4 }
+    }
+
+    pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
+        let x1 = self.x1 * draw_params.scale - draw_params.origin.x;
+        let y1 = -self.z1 * draw_params.scale - draw_params.origin.y;
+        let x2 = self.x2 * draw_params.scale - draw_params.origin.x;
+        let y2 = -self.z2 * draw_params.scale - draw_params.origin.y;
+        let x3 = self.x3 * draw_params.scale - draw_params.origin.x;
+        let y3 = -self.z3 * draw_params.scale - draw_params.origin.y;
+        let x4 = self.x4 * draw_params.scale - draw_params.origin.x;
+        let y4 = -self.z4 * draw_params.scale - draw_params.origin.y;
+
+        egui::Shape::Path(epaint::PathShape {
+            points: vec![
+                egui::Pos2::new(x1, y1),
+                egui::Pos2::new(x2, y2),
+                egui::Pos2::new(x3, y3),
+                egui::Pos2::new(x4, y4),
+            ],
+            closed: true,
+            fill: draw_params.fill_color,
+            stroke: epaint::PathStroke {
+                width: draw_params.stroke.width,
+                color: epaint::ColorMode::Solid(draw_params.stroke.color),
+                kind: draw_params.stroke_kind,
+            },
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum Collider {
+    Rect(RectCollider),
+    Diamond(DiamondCollider),
+    Ellipse(EllipseCollider),
+    Triangle(TriangleCollider),
+    Quad(QuadCollider),
+}
+
+impl Collider {
+    pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
+        match self {
+            Self::Rect(rect) => rect.gui_shape(draw_params),
+            Self::Diamond(diamond) => diamond.gui_shape(draw_params),
+            Self::Ellipse(ellipse) => ellipse.gui_shape(draw_params),
+            Self::Triangle(triangle) => triangle.gui_shape(draw_params),
+            Self::Quad(quad) => quad.gui_shape(draw_params),
+        }
     }
 }

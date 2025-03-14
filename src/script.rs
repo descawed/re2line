@@ -1,5 +1,7 @@
 use binrw::binrw;
 
+use crate::aot::{Entity, EntityForm};
+use crate::collision::{Collider, QuadCollider, RectCollider};
 use crate::math::{Fixed12, UFixed12};
 
 #[binrw]
@@ -581,4 +583,85 @@ pub enum Instruction {
         timer1: u16,
         data16: u16,
     },
+}
+
+impl Instruction {
+    pub fn to_entity(&self) -> Option<Entity> {
+        Some(match self {
+            Self::AotSet { aot, sce, n_floor, x, z, w, h, .. } => Entity::new(
+                EntityForm::Other,
+                Collider::Rect(RectCollider::new(*x, *z, *w, *h, 0.0)),
+                *n_floor,
+                *aot as u8,
+                *sce,
+            ),
+            Self::DoorAotSet { aot, sce, n_floor, x, z, w, h, next_pos_x, next_pos_y, next_pos_z, next_cdir_y, next_stage, next_room, next_nfloor, .. } =>
+                Entity::new(
+                    EntityForm::Door {
+                        next_pos_x: *next_pos_x,
+                        next_pos_y: *next_pos_y,
+                        next_pos_z: *next_pos_z,
+                        next_cdir_y: *next_cdir_y,
+                        next_stage: *next_stage,
+                        next_room: *next_room,
+                        next_n_floor: *next_nfloor,
+                    },
+                    Collider::Rect(RectCollider::new(*x, *z, *w, *h, 0.0)),
+                    *n_floor,
+                    *aot,
+                    *sce,
+                ),
+            Self::AotSet4p { aot, sce, n_floor, x0, z0, x1, z1, x2, z2, x3, z3, .. } => Entity::new(
+                EntityForm::Other,
+                Collider::Quad(QuadCollider::new(*x0, *z0, *x1, *z1, *x2, *z2, *x3, *z3)),
+                *n_floor,
+                *aot,
+                *sce,
+            ),
+            Self::DoorAotSet4p { aot, sce, n_floor, x0, z0, x1, z1, x2, z2, x3, z3, next_pos_x, next_pos_y, next_pos_z, next_cdir_y, next_stage, next_room, next_nfloor, .. } =>
+                Entity::new(
+                    EntityForm::Door {
+                        next_pos_x: *next_pos_x,
+                        next_pos_y: *next_pos_y,
+                        next_pos_z: *next_pos_z,
+                        next_cdir_y: *next_cdir_y,
+                        next_stage: *next_stage,
+                        next_room: *next_room,
+                        next_n_floor: *next_nfloor,
+                    },
+                    Collider::Quad(QuadCollider::new(*x0, *z0, *x1, *z1, *x2, *z2, *x3, *z3)),
+                    *n_floor,
+                    *aot,
+                    *sce,
+                ),
+            Self::ItemAotSet4p { aot, sce, n_floor, x0, z0, x1, z1, x2, z2, x3, z3, i_item, n_item, flag, md1, action, .. } => Entity::new(
+                EntityForm::Item {
+                    i_item: *i_item,
+                    n_item: *n_item,
+                    flag: *flag,
+                    md1: *md1,
+                    action: *action,
+                },
+                Collider::Quad(QuadCollider::new(*x0, *z0, *x1, *z1, *x2, *z2, *x3, *z3)),
+                *n_floor,
+                *aot,
+                *sce,
+            ),
+            Self::ItemAotSet { aot, sce, n_floor, x, z, w, h, i_item, n_item, flag, md1, action, .. } |
+            Self::ItemAotSet2 { aot, sce, n_floor, x, z, w, h, i_item, n_item, flag, md1, action, .. } => Entity::new(
+                EntityForm::Item {
+                    i_item: *i_item,
+                    n_item: *n_item,
+                    flag: *flag,
+                    md1: *md1,
+                    action: *action,
+                },
+                Collider::Rect(RectCollider::new(*x, *z, *w, *h, 0.0)),
+                *n_floor,
+                *aot,
+                *sce,
+            ),
+            _ => return None,
+        })
+    }
 }
