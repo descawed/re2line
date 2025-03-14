@@ -51,7 +51,7 @@ impl eframe::App for View {
             let floor_draw_params = DrawParams {
                 origin: view_center,
                 scale: self.scale,
-                fill_color: egui::Color32::DARK_RED,
+                fill_color: egui::Color32::from_rgb(0xa4, 0x4d, 0x68),
                 stroke: egui::Stroke::NONE,
                 stroke_kind: egui::StrokeKind::Outside,
             };
@@ -67,7 +67,7 @@ impl eframe::App for View {
                 fill_color: egui::Color32::TRANSPARENT,
                 stroke: egui::Stroke {
                     width: 1.0,
-                    color: egui::Color32::GREEN,
+                    color: egui::Color32::from_rgb(0x63, 0xb3, 0x4d),
                 },
                 stroke_kind: egui::StrokeKind::Middle,
             };
@@ -87,12 +87,28 @@ impl eframe::App for View {
 
             for entity in &self.entities {
                 entity_draw_params.fill_color = match entity.sce() {
-                    SceType::Door => egui::Color32::BLUE,
-                    SceType::Item => egui::Color32::LIGHT_GRAY,
-                    SceType::Damage => egui::Color32::ORANGE,
-                    SceType::Normal => continue, // don't know what this is but they're huge and cover the whole screen
-                    _ => egui::Color32::YELLOW,
+                    SceType::Door => egui::Color32::from_rgb(0x59, 0x70, 0xd8),
+                    SceType::Item => egui::Color32::from_rgb(0x4c, 0xb2, 0x92),
+                    SceType::Damage => egui::Color32::from_rgb(0xd2, 0x52, 0x2c),
+                    SceType::Message => egui::Color32::from_rgb(0xb9, 0x78, 0x31),
+                    SceType::Water => egui::Color32::from_rgb(0x5e, 0x9b, 0xd5),
+                    SceType::Normal => egui::Color32::from_rgb(0xdb, 0x8b, 0x72),
+                    SceType::Event => egui::Color32::from_rgb(0xd0, 0x77, 0xe1),
+                    SceType::FlagChg => egui::Color32::from_rgb(0xc2, 0x42, 0x9e),
+                    SceType::Move => egui::Color32::from_rgb(0x69, 0x7b, 0x37),
+                    SceType::Windows => egui::Color32::from_rgb(0x79, 0x61, 0xa4),
+                    SceType::ItemBox => egui::Color32::from_rgb(0xbc, 0xb0, 0x45),
+                    SceType::Status => egui::Color32::from_rgb(0xde, 0x4f, 0x85),
+                    SceType::Save => egui::Color32::from_rgb(0xca, 0x46, 0x4d),
+                    SceType::Hikidashi => egui::Color32::from_rgb(0x91, 0x50, 0xc3),
+                    SceType::Auto => egui::Color32::from_rgb(0xcf, 0x8d, 0xc9),
+                    SceType::Unknown => egui::Color32::BLACK,
                 };
+
+                // make entities partially transparent so we can still see the scene and any overlapping
+                // entities
+                let rgba: egui::Rgba = entity_draw_params.fill_color.into();
+                entity_draw_params.fill_color = rgba.multiply(0.5).into();
 
                 let shape = entity.gui_shape(&entity_draw_params);
                 ui.painter().add(shape);
