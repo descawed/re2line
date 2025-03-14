@@ -6,6 +6,8 @@ use binrw::{binrw, BinReaderExt};
 use crate::collision;
 use crate::math::{Fixed12, UFixed12};
 
+const CORNER_RADIUS: f32 = Fixed12(400).to_f32();
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum CollisionShape {
     Rectangle,
@@ -138,7 +140,7 @@ impl Rdt {
 
         for collider in &self.collision.colliders {
             colliders.push(match collider.shape() {
-                CollisionShape::Rectangle => Box::new(collision::RectCollider::new(collider.x, collider.z, collider.w, collider.h)) as Box<dyn collision::Collider>,
+                CollisionShape::Rectangle => Box::new(collision::RectCollider::new(collider.x, collider.z, collider.w, collider.h, 0.0)) as Box<dyn collision::Collider>,
                 CollisionShape::TriangleTopRight => Box::new(collision::TriangleCollider::new(
                     collider.x, collider.z, collider.w, collider.h,
                     [(1.0, 1.0), (1.0, 0.0), (0.0, 0.0)],
@@ -157,7 +159,7 @@ impl Rdt {
                 )) as Box<dyn collision::Collider>,
                 CollisionShape::Diamond => Box::new(collision::DiamondCollider::new(collider.x, collider.z, collider.w, collider.h)) as Box<dyn collision::Collider>,
                 CollisionShape::Circle => Box::new(collision::EllipseCollider::new(collider.x, collider.z, collider.w, collider.h)) as Box<dyn collision::Collider>,
-                _ => continue,
+                CollisionShape::RoundedRectangle => Box::new(collision::RectCollider::new(collider.x, collider.z, collider.w, collider.h, CORNER_RADIUS)) as Box<dyn collision::Collider>,
             });
         }
 

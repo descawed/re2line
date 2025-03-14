@@ -30,24 +30,28 @@ pub struct RectCollider {
     z: Fixed12,
     width: UFixed12,
     height: UFixed12,
+    corner_radius: f32,
 }
 
 impl RectCollider {
-    pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12) -> Self {
-        Self { x, z, width, height }
+    pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, corner_radius: f32,) -> Self {
+        Self { x, z, width, height, corner_radius }
     }
 }
 
 impl Collider for RectCollider {
     fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
         let (x, y, width, height) = draw_params.transform(self.x, self.z, self.width, self.height);
+        // TODO: verify in-game whether the corners are actually rounded or if they're sharply cut the way they appear
+        //  in RE2RDTE
+        let corner_radius = epaint::CornerRadiusF32::same(self.corner_radius * draw_params.scale);
 
         egui::Shape::Rect(epaint::RectShape::new(
             egui::Rect {
                 min: egui::Pos2 { x, y },
                 max: egui::Pos2 { x: x + width, y: y + height },
             },
-            epaint::CornerRadius::ZERO,
+            corner_radius,
             draw_params.fill_color,
             draw_params.stroke,
             draw_params.stroke_kind,

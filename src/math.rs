@@ -3,7 +3,7 @@ use derive_more::{Add, AddAssign, From, Into, Neg, Sub, SubAssign};
 
 #[binrw]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Add, AddAssign, From, Into, Neg, Sub, SubAssign)]
-pub struct Fixed12(i16);
+pub struct Fixed12(pub i16);
 
 impl Fixed12 {
     pub const fn from_f32(f: f32) -> Self {
@@ -92,7 +92,7 @@ impl PartialOrd<f32> for Fixed12 {
 
 #[binrw]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Add, AddAssign, From, Into, Sub, SubAssign)]
-pub struct UFixed12(u16);
+pub struct UFixed12(pub u16);
 
 impl UFixed12 {
     pub const fn from_f32(f: f32) -> Self {
