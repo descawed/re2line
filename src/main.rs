@@ -5,12 +5,16 @@ use std::path::PathBuf;
 
 use rfd::FileDialog;
 
+mod app;
 mod collision;
 mod rdt;
-mod view;
 mod math;
 mod script;
 mod aot;
+
+fn make_eframe_error(e: anyhow::Error) -> eframe::Error {
+    eframe::Error::AppCreation(std::io::Error::new(std::io::ErrorKind::Other, e).into())
+}
 
 fn main() -> eframe::Result {
     let args: Vec<String> = env::args().collect();
@@ -32,15 +36,9 @@ fn main() -> eframe::Result {
         rdt::Rdt::read(reader)
     }) {
         Ok(rdt) => rdt,
-        Err(e) => return Err(eframe::Error::AppCreation(std::io::Error::new(std::io::ErrorKind::Other, e).into())),
+        Err(e) => return Err(make_eframe_error(e)),
     };
 
-    let view = view::View::new(rdt);
-
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1920.0, 1080.0]),
-        ..Default::default()
-    };
-
-    eframe::run_native("re2line", options, Box::new(|_| Ok(Box::new(view))))
+    let app = app::App::new(rdt).map_err(make_eframe_error)?;
+    eframe::run_native(app::APP_NAME, eframe::NativeOptions::default(), Box::new(|_| Ok(Box::new(app))))
 }
