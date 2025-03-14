@@ -34,7 +34,7 @@ pub struct RectCollider {
 }
 
 impl RectCollider {
-    pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, corner_radius: f32,) -> Self {
+    pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, corner_radius: f32) -> Self {
         Self { x, z, width, height, corner_radius }
     }
 }

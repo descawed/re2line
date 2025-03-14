@@ -7,6 +7,7 @@ use crate::rdt::Rdt;
 pub struct View {
     center: (Fixed12, Fixed12),
     colliders: Vec<Box<dyn Collider>>,
+    pan: egui::Vec2,
     scale: f32,
 }
 
@@ -16,6 +17,7 @@ impl View {
         Self {
             center: (x, -y),
             colliders: rdt.get_colliders(),
+            pan: egui::Vec2::ZERO,
             scale: 20.0,
         }
     }
@@ -23,15 +25,21 @@ impl View {
 
 impl eframe::App for View {
     fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
-        let (viewport, scroll) = ctx.input(|i| (i.screen_rect(), i.smooth_scroll_delta));
+        let (viewport, scroll) = ctx.input(|i| {
+            if i.pointer.primary_down() && !i.pointer.primary_pressed() {
+                self.pan -= i.pointer.delta();
+            }
 
-        self.scale += scroll.y * 0.01;
+            (i.screen_rect(), i.smooth_scroll_delta)
+        });
+
+        self.scale += scroll.y * 0.05;
 
         let window_center = viewport.center();
         let view_center = egui::Pos2::new(
             self.center.0 * self.scale - window_center.x,
             self.center.1 * self.scale - window_center.y,
-        );
+        ) + self.pan;
 
         let draw_params = DrawParams {
             origin: view_center,
