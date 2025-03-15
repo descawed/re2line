@@ -1,6 +1,7 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use enum_map::{enum_map, Enum, EnumMap};
 use egui::Color32;
 use serde::{Deserialize, Serialize};
@@ -9,6 +10,36 @@ use crate::aot::SceType;
 use crate::collision::DrawParams;
 
 const STROKE_WIDTH: f32 = 1.0;
+const STAGE_CHARACTERS: &str = "123456789ABCDEFG";
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Deserialize, Serialize)]
+pub struct RoomId {
+     pub stage: u8,
+     pub room: u8,
+     pub player: u8,
+}
+
+impl std::fmt::Display for RoomId {
+     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+          write!(f, "{}{:02X}{}", self.stage + 1, self.room, self.player)
+     }
+}
+
+impl FromStr for RoomId {
+     type Err = anyhow::Error;
+
+     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+          if s.len() != 4 {
+               return Err(anyhow!("Invalid room ID: {}", s));
+          }
+          
+          let stage = STAGE_CHARACTERS.find(s.get(0..1).unwrap()).ok_or_else(|| anyhow!("Invalid stage ID in room ID {}", s))? as u8;
+          let room = u8::from_str_radix(s.get(1..3).unwrap(), 16)?;
+          let player = s.get(3..4).ok_or_else(|| anyhow!("Invalid player ID in room ID {}", s))?.parse::<u8>()?;
+          
+          Ok(Self { stage, room, player })
+     }
+}
 
 #[derive(Debug, Enum, PartialEq, Eq, Hash, Clone, Copy, Deserialize, Serialize)]
 pub(super) enum ObjectType {
@@ -107,7 +138,7 @@ impl ObjectSettings {
 #[derive(Debug, Deserialize, Serialize)]
 pub(super) struct Config {
      pub rdt_folder: Option<PathBuf>,
-     pub last_rdt: Option<PathBuf>,
+     pub last_rdt: Option<RoomId>,
      pub zoom_scale: f32,
      pub object_settings: EnumMap<ObjectType, ObjectSettings>,
 }
@@ -137,12 +168,12 @@ impl Config {
           Ok(())
      }
      
-     pub fn get_object_settings(&self, object_type: ObjectType) -> &ObjectSettings {
-          &self.object_settings[object_type]
-     }
-     
      pub fn get_draw_params(&self, object_type: ObjectType, origin: egui::Pos2) -> DrawParams {
           self.object_settings[object_type].get_draw_params(origin, self.zoom_scale)
+     }
+     
+     pub fn should_show(&self, object_type: ObjectType) -> bool {
+          self.object_settings[object_type].show
      }
 }
 

@@ -1,9 +1,5 @@
 use std::env;
-use std::fs::File;
-use std::io::BufReader;
 use std::path::PathBuf;
-
-use rfd::FileDialog;
 
 mod app;
 mod collision;
@@ -19,26 +15,16 @@ fn make_eframe_error(e: anyhow::Error) -> eframe::Error {
 fn main() -> eframe::Result {
     let args: Vec<String> = env::args().collect();
 
-    let file = if args.len() == 2 {
-        PathBuf::from(args[1].clone())
+    let mut app = app::App::new().map_err(make_eframe_error)?;
+    if args.len() > 1 {
+        app.load_rdt(PathBuf::from(&args[1])).map_err(make_eframe_error)?;
     } else {
-        match FileDialog::new()
-            .add_filter("RDTs", &["rdt", "RDT"])
-            .set_directory("/media/jacob/E2A6DD85A6DD5A9D/games/BIOHAZARD 2 PC/pl0/Rdt") // TODO: remove after testing
-            .pick_file() {
-            Some(path) => path,
-            None => return Ok(()),
+        // if we bail on this error then it'll be impossible to start the app without manually
+        // editing the config file
+        if let Err(e) = app.try_resume_rdt() {
+            eprintln!("Failed to load previous RDT: {}", e);
         }
-    };
-
-    let rdt = match File::open(file).map_err(anyhow::Error::new).and_then(|f| {
-        let reader = BufReader::new(f);
-        rdt::Rdt::read(reader)
-    }) {
-        Ok(rdt) => rdt,
-        Err(e) => return Err(make_eframe_error(e)),
-    };
-
-    let app = app::App::new(rdt).map_err(make_eframe_error)?;
+    }
+    
     eframe::run_native(app::APP_NAME, eframe::NativeOptions::default(), Box::new(|_| Ok(Box::new(app))))
 }

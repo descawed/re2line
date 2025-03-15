@@ -1,6 +1,11 @@
+use std::fs::File;
+use std::path::Path;
+use std::io::BufReader;
+
 use anyhow::Result;
 use eframe::{Frame, Storage};
 use egui::Context;
+use rfd::FileDialog;
 
 use crate::aot::Entity;
 use crate::collision::{Collider, RectCollider};
@@ -22,25 +27,22 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(rdt: Rdt) -> Result<Self> {
-        let (x, y) = rdt.get_center();
+    pub fn new() -> Result<Self> {
         Ok(Self {
-            center: (x, -y),
-            colliders: rdt.get_colliders(),
-            entities: rdt.get_entities(),
-            floors: rdt.get_floors(),
+            center: (Fixed12(0), Fixed12(0)),
+            colliders: Vec::new(),
+            entities: Vec::new(),
+            floors: Vec::new(),
             pan: egui::Vec2::ZERO,
             config: Config::get()?,
         })
     }
-    
+
     const fn scale(&self) -> f32 {
         self.config.zoom_scale
     }
-}
 
-impl eframe::App for App {
-    fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
+    fn handle_input(&mut self, ctx: &Context) -> egui::Pos2 {
         let (viewport, scroll) = ctx.input(|i| {
             if i.pointer.primary_down() && !i.pointer.primary_pressed() {
                 self.pan -= i.pointer.delta();
@@ -52,12 +54,66 @@ impl eframe::App for App {
         self.config.zoom_scale += scroll.y * 0.05;
 
         let window_center = viewport.center();
-        let view_center = egui::Pos2::new(
+        egui::Pos2::new(
             self.center.0 * self.scale() - window_center.x,
             self.center.1 * self.scale() - window_center.y,
-        ) + self.pan;
+        ) + self.pan
+    }
+    
+    fn set_rdt(&mut self, rdt: Rdt) {
+        let (x, y) = rdt.get_center();
+        self.center = (x, -y);
+        self.colliders = rdt.get_colliders();
+        self.entities = rdt.get_entities();
+        self.floors = rdt.get_floors();
+        self.pan = egui::Vec2::ZERO;
+    }
+    
+    pub fn try_resume_rdt(&mut self) -> Result<()> {
+        if let Some(ref path) = self.config.rdt_folder {
+            self.load_rdt(path.clone())?;
+        }
+        
+        Ok(())
+    }
+    
+    pub fn load_rdt(&mut self, path: impl AsRef<Path>) -> Result<()> {
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let rdt = Rdt::read(reader)?;
+        
+        self.set_rdt(rdt);
+        
+        Ok(())
+    }
+    
+    fn prompt_load_rdt(&mut self) -> Result<()> {
+        let Some(file) = FileDialog::new()
+            .add_filter("RDTs", &["rdt", "RDT"])
+            .set_directory("/media/jacob/E2A6DD85A6DD5A9D/games/BIOHAZARD 2 PC/pl0/Rdt") // TODO: remove after testing
+            .pick_file() else {
+            return Ok(());
+        };
+        
+        self.load_rdt(file.as_path())
+    }
+}
+
+impl eframe::App for App {
+    fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
+        let view_center = self.handle_input(ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("File", |ui| {
+                    if ui.button("Open").clicked() {
+                        if let Err(e) = self.prompt_load_rdt() {
+                            eprintln!("Failed to open RDT: {}", e);
+                        }
+                    }
+                });
+            });
+
             let floor_draw_params = self.config.get_draw_params(ObjectType::Floor, view_center);
 
             for floor in &self.floors {
