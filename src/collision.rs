@@ -1,5 +1,10 @@
 use crate::math::{Fixed12, UFixed12};
 
+const HIGHLIGHT_MAX_INTENSITY: f32 = 0.5;
+const HIGHLIGHT: egui::Rgba = egui::Rgba::from_rgba_premultiplied(0.25, 0.25, 0.25, 0.0);
+const HIGHLIGHT_STROKE: f32 = 2.0;
+const HIGHLIGHT_ALPHA: f32 = 1.5;
+
 #[derive(Debug)]
 pub struct DrawParams {
     pub origin: egui::Pos2,
@@ -17,6 +22,40 @@ impl DrawParams {
             w * self.scale,
             h * self.scale,
         )
+    }
+
+    const fn is_stroke(&self) -> bool {
+        self.stroke.width > 0.0 && self.stroke.color.a() > 0
+    }
+
+    const fn color(&self) -> egui::Color32 {
+        if self.is_stroke() {
+            self.stroke.color
+        } else {
+            self.fill_color
+        }
+    }
+
+    const fn set_color(&mut self, color: egui::Color32) {
+        if self.is_stroke() {
+            self.stroke.color = color;
+        } else {
+            self.fill_color = color;
+        }
+    }
+
+    pub fn highlight(&mut self) {
+        let rgba: egui::Rgba = self.color().into();
+        let mut highlighted = (rgba + HIGHLIGHT).multiply(HIGHLIGHT_ALPHA);
+        let intensity = highlighted.intensity();
+        if intensity > HIGHLIGHT_MAX_INTENSITY {
+            highlighted = highlighted * (HIGHLIGHT_MAX_INTENSITY / intensity);
+        }
+        
+        self.set_color(highlighted.into());
+        if self.is_stroke() {
+            self.stroke.width *= HIGHLIGHT_STROKE;
+        }
     }
 }
 
