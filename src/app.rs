@@ -8,7 +8,7 @@ use egui::Context;
 use rfd::FileDialog;
 
 use crate::aot::{Entity, SceType};
-use crate::collision::{Collider, RectCollider};
+use crate::collision::Collider;
 use crate::math::Fixed12;
 use crate::rdt::Rdt;
 
@@ -16,6 +16,8 @@ mod config;
 use config::{Config, ObjectType};
 
 pub const APP_NAME: &str = "re2line";
+
+const DETAIL_MAX_ROWS: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SelectedObject {
@@ -29,7 +31,7 @@ pub struct App {
     center: (Fixed12, Fixed12),
     colliders: Vec<Collider>,
     entities: Vec<Entity>,
-    floors: Vec<RectCollider>,
+    floors: Vec<Collider>,
     pan: egui::Vec2,
     selected_object: SelectedObject,
     config: Config,
@@ -125,7 +127,7 @@ impl eframe::App for App {
                 });
             });
         });
-        
+
         egui::SidePanel::left("browser").show(ctx, |ui| {
             egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
                 ui.collapsing("Floor", |ui| {
@@ -172,15 +174,82 @@ impl eframe::App for App {
                         }
 
                         ui.selectable_value(&mut self.selected_object, SelectedObject::Entity(i), format!("AOT {}", aot_count));
-                        aot_count += 1;   
+                        aot_count += 1;
                     }
                 });
             });
         });
-        
+
+        egui::TopBottomPanel::bottom("detail").show(ctx, |ui| {
+            egui::ScrollArea::horizontal().show(ui, |ui| {
+                let description = match self.selected_object {
+                    SelectedObject::Floor(i) => self.floors[i].describe(),
+                    SelectedObject::Entity(i) => self.entities[i].describe(),
+                    SelectedObject::Collider(i) => self.colliders[i].describe(),
+                    SelectedObject::None => return,
+                };
+                
+                let mut groups = description.into_iter();
+                let (mut group_name, fields) = groups.next().unwrap();
+                let mut field_iter = fields.into_iter();
+                let mut is_group_start = true;
+                let mut is_group_end = false;
+                
+                ui.horizontal(|ui| {
+                    loop {
+                        ui.vertical(|ui| {
+                            if is_group_start {
+                                ui.label(egui::RichText::new(group_name.clone()).strong());
+                                is_group_start = false;
+                            } else {
+                                ui.label("");
+                            }
+
+                            let mut num_rows = 0;
+                            loop {
+                                match field_iter.next() {
+                                    Some(field) => {
+                                        ui.label(field);
+                                        num_rows += 1;
+
+                                        if num_rows >= DETAIL_MAX_ROWS {
+                                            break;
+                                        }
+                                    }
+                                    None => {
+                                        is_group_end = true;
+                                        while num_rows < DETAIL_MAX_ROWS {
+                                            ui.label("");
+                                            num_rows += 1;   
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        });
+                        
+                        if is_group_end {
+                            let Some(group) = groups.next() else {
+                                break;
+                            };
+                            
+                            group_name = group.0;
+                            field_iter = group.1.into_iter();
+                            is_group_start = true;
+                            is_group_end = false;
+                            
+                            ui.separator();
+                        }
+                    }
+                    
+                    ui.shrink_height_to_current();
+                });
+            });
+        });
+
         egui::CentralPanel::default().show(ctx, |ui| {
             let view_center = self.calculate_origin(ctx, ui.ui_contains_pointer());
-            
+
             for (i, floor) in self.floors.iter().enumerate() {
                 let mut floor_draw_params = self.config.get_draw_params(ObjectType::Floor, view_center);
                 if self.selected_object == SelectedObject::Floor(i) {
@@ -189,7 +258,7 @@ impl eframe::App for App {
                     // given floor
                     floor_draw_params.highlight();
                 }
-                
+
                 let shape = floor.gui_shape(&floor_draw_params);
                 ui.painter().add(shape);
             }
@@ -197,9 +266,9 @@ impl eframe::App for App {
             let mut collider_draw_params = self.config.get_draw_params(ObjectType::Collider, view_center);
             for (i, collider) in self.colliders.iter().enumerate() {
                 if self.selected_object == SelectedObject::Collider(i) {
-                    continue;   
+                    continue;
                 }
-                
+
                 let shape = collider.gui_shape(&collider_draw_params);
                 ui.painter().add(shape);
             }
@@ -208,12 +277,12 @@ impl eframe::App for App {
                 if self.selected_object == SelectedObject::Entity(i) {
                     continue;
                 }
-                
+
                 let entity_draw_params = self.config.get_draw_params(entity.sce().into(), view_center);
                 let shape = entity.gui_shape(&entity_draw_params);
                 ui.painter().add(shape);
             }
-            
+
             // draw highlighted object (if any) on top
             match self.selected_object {
                 SelectedObject::None | SelectedObject::Floor(_) => {}

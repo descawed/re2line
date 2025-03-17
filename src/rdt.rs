@@ -307,11 +307,11 @@ impl Rdt {
         (self.collision.cell_x, self.collision.cell_z)
     }
 
-    pub fn get_floors(&self) -> Vec<collision::RectCollider> {
+    pub fn get_floors(&self) -> Vec<collision::Collider> {
         let mut floors = Vec::with_capacity(self.floors.len());
 
         for floor in &self.floors {
-            floors.push(collision::RectCollider::new(floor.x, floor.z, floor.width, floor.height, 0.0));
+            floors.push(collision::Collider::Rect(collision::RectCollider::new(floor.x, floor.z, floor.width, floor.height, 0.0)));
         }
 
         floors

@@ -22,6 +22,29 @@ pub enum SceType {
     Unknown = 0xFF,
 }
 
+impl SceType {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::Door => "Door",
+            Self::Item => "Item",
+            Self::Normal => "Normal",
+            Self::Message => "Message",
+            Self::Event => "Event",
+            Self::FlagChg => "Flag Change",
+            Self::Water => "Water",
+            Self::Move => "Move",
+            Self::Save => "Save",
+            Self::ItemBox => "Item Box",
+            Self::Damage => "Damage",
+            Self::Status => "Status",
+            Self::Hikidashi => "Hikidashi",
+            Self::Windows => "Windows",
+            Self::Unknown => "Unknown",
+        }
+    }
+}
+
 impl From<u8> for SceType {
     fn from(value: u8) -> Self {
         match value {
@@ -88,6 +111,40 @@ impl Entity {
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
         self.collider.gui_shape(draw_params)
+    }
+    
+    pub fn describe(&self) -> Vec<(String, Vec<String>)> {
+        let mut groups = self.collider.describe();
+        
+        groups.push((String::from("Object"), vec![
+            format!("Floor: {}", self.floor),
+            format!("ID: {}", self.id),
+            format!("Type: {}", self.sce.name()),
+        ]));
+        
+        match self.form {
+            EntityForm::Door { next_pos_x, next_pos_y, next_pos_z, next_cdir_y, next_stage, next_room, next_n_floor } => {
+                groups.push((String::from("Door"), vec![
+                    format!("Target X: {}", next_pos_x),
+                    format!("Target Y: {}", next_pos_y),
+                    format!("Target Z: {}", next_pos_z),
+                    format!("Target Angle: {:.1}°", next_cdir_y.to_degrees()),
+                    format!("Target Stage: {}", next_stage),
+                    format!("Target Room: {}", next_room),
+                    format!("Target Floor: {}", next_n_floor),
+                ]));
+            }
+            EntityForm::Item { i_item, n_item, flag, .. } => {
+                groups.push((String::from("Item"), vec![
+                    format!("ID: {}", i_item),
+                    format!("Count: {}", n_item),
+                    format!("Flag: {}", flag),
+                ]));
+            }
+            EntityForm::Other => {}
+        }
+
+        groups
     }
 
     pub fn form(&self) -> &EntityForm {

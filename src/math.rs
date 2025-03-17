@@ -13,6 +13,14 @@ impl Fixed12 {
     pub const fn to_f32(&self) -> f32 {
         self.0 as f32 / 4096.0
     }
+    
+    pub const fn to_radians(&self) -> f32 {
+        self.to_f32() * std::f32::consts::PI * 2.0
+    }
+    
+    pub const fn to_degrees(&self) -> f32 {
+        self.to_radians() * 180.0 / std::f32::consts::PI
+    }
 }
 
 impl std::convert::From<f32> for Fixed12 {
@@ -87,6 +95,28 @@ impl PartialEq<f32> for Fixed12 {
 impl PartialOrd<f32> for Fixed12 {
     fn partial_cmp(&self, other: &f32) -> Option<std::cmp::Ordering> {
         self.to_f32().partial_cmp(other)
+    }
+}
+
+impl std::ops::Shl<i32> for Fixed12 {
+    type Output = Self;
+    
+    fn shl(self, rhs: i32) -> Self::Output {
+        Self(self.0 << rhs)
+    }
+}
+
+impl std::ops::Shr<i32> for Fixed12 {
+    type Output = Self;
+
+    fn shr(self, rhs: i32) -> Self::Output {
+        Self(self.0 >> rhs)
+    }
+}
+
+impl std::fmt::Display for Fixed12 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -200,5 +230,27 @@ impl std::ops::Sub<UFixed12> for Fixed12 {
 
     fn sub(self, rhs: UFixed12) -> Self::Output {
         Self((self.0 as i32 - rhs.0 as i32) as i16)
+    }
+}
+
+impl std::ops::Shl<i32> for UFixed12 {
+    type Output = Self;
+
+    fn shl(self, rhs: i32) -> Self::Output {
+        Self(self.0 << rhs)
+    }
+}
+
+impl std::ops::Shr<i32> for UFixed12 {
+    type Output = Self;
+
+    fn shr(self, rhs: i32) -> Self::Output {
+        Self(self.0 >> rhs)
+    }
+}
+
+impl std::fmt::Display for UFixed12 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }

@@ -51,7 +51,7 @@ impl DrawParams {
         if intensity > HIGHLIGHT_MAX_INTENSITY {
             highlighted = highlighted * (HIGHLIGHT_MAX_INTENSITY / intensity);
         }
-        
+
         self.set_color(highlighted.into());
         if self.is_stroke() {
             self.stroke.width *= HIGHLIGHT_STROKE;
@@ -254,6 +254,122 @@ pub enum Collider {
 }
 
 impl Collider {
+    pub fn describe(&self) -> Vec<(String, Vec<String>)> {
+        let mut groups = Vec::new();
+        
+        // type
+        groups.push((String::from("Type"), vec![String::from(match self {
+            Self::Rect(rect) => {
+                if rect.corner_radius > 0.0 {
+                    "Rectangle (rounded)"
+                } else {
+                    "Rectangle"
+                }
+            }
+            Self::Diamond(_) => "Diamond",
+            Self::Ellipse(_) => "Ellipse",
+            Self::Triangle(_) => "Triangle",
+            Self::Quad(_) => "Quadrilateral",
+        })]));
+
+        // basic shape parameters
+        let label = String::from("Params");
+        match self {
+            Self::Quad(quad) => {
+                groups.push((label, vec![
+                    format!("X1: {}", quad.x1),
+                    format!("Z1: {}", quad.z1),
+                    format!("X2: {}", quad.x2),
+                    format!("Z2: {}", quad.z2),
+                    format!("X3: {}", quad.x3),
+                    format!("Z3: {}", quad.z3),
+                    format!("X4: {}", quad.x4),
+                    format!("Z4: {}", quad.z4),
+                ]));
+            }
+            Self::Rect(RectCollider { x, z, width, height, .. })
+            | Self::Diamond(DiamondCollider { x, z, width, height })
+            | Self::Ellipse(EllipseCollider { x, z, width, height })
+            | Self::Triangle(TriangleCollider { x, z, width, height, .. })
+            => {
+                groups.push((label, vec![
+                    format!("X: {}", x),
+                    format!("Z: {}", z),
+                    format!("W: {}", width),
+                    format!("H: {}", height),
+                ]));
+            }
+        }
+        
+        // calculated geometry where it might be useful
+        let label = String::from("Calculated");
+        match self {
+            Self::Ellipse(ellipse) => {
+                let x_radius = ellipse.width >> 1;
+                let z_radius = ellipse.height >> 1;
+                let center_x = ellipse.x + x_radius;
+                let center_z = ellipse.z + z_radius;
+                
+                groups.push((label, vec![
+                    format!("CX: {}", center_x),
+                    format!("CZ: {}", center_z),
+                    format!("RX: {}", x_radius),
+                    format!("RZ: {}", z_radius),
+                ]));
+            }
+            Self::Triangle(tri) => {
+                let x1 = tri.x + if tri.offsets[0].0 > 0.0 { tri.width } else { UFixed12(0) };
+                let z1 = tri.z + if tri.offsets[0].1 > 0.0 { tri.height } else { UFixed12(0) };
+                let x2 = tri.x + if tri.offsets[1].0 > 0.0 { tri.width } else { UFixed12(0) };
+                let z2 = tri.z + if tri.offsets[1].1 > 0.0 { tri.height } else { UFixed12(0) };
+                let x3 = tri.x + if tri.offsets[2].0 > 0.0 { tri.width } else { UFixed12(0) };
+                let z3 = tri.z + if tri.offsets[2].1 > 0.0 { tri.height } else { UFixed12(0) };
+                
+                groups.push((label, vec![
+                    format!("X1: {}", x1),
+                    format!("Z1: {}", z1),
+                    format!("X2: {}", x2),
+                    format!("Z2: {}", z2),
+                    format!("X3: {}", x3),
+                    format!("Z3: {}", z3),
+                ]));
+            }
+            Self::Diamond(diamond) => {
+                let radius_x = diamond.width >> 1;
+                let radius_z = diamond.height >> 1;
+                
+                groups.push((label, vec![
+                    format!("X1: {}", diamond.x + radius_x),
+                    format!("Z1: {}", diamond.z),
+                    format!("X2: {}", diamond.x + diamond.width),
+                    format!("Z2: {}", diamond.z + radius_z),
+                    format!("X3: {}", diamond.x + radius_x),
+                    format!("Z3: {}", diamond.z + diamond.height),
+                    format!("X4: {}", diamond.x),
+                    format!("Z4: {}", diamond.z + radius_z),   
+                ]));
+            }
+            Self::Rect(rect) => {
+                let nx = rect.x;
+                let nz = rect.z;
+                let fx = rect.x + rect.width;
+                let fz = rect.z + rect.height;
+                
+                groups.push((label, vec![
+                    format!("X2: {}", fx),
+                    format!("Z2: {}", nz),
+                    format!("X3: {}", fx),
+                    format!("Z3: {}", fz),
+                    format!("X4: {}", nx),
+                    format!("Z4: {}", fz),
+                ]));
+            }
+            Self::Quad(_) => {} // no need for calculated for quad since all points are included in params
+        }
+
+        groups
+    }
+
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
         match self {
             Self::Rect(rect) => rect.gui_shape(draw_params),
