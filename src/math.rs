@@ -21,6 +21,10 @@ impl Fixed12 {
     pub const fn to_degrees(&self) -> f32 {
         self.to_radians() * 180.0 / std::f32::consts::PI
     }
+    
+    pub const fn abs(&self) -> Self {
+        Self(self.0.abs())
+    }
 }
 
 impl std::convert::From<f32> for Fixed12 {
@@ -203,9 +207,49 @@ impl PartialEq<f32> for UFixed12 {
     }
 }
 
+impl PartialEq<Fixed12> for UFixed12 {
+    fn eq(&self, other: &Fixed12) -> bool {
+        if other.0 < 0 {
+            return false;
+        }
+        
+        other.0 as u16 == self.0
+    }
+}
+
+impl PartialEq<UFixed12> for Fixed12 {
+    fn eq(&self, other: &UFixed12) -> bool {
+        if self.0 < 0 {
+            return false;
+        }
+        
+        self.0 as u16 == other.0
+    }   
+}
+
 impl PartialOrd<f32> for UFixed12 {
     fn partial_cmp(&self, other: &f32) -> Option<std::cmp::Ordering> {
         self.to_f32().partial_cmp(other)
+    }
+}
+
+impl PartialOrd<Fixed12> for UFixed12 {
+    fn partial_cmp(&self, other: &Fixed12) -> Option<std::cmp::Ordering> {
+        if other.0 < 0 {
+            return Some(std::cmp::Ordering::Greater);
+        }
+
+        (other.0 as u16).partial_cmp(&self.0)
+    }
+}
+
+impl PartialOrd<UFixed12> for Fixed12 {
+    fn partial_cmp(&self, other: &UFixed12) -> Option<std::cmp::Ordering> {
+        if self.0 < 0 {
+            return Some(std::cmp::Ordering::Less);
+        }
+
+        (self.0 as u16).partial_cmp(&other.0)
     }
 }
 
@@ -253,4 +297,10 @@ impl std::fmt::Display for UFixed12 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Point2 {
+    pub x: Fixed12,
+    pub z: Fixed12,
 }
