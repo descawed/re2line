@@ -12,7 +12,7 @@ use crate::collision::DrawParams;
 const STROKE_WIDTH: f32 = 1.0;
 const STAGE_CHARACTERS: &str = "123456789ABCDEFG";
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord, Deserialize, Serialize)]
 pub struct RoomId {
      pub stage: u8,
      pub room: u8,
@@ -21,7 +21,8 @@ pub struct RoomId {
 
 impl std::fmt::Display for RoomId {
      fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-          write!(f, "{}{:02X}{}", self.stage + 1, self.room, self.player)
+          let stage = self.stage as usize;
+          write!(f, "{}{:02X}{}", &STAGE_CHARACTERS[stage..stage + 1], self.room, self.player)
      }
 }
 
@@ -32,8 +33,9 @@ impl FromStr for RoomId {
           if s.len() != 4 {
                return Err(anyhow!("Invalid room ID: {}", s));
           }
-          
-          let stage = STAGE_CHARACTERS.find(s.get(0..1).unwrap()).ok_or_else(|| anyhow!("Invalid stage ID in room ID {}", s))? as u8;
+
+          let stage_char = s.get(0..1).unwrap().to_uppercase();
+          let stage = STAGE_CHARACTERS.find(&stage_char).ok_or_else(|| anyhow!("Invalid stage ID in room ID {}", s))? as u8;
           let room = u8::from_str_radix(s.get(1..3).unwrap(), 16)?;
           let player = s.get(3..4).ok_or_else(|| anyhow!("Invalid player ID in room ID {}", s))?.parse::<u8>()?;
           

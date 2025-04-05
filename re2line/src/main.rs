@@ -17,12 +17,12 @@ fn main() -> eframe::Result {
 
     let mut app = app::App::new().map_err(make_eframe_error)?;
     if args.len() > 1 {
-        app.load_rdt(PathBuf::from(&args[1])).map_err(make_eframe_error)?;
+        app.load_game_folder(PathBuf::from(&args[1])).map_err(make_eframe_error)?;
     } else {
         // if we bail on this error then it'll be impossible to start the app without manually
         // editing the config file
-        if let Err(e) = app.try_resume_rdt() {
-            eprintln!("Failed to load previous RDT: {}", e);
+        if let Err(e) = app.try_resume() {
+            eprintln!("Failed to load previous game folder: {}", e);
         }
     }
     

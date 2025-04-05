@@ -1,10 +1,10 @@
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::io::BufReader;
-
-use anyhow::Result;
+use std::str::FromStr;
+use anyhow::{Result, bail, anyhow};
 use eframe::{Frame, Storage};
-use egui::Context;
+use egui::{Context, Ui, ViewportCommand};
 use rfd::FileDialog;
 
 use crate::aot::{Entity, SceType};
@@ -13,7 +13,7 @@ use crate::math::Fixed12;
 use crate::rdt::Rdt;
 
 mod config;
-use config::{Config, ObjectType};
+use config::{Config, ObjectType, RoomId};
 
 pub const APP_NAME: &str = "re2line";
 
@@ -27,6 +27,25 @@ enum SelectedObject {
     Floor(usize),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BrowserTab {
+    Game,
+    Room,
+}
+
+impl BrowserTab {
+    const fn list() -> [BrowserTab; 2] {
+        [BrowserTab::Game, BrowserTab::Room]
+    }
+
+    const fn name(&self) -> &'static str {
+        match self {
+            Self::Game => "Game",
+            Self::Room => "Room",
+        }
+    }
+}
+
 pub struct App {
     center: (Fixed12, Fixed12),
     colliders: Vec<Collider>,
@@ -35,6 +54,10 @@ pub struct App {
     pan: egui::Vec2,
     selected_object: SelectedObject,
     config: Config,
+    tab: BrowserTab,
+    leon_rooms: Vec<(PathBuf, RoomId)>,
+    claire_rooms: Vec<(PathBuf, RoomId)>,
+    need_title_update: bool,
 }
 
 impl App {
@@ -47,6 +70,10 @@ impl App {
             pan: egui::Vec2::ZERO,
             selected_object: SelectedObject::None,
             config: Config::get()?,
+            tab: BrowserTab::Game,
+            leon_rooms: Vec::new(),
+            claire_rooms: Vec::new(),
+            need_title_update: false,
         })
     }
 
@@ -74,7 +101,7 @@ impl App {
         ) + self.pan
     }
 
-    fn set_rdt(&mut self, rdt: Rdt) {
+    fn set_rdt(&mut self, rdt: Rdt, id: RoomId) {
         let (x, y) = rdt.get_center();
         self.center = (x, -y);
         self.colliders = rdt.get_colliders();
@@ -82,45 +109,212 @@ impl App {
         self.floors = rdt.get_floors();
         self.pan = egui::Vec2::ZERO;
         self.selected_object = SelectedObject::None;
+        self.config.last_rdt = Some(id);
+        self.need_title_update = true;
     }
 
-    pub fn try_resume_rdt(&mut self) -> Result<()> {
+    pub fn try_resume(&mut self) -> Result<()> {
         if let Some(ref path) = self.config.rdt_folder {
-            self.load_rdt(path.clone())?;
+            self.load_game_folder(path.clone())?;
+
+            if let Some((id, Some(path))) = self.config.last_rdt.map(|id| (id, self.get_room_path(id).map(PathBuf::from))) {
+                self.load_rdt(id, path)?;
+            }
         }
 
         Ok(())
     }
 
-    pub fn load_rdt(&mut self, path: impl AsRef<Path>) -> Result<()> {
+    pub fn load_rdt(&mut self, id: RoomId, path: impl AsRef<Path>) -> Result<()> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
         let rdt = Rdt::read(reader)?;
 
-        self.set_rdt(rdt);
+        self.set_rdt(rdt, id);
 
         Ok(())
     }
 
-    fn prompt_load_rdt(&mut self) -> Result<()> {
-        let Some(file) = FileDialog::new()
-            .add_filter("RDTs", &["rdt", "RDT"])
-            .set_directory("/media/jacob/E2A6DD85A6DD5A9D/games/BIOHAZARD 2 PC/pl0/Rdt") // TODO: remove after testing
-            .pick_file() else {
+    fn get_room_path(&self, id: RoomId) -> Option<&Path> {
+        let room_list = if id.player == 0 {
+            &self.leon_rooms
+        } else {
+            &self.claire_rooms
+        };
+
+        for (path, room_id) in room_list {
+            if id == *room_id {
+                return Some(path.as_path());
+            }
+        }
+
+        None
+    }
+
+    fn is_game_loaded(&self) -> bool {
+        !self.leon_rooms.is_empty() || !self.claire_rooms.is_empty()
+    }
+
+    fn get_entry_case_insensitive(dir: impl AsRef<Path>, name: &str) -> Result<Option<PathBuf>> {
+        for entry in dir.as_ref().read_dir()? {
+            let entry = entry?;
+            let lc_name = entry.file_name().to_string_lossy().to_lowercase();
+            if lc_name == name {
+                return Ok(Some(entry.path()));
+            }
+        }
+
+        Ok(None)
+    }
+
+    fn enumerate_rdts(dir: impl AsRef<Path>, rdt_list: &mut Vec<(PathBuf, RoomId)>) -> Result<()> {
+        let rdt_dir = Self::get_entry_case_insensitive(dir, "rdt")?.ok_or_else(|| anyhow!("Could not find RDT folder"))?;
+
+        for entry in rdt_dir.read_dir()? {
+            let entry = entry?;
+            let lc_name = entry.file_name().to_string_lossy().to_lowercase();
+            if lc_name.starts_with("room") && lc_name.ends_with(".rdt") {
+                let room_id = RoomId::from_str(&lc_name[4..8])?;
+                rdt_list.push((entry.path(), room_id));
+            }
+        }
+
+        // sort RDT list by ID
+        rdt_list.sort_by(|a, b| a.1.cmp(&b.1));
+
+        Ok(())
+    }
+
+    pub fn load_game_folder(&mut self, dir: PathBuf) -> Result<()> {
+        for entry in dir.read_dir()? {
+            let entry = entry?;
+            let lc_name = entry.file_name().to_string_lossy().to_lowercase();
+            match lc_name.as_str() {
+                "pl0" => Self::enumerate_rdts(entry.path(), &mut self.leon_rooms)?,
+                "pl1" => Self::enumerate_rdts(entry.path(), &mut self.claire_rooms)?,
+                _ => (),
+            }
+
+            if !self.leon_rooms.is_empty() && !self.claire_rooms.is_empty() {
+                break;
+            }
+        }
+
+        if !self.is_game_loaded() {
+            bail!("Invalid game directory could not find RDT files");
+        }
+
+        self.config.rdt_folder = Some(dir);
+        Ok(())
+    }
+
+    fn prompt_load_game(&mut self) -> Result<()> {
+        let Some(folder) = FileDialog::new().pick_folder() else {
             return Ok(());
         };
 
-        self.load_rdt(file.as_path())
+        self.load_game_folder(folder)
+    }
+
+    fn room_browser(&mut self, ui: &mut Ui) {
+        egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
+            ui.collapsing("Floor", |ui| {
+                for i in 0..self.floors.len() {
+                    ui.selectable_value(&mut self.selected_object, SelectedObject::Floor(i), format!("Floor {}", i));
+                }
+            });
+
+            ui.collapsing("Collision", |ui| {
+                for i in 0..self.colliders.len() {
+                    ui.selectable_value(&mut self.selected_object, SelectedObject::Collider(i), format!("Collider {}", i));
+                }
+            });
+
+            ui.collapsing("Door", |ui| {
+                let mut door_count = 0;
+                for (i, entity) in self.entities.iter().enumerate() {
+                    if entity.sce() != SceType::Door {
+                        continue;
+                    }
+
+                    ui.selectable_value(&mut self.selected_object, SelectedObject::Entity(i), format!("Door {}", door_count));
+                    door_count += 1;
+                }
+            });
+
+            ui.collapsing("Item", |ui| {
+                let mut item_count = 0;
+                for (i, entity) in self.entities.iter().enumerate() {
+                    if entity.sce() != SceType::Item {
+                        continue;
+                    }
+
+                    ui.selectable_value(&mut self.selected_object, SelectedObject::Entity(i), format!("Item {}", item_count));
+                    item_count += 1;
+                }
+            });
+
+            ui.collapsing("AOT", |ui| {
+                let mut aot_count = 0;
+                for (i, entity) in self.entities.iter().enumerate() {
+                    if matches!(entity.sce(), SceType::Door | SceType::Item) {
+                        continue;
+                    }
+
+                    ui.selectable_value(&mut self.selected_object, SelectedObject::Entity(i), format!("AOT {}", aot_count));
+                    aot_count += 1;
+                }
+            });
+        });
+    }
+
+    fn rdt_list(&mut self, is_leon: bool, ui: &mut Ui) {
+        let mut room_to_load = None;
+
+        let rdt_list = if is_leon {
+            &self.leon_rooms
+        } else {
+            &self.claire_rooms
+        };
+
+        for (path, id) in rdt_list {
+            let id = *id;
+            let is_current_room = self.config.last_rdt == Some(id);
+            if ui.selectable_label(is_current_room, format!("{}", id)).clicked() && !is_current_room {
+                room_to_load = Some((path.clone(), id));
+            }
+        }
+
+        if let Some((path, id)) = room_to_load {
+            if let Err(e) = self.load_rdt(id, path) {
+                eprintln!("Failed to load room {}: {}", id, e);
+            }
+        }
+    }
+
+    fn rdt_browser(&mut self, ui: &mut Ui) {
+        egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
+            ui.collapsing("Leon", |ui| {
+                self.rdt_list(true, ui);
+            });
+            ui.collapsing("Claire", |ui| {
+                self.rdt_list(false, ui);
+            });
+        });
     }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
+        if let (true, Some(room_id)) = (self.need_title_update, self.config.last_rdt) {
+            ctx.send_viewport_cmd(ViewportCommand::Title(format!("{} - {}", APP_NAME, room_id)));
+        }
+
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("Open").clicked() {
-                        if let Err(e) = self.prompt_load_rdt() {
+                        if let Err(e) = self.prompt_load_game() {
                             eprintln!("Failed to open RDT: {}", e);
                         }
                     }
@@ -129,54 +323,19 @@ impl eframe::App for App {
         });
 
         egui::SidePanel::left("browser").show(ctx, |ui| {
-            egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
-                ui.collapsing("Floor", |ui| {
-                    for i in 0..self.floors.len() {
-                        ui.selectable_value(&mut self.selected_object, SelectedObject::Floor(i), format!("Floor {}", i));
-                    }
-                });
-
-                ui.collapsing("Collision", |ui| {
-                    for i in 0..self.colliders.len() {
-                        ui.selectable_value(&mut self.selected_object, SelectedObject::Collider(i), format!("Collider {}", i));
-                    }
-                });
-
-                ui.collapsing("Door", |ui| {
-                    let mut door_count = 0;
-                    for (i, entity) in self.entities.iter().enumerate() {
-                        if entity.sce() != SceType::Door {
-                            continue;
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    for tab in BrowserTab::list() {
+                        if ui.selectable_label(self.tab == tab, tab.name()).clicked() {
+                            self.tab = tab;
                         }
-
-                        ui.selectable_value(&mut self.selected_object, SelectedObject::Entity(i), format!("Door {}", door_count));
-                        door_count += 1;
                     }
                 });
-
-                ui.collapsing("Item", |ui| {
-                    let mut item_count = 0;
-                    for (i, entity) in self.entities.iter().enumerate() {
-                        if entity.sce() != SceType::Item {
-                            continue;
-                        }
-
-                        ui.selectable_value(&mut self.selected_object, SelectedObject::Entity(i), format!("Item {}", item_count));
-                        item_count += 1;
-                    }
-                });
-
-                ui.collapsing("AOT", |ui| {
-                    let mut aot_count = 0;
-                    for (i, entity) in self.entities.iter().enumerate() {
-                        if matches!(entity.sce(), SceType::Door | SceType::Item) {
-                            continue;
-                        }
-
-                        ui.selectable_value(&mut self.selected_object, SelectedObject::Entity(i), format!("AOT {}", aot_count));
-                        aot_count += 1;
-                    }
-                });
+                ui.separator();
+                match self.tab {
+                    BrowserTab::Game => self.rdt_browser(ui),
+                    BrowserTab::Room => self.room_browser(ui),
+                }
             });
         });
 
