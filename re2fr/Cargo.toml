@@ -1,0 +1,17 @@
+[package]
+name = "re2fr"
+version = "0.1.0"
+authors = ["descawed <github@descawed.com>"]
+edition = "2024"
+description = "A mod/trainer to record speedrun data from Resident Evil 2"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1.0.97"
+binrw = "0.14.1"
+hook86 = { git = "https://github.com/descawed/hook86.git", features = ["crash_logging"] }
+log = "0.4.27"
+simplelog = "0.12.2"
+windows = { version = "0.61.1", features = ["Win32_Foundation", "Win32_System_Memory", "Win32_System_ProcessStatus", "Win32_System_Kernel", "Win32_System_SystemServices"] }

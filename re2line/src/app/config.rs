@@ -145,7 +145,7 @@ pub(super) struct Config {
 
 impl Config {
      pub fn config_path() -> PathBuf {
-          let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+          let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("../../.."));
           let config_filename = format!("{}.json", super::APP_NAME);
           config_dir.join(config_filename)
      }
