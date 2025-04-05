@@ -69,7 +69,7 @@ pub struct RectCollider {
 }
 
 impl RectCollider {
-    pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, corner_radius: f32) -> Self {
+    pub const fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, corner_radius: f32) -> Self {
         Self { x, z, width, height, corner_radius }
     }
 
@@ -101,7 +101,7 @@ pub struct DiamondCollider {
 }
 
 impl DiamondCollider {
-    pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12) -> Self {
+    pub const fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12) -> Self {
         Self { x, z, width, height }
     }
 
@@ -137,7 +137,7 @@ pub struct EllipseCollider {
 }
 
 impl EllipseCollider {
-    pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12) -> Self {
+    pub const fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12) -> Self {
         Self { x, z, width, height }
     }
 
@@ -168,7 +168,7 @@ pub struct TriangleCollider {
 }
 
 impl TriangleCollider {
-    pub fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, offsets: [(f32, f32); 3]) -> Self {
+    pub const fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, offsets: [(f32, f32); 3]) -> Self {
         Self { x, z, width, height, offsets }
     }
 
@@ -212,7 +212,7 @@ pub struct QuadCollider {
 }
 
 impl QuadCollider {
-    pub fn new(x1: Fixed12, z1: Fixed12, x2: Fixed12, z2: Fixed12, x3: Fixed12, z3: Fixed12, x4: Fixed12, z4: Fixed12) -> Self {
+    pub const fn new(x1: Fixed12, z1: Fixed12, x2: Fixed12, z2: Fixed12, x3: Fixed12, z3: Fixed12, x4: Fixed12, z4: Fixed12) -> Self {
         Self { x1, z1, x2, z2, x3, z3, x4, z4 }
     }
 

@@ -11,6 +11,7 @@ use crate::aot::{Entity, SceType};
 use crate::collision::Collider;
 use crate::math::Fixed12;
 use crate::rdt::Rdt;
+use crate::record::Recording;
 
 mod config;
 use config::{Config, ObjectType, RoomId};
@@ -58,6 +59,7 @@ pub struct App {
     leon_rooms: Vec<(PathBuf, RoomId)>,
     claire_rooms: Vec<(PathBuf, RoomId)>,
     need_title_update: bool,
+    active_recording: Option<Recording>,
 }
 
 impl App {
@@ -74,6 +76,7 @@ impl App {
             leon_rooms: Vec::new(),
             claire_rooms: Vec::new(),
             need_title_update: false,
+            active_recording: None,
         })
     }
 
@@ -216,6 +219,22 @@ impl App {
         self.load_game_folder(folder)
     }
 
+    fn load_recording(&mut self, path: impl AsRef<Path>) -> Result<()> {
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        self.active_recording = Some(Recording::read(reader)?);
+
+        Ok(())
+    }
+
+    fn prompt_load_recording(&mut self) -> Result<()> {
+        let Some(path) = FileDialog::new().pick_file() else {
+            return Ok(());
+        };
+
+        self.load_recording(path)
+    }
+
     fn room_browser(&mut self, ui: &mut Ui) {
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
             ui.collapsing("Floor", |ui| {
@@ -308,14 +327,21 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
         if let (true, Some(room_id)) = (self.need_title_update, self.config.last_rdt) {
             ctx.send_viewport_cmd(ViewportCommand::Title(format!("{} - {}", APP_NAME, room_id)));
+            self.need_title_update = false;
         }
 
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("Open").clicked() {
+                    if ui.button("Open game folder").clicked() {
                         if let Err(e) = self.prompt_load_game() {
                             eprintln!("Failed to open RDT: {}", e);
+                        }
+                    }
+
+                    if ui.button("Open recording").clicked() && self.is_game_loaded() {
+                        if let Err(e) = self.prompt_load_recording() {
+                            eprintln!("Failed to open recording: {}", e);
                         }
                     }
                 });

@@ -2682,6 +2682,7 @@ dependencies = [
  "egui",
  "enum-map",
  "epaint",
+ "re2shared",
  "rfd",
  "serde",
  "serde_json",

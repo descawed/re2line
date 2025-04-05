@@ -7,6 +7,8 @@ mod rdt;
 mod math;
 mod script;
 mod aot;
+mod character;
+mod record;
 
 fn make_eframe_error(e: anyhow::Error) -> eframe::Error {
     eframe::Error::AppCreation(std::io::Error::new(std::io::ErrorKind::Other, e).into())

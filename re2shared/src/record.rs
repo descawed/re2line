@@ -80,7 +80,7 @@ pub struct FrameRecord {
 #[brw(magic = b"RE2R")]
 #[derive(Debug)]
 pub struct RecordHeader {
-    version: u16,
+    pub version: u16,
 }
 
 impl RecordHeader {
