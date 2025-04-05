@@ -27,6 +27,7 @@ impl TryFrom<u32> for CollisionShape {
 
     fn try_from(value: u32) -> std::result::Result<Self, Self::Error> {
         match value {
+            // FIXME: 11 and 13 are not rectangles
             0 | 9 | 10 | 11 | 12 | 13 | 14 | 15 => Ok(Self::Rectangle),
             1 => Ok(Self::TriangleTopRight),
             2 => Ok(Self::TriangleTopLeft),
@@ -34,6 +35,8 @@ impl TryFrom<u32> for CollisionShape {
             4 => Ok(Self::TriangleBottomLeft),
             5 => Ok(Self::Diamond),
             6 => Ok(Self::Circle),
+            // FIXME: these two types are not identical
+            //  also, think these might be capsules rather than rectangles with rounded corners?
             7 | 8 => Ok(Self::RoundedRectangle),
             _ => Err(anyhow!("Unknown collision shape type {}", value)),
         }
