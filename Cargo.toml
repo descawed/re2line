@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["re2line", "re2fr"]
+members = ["re2line", "re2fr", "re2shared"]
 
 [profile.dll-release]
 inherits = "release"

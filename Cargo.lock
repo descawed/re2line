@@ -2665,6 +2665,7 @@ dependencies = [
  "binrw",
  "hook86",
  "log",
+ "re2shared",
  "simplelog",
  "windows 0.61.1",
 ]
@@ -2684,6 +2685,13 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "re2shared"
+version = "0.1.0"
+dependencies = [
+ "binrw",
 ]
 
 [[package]]

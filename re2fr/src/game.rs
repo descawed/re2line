@@ -2,9 +2,7 @@ use std::time::Duration;
 
 use anyhow::{Result, bail};
 use hook86::mem::ByteSearcher;
-
-mod types;
-pub use types::*;
+use re2shared::game::*;
 
 const RDT_STRING: &[u8] = b"Pl0\\Rdt\\room1000.rdt\0";
 const FRAMES_PER_SECOND: u64 = 60;

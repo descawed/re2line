@@ -10,6 +10,7 @@ use hook86::asm;
 use hook86::mem;
 use hook86::patch::patch;
 use log::LevelFilter;
+use re2shared::record::RecordHeader;
 use simplelog::{Config, WriteLogger};
 use windows::Win32::Foundation::HMODULE;
 use windows::Win32::System::SystemServices::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH};

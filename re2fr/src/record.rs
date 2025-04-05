@@ -1,7 +1,7 @@
-use crate::game::{Character, Game, NUM_CHARACTERS, MATRIX, SVECTOR};
+use re2shared::game::{Character, MATRIX, SVECTOR};
+use re2shared::record::*;
 
-mod bin;
-pub use bin::*;
+use crate::game::{Game, NUM_CHARACTERS};
 
 #[derive(Debug)]
 pub struct CharacterState {
