@@ -5,6 +5,7 @@ use std::str::FromStr;
 use anyhow::{Result, bail, anyhow};
 use eframe::{Frame, Storage};
 use egui::{Context, Ui, ViewportCommand};
+use re2shared::record::FrameRecord;
 use rfd::FileDialog;
 
 use crate::aot::{Entity, SceType};
@@ -321,6 +322,73 @@ impl App {
             });
         });
     }
+
+    fn object_details(&mut self, ui: &mut Ui) {
+        egui::ScrollArea::horizontal().show(ui, |ui| {
+            let description = match self.selected_object {
+                SelectedObject::Floor(i) => self.floors[i].describe(),
+                SelectedObject::Entity(i) => self.entities[i].describe(),
+                SelectedObject::Collider(i) => self.colliders[i].describe(),
+                SelectedObject::None => return,
+            };
+
+            let mut groups = description.into_iter();
+            let (mut group_name, fields) = groups.next().unwrap();
+            let mut field_iter = fields.into_iter();
+            let mut is_group_start = true;
+            let mut is_group_end = false;
+
+            ui.horizontal(|ui| {
+                loop {
+                    ui.vertical(|ui| {
+                        if is_group_start {
+                            ui.label(egui::RichText::new(group_name.clone()).strong());
+                            is_group_start = false;
+                        } else {
+                            ui.label("");
+                        }
+
+                        let mut num_rows = 0;
+                        loop {
+                            match field_iter.next() {
+                                Some(field) => {
+                                    ui.label(field);
+                                    num_rows += 1;
+
+                                    if num_rows >= DETAIL_MAX_ROWS {
+                                        break;
+                                    }
+                                }
+                                None => {
+                                    is_group_end = true;
+                                    while num_rows < DETAIL_MAX_ROWS {
+                                        ui.label("");
+                                        num_rows += 1;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    });
+
+                    if is_group_end {
+                        let Some(group) = groups.next() else {
+                            break;
+                        };
+
+                        group_name = group.0;
+                        field_iter = group.1.into_iter();
+                        is_group_start = true;
+                        is_group_end = false;
+
+                        ui.separator();
+                    }
+                }
+
+                ui.shrink_height_to_current();
+            });
+        });
+    }
 }
 
 impl eframe::App for App {
@@ -366,69 +434,21 @@ impl eframe::App for App {
         });
 
         egui::TopBottomPanel::bottom("detail").show(ctx, |ui| {
-            egui::ScrollArea::horizontal().show(ui, |ui| {
-                let description = match self.selected_object {
-                    SelectedObject::Floor(i) => self.floors[i].describe(),
-                    SelectedObject::Entity(i) => self.entities[i].describe(),
-                    SelectedObject::Collider(i) => self.colliders[i].describe(),
-                    SelectedObject::None => return,
-                };
-                
-                let mut groups = description.into_iter();
-                let (mut group_name, fields) = groups.next().unwrap();
-                let mut field_iter = fields.into_iter();
-                let mut is_group_start = true;
-                let mut is_group_end = false;
-                
-                ui.horizontal(|ui| {
-                    loop {
-                        ui.vertical(|ui| {
-                            if is_group_start {
-                                ui.label(egui::RichText::new(group_name.clone()).strong());
-                                is_group_start = false;
-                            } else {
-                                ui.label("");
-                            }
-
-                            let mut num_rows = 0;
-                            loop {
-                                match field_iter.next() {
-                                    Some(field) => {
-                                        ui.label(field);
-                                        num_rows += 1;
-
-                                        if num_rows >= DETAIL_MAX_ROWS {
-                                            break;
-                                        }
-                                    }
-                                    None => {
-                                        is_group_end = true;
-                                        while num_rows < DETAIL_MAX_ROWS {
-                                            ui.label("");
-                                            num_rows += 1;   
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
-                        });
-                        
-                        if is_group_end {
-                            let Some(group) = groups.next() else {
-                                break;
-                            };
-                            
-                            group_name = group.0;
-                            field_iter = group.1.into_iter();
-                            is_group_start = true;
-                            is_group_end = false;
-                            
-                            ui.separator();
-                        }
-                    }
-                    
-                    ui.shrink_height_to_current();
-                });
+            let width = ui.max_rect().width();
+            ui.vertical(|ui| {
+                if let Some(recording) = &mut self.active_recording {
+                    ui.horizontal(|ui| {
+                        // TODO: play/pause button
+                        let mut pos = recording.index();
+                        let num_frames = recording.frames().len();
+                        let time = recording.current().map(FrameRecord::time).unwrap_or_else(|| String::from("00:00:00"));
+                        ui.style_mut().spacing.slider_width = width * 0.6;
+                        ui.add(egui::Slider::new(&mut pos, 0..=num_frames).text(time));
+                        recording.set_index(pos);
+                    });
+                    ui.separator();
+                }
+                self.object_details(ui);
             });
         });
 

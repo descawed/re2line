@@ -8,6 +8,7 @@ use re2shared::record::*;
 pub struct Recording {
     version: u16,
     frames: Vec<FrameRecord>,
+    index: usize,
 }
 
 impl Recording {
@@ -28,6 +29,29 @@ impl Recording {
         Ok(Self {
             version: header.version,
             frames,
+            index: 0,
         })
+    }
+
+    pub fn frames(&self) -> &[FrameRecord] {
+        &self.frames
+    }
+
+    pub fn current(&self) -> Option<&FrameRecord> {
+        self.frames.get(self.index)
+    }
+
+    pub fn next(&mut self) -> Option<&FrameRecord> {
+        self.index += 1;
+        self.current()
+    }
+
+    pub fn set_index(&mut self, index: usize) -> Option<&FrameRecord> {
+        self.index = index;
+        self.current()
+    }
+
+    pub fn index(&self) -> usize {
+        self.index
     }
 }

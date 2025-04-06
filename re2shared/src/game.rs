@@ -2,6 +2,8 @@
 
 use binrw::binrw;
 
+pub const FRAMES_PER_SECOND: u64 = 60;
+
 #[repr(C)]
 #[binrw]
 #[derive(Debug, Clone, Eq, PartialEq)]

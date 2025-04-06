@@ -1,6 +1,6 @@
 use binrw::binrw;
 
-use crate::game::{MATRIX, SVECTOR};
+use crate::game::{FRAMES_PER_SECOND, MATRIX, SVECTOR};
 
 pub const RECORD_VERSION: u16 = 1;
 pub const MAX_CHARACTER_CHANGES: usize = 9;
@@ -74,6 +74,15 @@ pub struct FrameRecord {
     num_character_diffs: u8,
     #[br(count = num_character_diffs)]
     pub character_diffs: Vec<CharacterDiff>,
+}
+
+impl FrameRecord {
+    pub fn time(&self) -> String {
+        let minutes = self.igt_seconds / 60;
+        let seconds = self.igt_seconds % 60;
+        let frames = ((self.igt_frames as f32 / FRAMES_PER_SECOND as f32) * 100.0) as u32;
+        format!("{:02}:{:02}:{:02}", minutes, seconds, frames)
+    }
 }
 
 #[binrw]
