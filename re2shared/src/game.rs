@@ -54,7 +54,7 @@ pub struct Character {
     pub unk_107: [u8; 7],           // 107
     pub type_: u16,                 // 10E
     pub collision_state: u32,       // 110
-    pub colliders_hit: usize,       // 114
+    pub colliders_hit: u32,         // 114
     pub next_x: i16,                // 118
     pub next_z: i16,                // 11A
     pub unk_11c: [u8; 0x28],        // 11C
@@ -62,7 +62,10 @@ pub struct Character {
     pub unk_14c: [u8; 0xa],         // 14C
     pub health: i16,                // 156
     pub motion: i16,                // 158
-    pub unk_15a: [u8; 0xa2],        // 15A
+    pub unk_15a: [u8; 0x96],        // 15A
+    pub distance_to_target: u32,    // 1F0
+    pub unk_1f4: u32,               // 1F4
+    pub unk_1f8: u32,               // 1F8
     pub prev_state: [u8; 4],        // 1FC
 }
 
@@ -80,6 +83,13 @@ mod tests {
 
     #[test]
     fn test_layout() {
+        assert_eq!(offset_of!(Character, unk_94), 0x94);
+        assert_eq!(offset_of!(Character, floor), 0x106);
+        assert_eq!(offset_of!(Character, type_), 0x10e);
+        assert_eq!(offset_of!(Character, unk_11c), 0x11c);
+        assert_eq!(offset_of!(Character, motion), 0x158);
+        assert_eq!(offset_of!(Character, unk_15a), 0x15a);
+        assert_eq!(offset_of!(Character, distance_to_target), 0x1f0);
         assert_eq!(offset_of!(Character, prev_state), 0x1fc);
     }
 }
