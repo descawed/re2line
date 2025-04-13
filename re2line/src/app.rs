@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use anyhow::{Result, bail, anyhow};
 use eframe::{Frame, Storage};
-use egui::{Context, Ui, ViewportCommand};
+use egui::{Context, Key, Ui, ViewportCommand};
 use egui::widgets::color_picker::Alpha;
 use re2shared::record::FrameRecord;
 use rfd::FileDialog;
@@ -115,7 +115,17 @@ impl App {
         self.config.zoom_scale
     }
 
+    fn toggle_play_recording(&mut self) {
+        if self.active_recording.is_none() {
+            return;
+        }
+
+        self.is_recording_playing = !self.is_recording_playing;
+        self.last_play_tick = Instant::now();
+    }
+
     fn calculate_origin(&mut self, ctx: &Context, handle_input: bool) -> egui::Pos2 {
+        let egui_wants_kb_input = ctx.wants_keyboard_input();
         let viewport = ctx.input(|i| {
             if handle_input {
                 if i.pointer.primary_down() && !i.pointer.primary_pressed() {
@@ -123,6 +133,10 @@ impl App {
                 }
 
                 self.config.zoom_scale += i.smooth_scroll_delta.y * 0.05;
+
+                if !egui_wants_kb_input && i.key_pressed(Key::Space) {
+                    self.toggle_play_recording();
+                }
             }
 
             i.screen_rect()
@@ -537,6 +551,7 @@ impl eframe::App for App {
         egui::TopBottomPanel::bottom("detail").show(ctx, |ui| {
             let width = ui.max_rect().width();
             ui.vertical(|ui| {
+                let mut need_toggle = false;
                 if let Some(recording) = &mut self.active_recording {
                     ui.horizontal(|ui| {
                         let play_pause = if self.is_recording_playing {
@@ -545,11 +560,7 @@ impl eframe::App for App {
                             "▶"
                         };
 
-                        if ui.button(play_pause).clicked() {
-                            self.is_recording_playing = !self.is_recording_playing;
-                            // reset timer also
-                            self.last_play_tick = Instant::now();
-                        }
+                        need_toggle = ui.button(play_pause).clicked();
 
                         let mut pos = recording.index();
                         let num_frames = recording.frames().len();
@@ -560,6 +571,11 @@ impl eframe::App for App {
                     });
                     ui.separator();
                 }
+
+                if need_toggle {
+                    self.toggle_play_recording();
+                }
+
                 self.object_details(ui);
             });
         });
