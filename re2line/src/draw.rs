@@ -13,7 +13,7 @@ pub fn get_path_for_semicircle(center: Pos2, radius: f32, facing_angle: f32, hal
     let mut max_angle = facing_angle + half_arc_angle;
 
     if inverted {
-        let new_max = min_angle + std::f32::consts::PI * 2.0;
+        let new_max = min_angle + std::f32::consts::TAU;
         min_angle = max_angle;
         max_angle = new_max;
     }

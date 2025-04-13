@@ -1,3 +1,5 @@
+use std::f32::consts::{PI, TAU};
+
 use egui::{Color32, Shape};
 use epaint::{ColorMode, PathShape, PathStroke};
 
@@ -77,6 +79,29 @@ impl AiCone {
             }
         }
         true
+    }
+
+    /// Is the given point within the AI cone?
+    ///
+    /// Note that AiCone does not keep track of its center, so the given point should be relative
+    /// to the center of the cone.
+    pub fn is_point_in_cone(&self, point: Vec2, facing_angle: f32) -> bool {
+        if point.len() > self.radius {
+            return false;
+        }
+
+        let x = point.x.to_f32();
+        let z = point.z.to_f32();
+        let angle = TAU - z.atan2(x);
+        let angle = angle - facing_angle;
+        let normalized = (angle + PI).rem_euclid(TAU) - PI;
+
+        let is_inside = normalized.abs() <= self.half_angle.to_radians().abs();
+        if self.inverted {
+            !is_inside
+        } else {
+            is_inside
+        }
     }
 }
 

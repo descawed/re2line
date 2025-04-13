@@ -630,8 +630,13 @@ impl eframe::App for App {
                 if let Some(state) = recording.current_state() {
                     let mut ai_zones = Vec::with_capacity(NUM_CHARACTERS);
                     let mut character_icons = Vec::with_capacity(NUM_CHARACTERS);
+                    let mut player_pos = None;
 
                     for (i, character) in state.characters().iter().enumerate() {
+                        if let (0, Some(character)) = (i, character.as_ref()) {
+                            player_pos = Some(character.center);
+                        }
+
                         if self.selected_object == SelectedObject::Character(i) {
                             continue;
                         }
@@ -648,7 +653,7 @@ impl eframe::App for App {
                         let char_draw_params = self.config.get_draw_params(object_type, view_center);
                         character_icons.push(character.gui_shape(&char_draw_params, ui, settings.show_tooltip));
                         if settings.show_ai {
-                            ai_zones.push(character.gui_ai(&char_draw_params));
+                            ai_zones.push(character.gui_ai(&char_draw_params, player_pos));
                         }
                     }
 
@@ -665,7 +670,7 @@ impl eframe::App for App {
                             let object_type: ObjectType = character.type_().into();
                             if settings.show_ai && self.config.should_show(object_type) {
                                 let char_draw_params = self.config.get_draw_params(object_type, view_center);
-                                ui.painter().add(character.gui_ai(&char_draw_params));
+                                ui.painter().add(character.gui_ai(&char_draw_params, player_pos));
                             }
                         }
                     }

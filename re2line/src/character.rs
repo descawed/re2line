@@ -384,7 +384,7 @@ impl Character {
         groups
     }
 
-    pub fn gui_ai(&self, draw_params: &DrawParams) -> Shape {
+    pub fn gui_ai(&self, draw_params: &DrawParams, player_pos: Option<Vec2>) -> Shape {
         let mut shapes = Vec::new();
         // TODO: add other types
         if !self.id.is_zombie() {
@@ -400,10 +400,19 @@ impl Character {
             draw_params.fill_color = ai_cone.behavior_type.default_color();
             if !ai_cone.check_state(&self.state) {
                 // cone is not active in this state; make it more transparent
-                draw_params.fill_color = draw_params.fill_color.gamma_multiply(0.5);
+                draw_params.fill_color = draw_params.fill_color.gamma_multiply(0.3);
             }
 
-            shapes.push(ai_cone.gui_shape(self.angle.to_radians(), draw_params));
+            let facing_angle = self.angle.to_radians();
+            if let Some(player_pos) = player_pos {
+                if ai_cone.is_point_in_cone(player_pos.saturating_sub(self.center), facing_angle) {
+                    // add an outline to the shape when the player is inside
+                    draw_params.stroke.width = 3.0;
+                    draw_params.stroke.color = Color32::from_rgb(0x42, 0x03, 0x03);
+                }
+            }
+
+            shapes.push(ai_cone.gui_shape(facing_angle, draw_params));
         }
 
         Shape::Vec(shapes)

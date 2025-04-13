@@ -15,7 +15,7 @@ impl Fixed12 {
     }
     
     pub const fn to_radians(&self) -> f32 {
-        self.to_f32() * std::f32::consts::PI * 2.0
+        self.to_f32() * std::f32::consts::TAU
     }
     
     pub const fn to_degrees(&self) -> f32 {
@@ -332,9 +332,10 @@ impl Vec2 {
     }
 
     pub fn len(&self) -> UFixed12 {
-        let x_abs = self.x.unsigned_abs();
-        let z_abs = self.z.unsigned_abs();
-        (x_abs * x_abs + z_abs * z_abs).sqrt()
+        let x = self.x.to_f32();
+        let z = self.z.to_f32();
+        let len = (x * x + z * z).sqrt();
+        UFixed12::from_f32(len)
     }
 
     pub fn saturating_add(&self, rhs: impl Into<Self>) -> Self {
@@ -342,6 +343,14 @@ impl Vec2 {
         Self {
             x: Fixed12(self.x.0.saturating_add(rhs.x.0)),
             z: Fixed12(self.z.0.saturating_add(rhs.z.0)),
+        }
+    }
+
+    pub fn saturating_sub(&self, rhs: impl Into<Self>) -> Self {
+        let rhs = rhs.into();
+        Self {
+            x: Fixed12(self.x.0.saturating_sub(rhs.x.0)),
+            z: Fixed12(self.z.0.saturating_sub(rhs.z.0)),
         }
     }
 }
