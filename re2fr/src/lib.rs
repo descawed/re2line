@@ -6,6 +6,7 @@ use std::sync::{OnceLock, Mutex};
 
 use anyhow::{anyhow, Result};
 use binrw::BinWriterExt;
+use chrono::Local;
 use hook86::asm;
 use hook86::mem;
 use hook86::patch::patch;
@@ -116,7 +117,11 @@ fn init_recorder() -> Result<()> {
     let game = unsafe { Game::init() }?;
     let tracker = GameTracker::new(&game);
 
-    let mut file = File::create("re2fr.bin")?;
+    // use the current timestamp in the filename to make it unique
+    let now = Local::now();
+    let filename = format!("re2fr_{}.bin", now.format("%Y-%m-%d_%H-%M-%S"));
+
+    let mut file = File::create(filename)?;
     file.write_le(&RecordHeader::new())?;
 
     FLIGHT_RECORDER.set(Mutex::new(FlightRecorder {
