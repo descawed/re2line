@@ -7,6 +7,7 @@ use egui::Color32;
 use serde::{Deserialize, Serialize};
 
 use crate::aot::SceType;
+use crate::character::CharacterType;
 use crate::collision::DrawParams;
 
 const STROKE_WIDTH: f32 = 1.0;
@@ -17,6 +18,12 @@ pub struct RoomId {
      pub stage: u8,
      pub room: u8,
      pub player: u8,
+}
+
+impl RoomId {
+     pub const fn new(stage: u8, room: u8, player: u8) -> Self {
+          Self { stage, room, player }
+     }
 }
 
 impl std::fmt::Display for RoomId {
@@ -67,6 +74,8 @@ pub(super) enum ObjectType {
      Object,
      Enemy,
      Player,
+     Ally,
+     Neutral,
 }
 
 impl From<SceType> for ObjectType {
@@ -87,6 +96,17 @@ impl From<SceType> for ObjectType {
                SceType::Status => Self::Status,
                SceType::Hikidashi => Self::Hikidashi,
                SceType::Windows => Self::Windows,
+          }
+     }
+}
+
+impl From<CharacterType> for ObjectType {
+     fn from(value: CharacterType) -> Self {
+          match value {
+               CharacterType::Player => Self::Player,
+               CharacterType::Ally => Self::Ally,
+               CharacterType::Neutral => Self::Neutral,
+               CharacterType::Enemy => Self::Enemy,
           }
      }
 }
@@ -206,6 +226,8 @@ impl Default for Config {
                     ObjectType::Object => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0xd0, 0xd0, 0xd0, 0xc0)),
                     ObjectType::Enemy => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0xfd, 0xd0, 0x17, 0xd0)),
                     ObjectType::Player => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0x57, 0xe9, 0x64, 0xd0)),
+                    ObjectType::Ally => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0x57, 0xe9, 0xd3, 0xd0)),
+                    ObjectType::Neutral => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0x57, 0xcc, 0x57, 0xd0)),
                },
           }
      }

@@ -3,6 +3,7 @@
 use binrw::binrw;
 
 pub const FRAMES_PER_SECOND: u64 = 60;
+pub const NUM_CHARACTERS: usize = 34;
 
 #[repr(C)]
 #[binrw]

@@ -128,7 +128,7 @@ impl DiamondCollider {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EllipseCollider {
     x: Fixed12,
     z: Fixed12,
@@ -155,6 +155,16 @@ impl EllipseCollider {
             fill: draw_params.fill_color,
             stroke: draw_params.stroke,
         })
+    }
+
+    pub fn set_pos(&mut self, x: Fixed12, z: Fixed12) {
+        self.x = x;
+        self.z = z;
+    }
+
+    pub fn set_size(&mut self, width: UFixed12, height: UFixed12) {
+        self.width = width;
+        self.height = height;
     }
 }
 

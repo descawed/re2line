@@ -30,6 +30,7 @@ pub enum GameField {
     #[brw(magic = 3u8)] RoomIndex(u8),
     #[brw(magic = 4u8)] Rng(u16),
     #[brw(magic = 5u8)] StageOffset(u8),
+    #[brw(magic = 6u8)] Scenario(u8),
 }
 
 #[binrw]

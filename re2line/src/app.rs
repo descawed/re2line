@@ -2,6 +2,8 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::io::BufReader;
 use std::str::FromStr;
+use std::time::Instant;
+
 use anyhow::{Result, bail, anyhow};
 use eframe::{Frame, Storage};
 use egui::{Context, Ui, ViewportCommand};
@@ -12,10 +14,11 @@ use crate::aot::{Entity, SceType};
 use crate::collision::Collider;
 use crate::math::Fixed12;
 use crate::rdt::Rdt;
-use crate::record::Recording;
+use crate::record::{FRAME_DURATION, Recording};
 
 mod config;
-use config::{Config, ObjectType, RoomId};
+use config::{Config, ObjectType};
+pub use config::RoomId;
 
 pub const APP_NAME: &str = "re2line";
 
@@ -61,6 +64,8 @@ pub struct App {
     claire_rooms: Vec<(PathBuf, RoomId)>,
     need_title_update: bool,
     active_recording: Option<Recording>,
+    is_recording_playing: bool,
+    last_play_tick: Instant,
 }
 
 impl App {
@@ -78,6 +83,8 @@ impl App {
             claire_rooms: Vec::new(),
             need_title_update: false,
             active_recording: None,
+            is_recording_playing: false,
+            last_play_tick: Instant::now(),
         })
     }
 
@@ -137,6 +144,11 @@ impl App {
         self.set_rdt(rdt, id);
 
         Ok(())
+    }
+
+    pub fn load_room(&mut self, id: RoomId) -> Result<()> {
+        let path = self.get_room_path(id).ok_or_else(|| anyhow!("Could not find room"))?;
+        self.load_rdt(id, path.to_path_buf())
     }
 
     fn get_room_path(&self, id: RoomId) -> Option<&Path> {
@@ -438,10 +450,21 @@ impl eframe::App for App {
             ui.vertical(|ui| {
                 if let Some(recording) = &mut self.active_recording {
                     ui.horizontal(|ui| {
-                        // TODO: play/pause button
+                        let play_pause = if self.is_recording_playing {
+                            "⏸"
+                        } else {
+                            "▶"
+                        };
+
+                        if ui.button(play_pause).clicked() {
+                            self.is_recording_playing = !self.is_recording_playing;
+                            // reset timer also
+                            self.last_play_tick = Instant::now();
+                        }
+
                         let mut pos = recording.index();
                         let num_frames = recording.frames().len();
-                        let time = recording.current().map(FrameRecord::time).unwrap_or_else(|| String::from("00:00:00"));
+                        let time = recording.current_frame().map(FrameRecord::time).unwrap_or_else(|| String::from("00:00:00"));
                         ui.style_mut().spacing.slider_width = width * 0.6;
                         ui.add(egui::Slider::new(&mut pos, 0..=num_frames).text(time));
                         recording.set_index(pos);
@@ -488,6 +511,20 @@ impl eframe::App for App {
                 ui.painter().add(shape);
             }
 
+            if let Some(recording) = &mut self.active_recording {
+                if let Some(state) = recording.current_state() {
+                    for character in state.characters() {
+                        let Some(character) = character.as_ref() else {
+                            continue;
+                        };
+
+                        let char_draw_params = self.config.get_draw_params(character.type_().into(), view_center);
+                        let shape = character.gui_shape(&char_draw_params);
+                        ui.painter().add(shape);
+                    }
+                }
+            }
+
             // draw highlighted object (if any) on top
             match self.selected_object {
                 SelectedObject::None | SelectedObject::Floor(_) => {}
@@ -504,6 +541,27 @@ impl eframe::App for App {
                 }
             }
         });
+
+        if let (Some(recording), true) = (&mut self.active_recording, self.is_recording_playing) {
+            let now = Instant::now();
+            let duration = now - self.last_play_tick;
+            if duration >= FRAME_DURATION {
+                self.last_play_tick = now;
+                if let Some(next_state) = recording.next() {
+                    let new_room_id = next_state.room_id();
+                    if self.config.last_rdt != Some(new_room_id) {
+                        if let Err(e) = self.load_room(new_room_id) {
+                            eprintln!("Failed to load room {}: {}", new_room_id, e);
+                        }
+                    }
+                }
+            }
+        }
+
+        if self.is_recording_playing {
+            // re-draw regularly while we're animating
+            ctx.request_repaint();
+        }
     }
 
     fn save(&mut self, _storage: &mut dyn Storage) {

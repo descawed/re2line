@@ -1,7 +1,7 @@
-use re2shared::game::{Character, MATRIX, SVECTOR};
+use re2shared::game::{Character, MATRIX, SVECTOR, NUM_CHARACTERS};
 use re2shared::record::*;
 
-use crate::game::{Game, NUM_CHARACTERS};
+use crate::game::Game;
 
 #[derive(Debug)]
 pub struct CharacterState {
@@ -108,6 +108,7 @@ pub struct GameState {
     stage_index: u16,
     room_index: u16,
     stage_offset: u32,
+    scenario: u8,
 }
 
 impl GameState {
@@ -119,6 +120,7 @@ impl GameState {
             stage_index: game.stage_index(),
             room_index: game.room_index(),
             stage_offset: game.stage_offset(),
+            scenario: if game.is_claire() { 1 } else { 0 },
         }
     }
 
@@ -131,6 +133,7 @@ impl GameState {
         let stage_index = game.stage_index();
         let room_index = game.room_index();
         let stage_offset = game.stage_offset();
+        let scenario = if game.is_claire() { 1 } else { 0 };
 
         if self.rng != rng {
             self.rng = rng;
@@ -160,6 +163,11 @@ impl GameState {
         if self.stage_offset != stage_offset {
             self.stage_offset = stage_offset;
             fields.push(GameField::StageOffset(self.stage_offset as u8));
+        }
+
+        if self.scenario != scenario {
+            self.scenario = scenario;
+            fields.push(GameField::Scenario(self.scenario));
         }
 
         fields

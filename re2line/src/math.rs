@@ -299,8 +299,94 @@ impl std::fmt::Display for UFixed12 {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Point2 {
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Vec2 {
     pub x: Fixed12,
     pub z: Fixed12,
+}
+
+impl Vec2 {
+    pub fn new<T, U>(x: T, z: U) -> Self
+    where T: Into<Fixed12>,
+          U: Into<Fixed12>
+    {
+        Self {
+            x: x.into(),
+            z: z.into(),
+        }
+    }
+
+    pub const fn zero() -> Self {
+        Self {
+            x: Fixed12(0),
+            z: Fixed12(0),
+        }
+    }
+}
+
+impl std::ops::Add for Vec2 {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            x: self.x + rhs.x,
+            z: self.z + rhs.z,
+        }
+    }
+}
+
+impl std::ops::Add<(Fixed12, Fixed12)> for Vec2 {
+    type Output = Self;
+
+    fn add(self, rhs: (Fixed12, Fixed12)) -> Self::Output {
+        Self {
+            x: self.x + rhs.0,
+            z: self.z + rhs.1,
+        }
+    }
+}
+
+impl std::ops::Sub for Vec2 {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self {
+            x: self.x - rhs.x,
+            z: self.z - rhs.z,
+        }
+    }
+}
+
+impl std::ops::Sub<(Fixed12, Fixed12)> for Vec2 {
+    type Output = Self;
+
+    fn sub(self, rhs: (Fixed12, Fixed12)) -> Self::Output {
+        Self {
+            x: self.x - rhs.0,
+            z: self.z - rhs.1,
+        }
+    }
+}
+
+impl<T: Into<Fixed12>> std::ops::Mul<T> for Vec2 {
+    type Output = Self;
+
+    fn mul(self, rhs: T) -> Self::Output {
+        let rhs = rhs.into();
+        Self {
+            x: self.x * rhs,
+            z: self.z * rhs,
+        }
+    }
+}
+
+impl std::ops::Neg for Vec2 {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self {
+            x: -self.x,
+            z: -self.z,
+        }
+    }
 }

@@ -7,8 +7,6 @@ use re2shared::game::*;
 const RDT_STRING: &[u8] = b"Pl0\\Rdt\\room1000.rdt\0";
 const STAGE_CHARS: &str = "123456789ABCDEFG";
 
-pub const NUM_CHARACTERS: usize = 34;
-
 #[derive(Debug)]
 pub struct GameVersion {
     pub version_name: &'static str,
