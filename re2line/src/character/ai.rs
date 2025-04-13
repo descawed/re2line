@@ -130,7 +130,9 @@ pub fn describe_zombie_ai_state(state: &[u8; 4]) -> &'static str {
         [0x01, 0x08, _, _] => "Eat",
         [0x01, 0x09, _, _] => "Knockback",
         [0x01, 0x0C, _, _] => "Lunge",
+        [0x01, 0x0E, _, _] => "Puke",
         [0x02, _, _, _] => "Hit",
+        [0x03, _, _, _] => "Die",
         _ => "Unknown",
     }
 }
