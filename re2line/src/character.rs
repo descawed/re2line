@@ -1,15 +1,19 @@
-use egui::{Align, Color32, Pos2, Shape, TextStyle, Ui};
-use epaint::TextShape;
+use egui::{Align, Color32, Pos2, Shape, Stroke, TextStyle, Ui};
+use epaint::{ColorMode, PathShape, PathStroke, TextShape};
 use epaint::text::LayoutJob;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::collision::{DrawParams, EllipseCollider};
 use crate::math::{Fixed12, UFixed12, Vec2};
 
+const ARROW_HEAD_HEIGHT: f32 = 6.0;
+const ARROW_HEAD_WIDTH: f32 = 6.0;
+const ARROW_SHAFT_WIDTH: f32 = 1.5;
 const LABEL_CORNER_RADIUS: f32 = 5.0;
 const LABEL_MARGIN: f32 = 10.0;
 const LABEL_PADDING: f32 = 5.0;
-const LABEL_WRAP_WIDTH: f32 = 100.0;
+const LABEL_WRAP_WIDTH: f32 = 150.0;
+const MOTION_PROJECTION_LENGTH: f32 = 25.0;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum CharacterType {
@@ -300,14 +304,21 @@ impl Character {
 
     pub fn label(&self) -> String {
         let (x, z) = self.shape.pos();
-        format!("{}\nX: {:7} Z:{:7}\nHP: {}/{}", self.id.name(), x, z, self.current_health, self.max_health)
+        format!(
+            "{}\nState: {:02X} {:02X} {:02X} {:02X}\nX: {:7} Z:{:7}\nHP: {}/{}",
+            self.id.name(),
+            self.state[0], self.state[1], self.state[2], self.state[3],
+            x, z,
+            self.current_health, self.max_health,
+        )
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams, ui: &Ui) -> Shape {
         let body_shape = self.shape.gui_shape(draw_params);
         let body_rect = body_shape.visual_bounding_rect();
+        let body_center = body_rect.center();
 
-        let center_x = body_rect.center().x;
+        let center_x = body_center.x;
         let top_y = body_rect.min.y;
         let font_id = TextStyle::Body.resolve(&*ui.style());
 
@@ -335,6 +346,33 @@ impl Character {
         let bg_rect = text_shape.visual_bounding_rect().expand(LABEL_PADDING);
         let text_bg_shape = Shape::rect_filled(bg_rect, LABEL_CORNER_RADIUS, bg_color);
 
-        Shape::Vec(vec![body_shape, text_bg_shape, text_shape])
+        let vector = egui::Vec2::angled(self.angle.to_radians()) * MOTION_PROJECTION_LENGTH;
+        let dest_pos = body_center + vector;
+        let vector_len = vector.length();
+        let shaft_pos = body_center + ((vector_len - ARROW_HEAD_HEIGHT) / vector_len).max(0.0) * vector;
+        let side_vector = vector.normalized().rot90() * ARROW_HEAD_WIDTH;
+        let arrow_point1 = shaft_pos - side_vector;
+        let arrow_point3 = shaft_pos + side_vector;
+
+        let shaft_shape = Shape::line_segment(
+            [body_center, shaft_pos],
+            Stroke {
+                width: ARROW_SHAFT_WIDTH,
+                color: draw_params.fill_color,
+            },
+        );
+
+        let arrow_shape = Shape::Path(PathShape {
+            points: vec![shaft_pos, arrow_point1, dest_pos, arrow_point3],
+            closed: true,
+            stroke: PathStroke {
+                width: draw_params.stroke.width,
+                color: ColorMode::Solid(draw_params.stroke.color),
+                kind: draw_params.stroke_kind,
+            },
+            fill: draw_params.fill_color,
+        });
+
+        Shape::Vec(vec![text_bg_shape, text_shape, body_shape, shaft_shape, arrow_shape])
     }
 }

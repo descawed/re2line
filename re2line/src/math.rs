@@ -25,6 +25,10 @@ impl Fixed12 {
     pub const fn abs(&self) -> Self {
         Self(self.0.abs())
     }
+
+    pub const fn unsigned_abs(&self) -> UFixed12 {
+        UFixed12(self.0.unsigned_abs())
+    }
 }
 
 impl std::convert::From<f32> for Fixed12 {
@@ -135,6 +139,10 @@ impl UFixed12 {
 
     pub const fn to_f32(&self) -> f32 {
         self.0 as f32 / 4096.0
+    }
+
+    pub const fn sqrt(&self) -> Self {
+        Self(self.0.isqrt())
     }
 }
 
@@ -322,6 +330,20 @@ impl Vec2 {
             z: Fixed12(0),
         }
     }
+
+    pub fn len(&self) -> UFixed12 {
+        let x_abs = self.x.unsigned_abs();
+        let z_abs = self.z.unsigned_abs();
+        (x_abs * x_abs + z_abs * z_abs).sqrt()
+    }
+
+    pub fn saturating_add(&self, rhs: impl Into<Self>) -> Self {
+        let rhs = rhs.into();
+        Self {
+            x: Fixed12(self.x.0.saturating_add(rhs.x.0)),
+            z: Fixed12(self.z.0.saturating_add(rhs.z.0)),
+        }
+    }
 }
 
 impl std::ops::Add for Vec2 {
@@ -387,6 +409,15 @@ impl std::ops::Neg for Vec2 {
         Self {
             x: -self.x,
             z: -self.z,
+        }
+    }
+}
+
+impl From<(Fixed12, Fixed12)> for Vec2 {
+    fn from(v: (Fixed12, Fixed12)) -> Self {
+        Self {
+            x: v.0,
+            z: v.1,
         }
     }
 }

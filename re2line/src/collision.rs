@@ -15,7 +15,7 @@ pub struct DrawParams {
 }
 
 impl DrawParams {
-    fn transform(&self, x: Fixed12, z: Fixed12, w: UFixed12, h: UFixed12) -> (f32, f32, f32, f32) {
+    pub fn transform(&self, x: Fixed12, z: Fixed12, w: UFixed12, h: UFixed12) -> (f32, f32, f32, f32) {
         (
             x * self.scale - self.origin.x,
             -(z + h) * self.scale - self.origin.y,

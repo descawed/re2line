@@ -70,8 +70,8 @@ impl State {
                     CharacterField::Transform(matrix) => {
                         character.set_pos(matrix.t.x as i16, matrix.t.z as i16);
                     },
-                    CharacterField::MotionAngle(_) => (), // TODO: figure out difference between Motion and MotionAngle
-                    CharacterField::Motion(angle) => character.angle = Fixed12(*angle),
+                    CharacterField::MotionAngle(angle) => character.angle = Fixed12(*angle),
+                    CharacterField::Motion(_) => (), // seems like this might not be something useful?
                     CharacterField::Size(width, height) => {
                         character.set_size(*width, *height);
                     }

@@ -554,6 +554,9 @@ impl eframe::App for App {
                             eprintln!("Failed to load room {}: {}", new_room_id, e);
                         }
                     }
+                } else {
+                    // pause once we reach the end of the recording
+                    self.is_recording_playing = false;
                 }
             }
 
