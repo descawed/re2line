@@ -78,6 +78,35 @@ pub(super) enum ObjectType {
      Neutral,
 }
 
+impl ObjectType {
+     pub const fn name(&self) -> &'static str {
+          match self {
+               Self::Floor => "Floor",
+               Self::Collider => "Collider",
+               Self::Auto => "Auto AOT",
+               Self::Door => "Door",
+               Self::Item => "Item",
+               Self::Normal => "Normal AOT",
+               Self::Message => "Message",
+               Self::Event => "Event",
+               Self::FlagChg => "Flag Change",
+               Self::Water => "Water",
+               Self::Move => "Move AOT",
+               Self::Save => "Typewriter",
+               Self::ItemBox => "Item Box",
+               Self::Damage => "Damage AOT",
+               Self::Status => "Status AOT",
+               Self::Hikidashi => "Hikidashi AOT",
+               Self::Windows => "Windows",
+               Self::Object => "Object",
+               Self::Enemy => "Enemy",
+               Self::Player => "Player",
+               Self::Ally => "NPC Ally",
+               Self::Neutral => "NPC",
+          }
+     }
+}
+
 impl From<SceType> for ObjectType {
      fn from(value: SceType) -> Self {
           match value {

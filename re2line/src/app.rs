@@ -7,6 +7,7 @@ use std::time::Instant;
 use anyhow::{Result, bail, anyhow};
 use eframe::{Frame, Storage};
 use egui::{Context, Ui, ViewportCommand};
+use egui::widgets::color_picker::Alpha;
 use re2shared::record::FrameRecord;
 use rfd::FileDialog;
 
@@ -36,17 +37,19 @@ enum SelectedObject {
 enum BrowserTab {
     Game,
     Room,
+    Settings,
 }
 
 impl BrowserTab {
-    const fn list() -> [BrowserTab; 2] {
-        [BrowserTab::Game, BrowserTab::Room]
+    const fn list() -> [BrowserTab; 3] {
+        [BrowserTab::Game, BrowserTab::Room, BrowserTab::Settings]
     }
 
     const fn name(&self) -> &'static str {
         match self {
             Self::Game => "Game",
             Self::Room => "Room",
+            Self::Settings => "Settings",
         }
     }
 }
@@ -335,6 +338,17 @@ impl App {
         });
     }
 
+    fn settings_browser(&mut self, ui: &mut Ui) {
+        egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
+            for (object_type, object_settings) in &mut self.config.object_settings {
+                ui.label(egui::RichText::new(object_type.name()).strong());
+                ui.checkbox(&mut object_settings.show, "Show");
+                egui::widgets::color_picker::color_picker_color32(ui, &mut object_settings.color, Alpha::OnlyBlend);
+                ui.separator();
+            }
+        });
+    }
+
     fn object_details(&mut self, ui: &mut Ui) {
         egui::ScrollArea::horizontal().show(ui, |ui| {
             let description = match self.selected_object {
@@ -441,6 +455,7 @@ impl eframe::App for App {
                 match self.tab {
                     BrowserTab::Game => self.rdt_browser(ui),
                     BrowserTab::Room => self.room_browser(ui),
+                    BrowserTab::Settings => self.settings_browser(ui),
                 }
             });
         });
@@ -478,27 +493,31 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             let view_center = self.calculate_origin(ctx, ui.ui_contains_pointer());
 
-            for (i, floor) in self.floors.iter().enumerate() {
-                let mut floor_draw_params = self.config.get_draw_params(ObjectType::Floor, view_center);
-                if self.selected_object == SelectedObject::Floor(i) {
-                    // unlike the other object types, we don't draw the floor on top when it's highlighted
-                    // because it covers everything up and makes it hard to tell what's actually on the
-                    // given floor
-                    floor_draw_params.highlight();
-                }
+            if self.config.should_show(ObjectType::Floor) {
+                for (i, floor) in self.floors.iter().enumerate() {
+                    let mut floor_draw_params = self.config.get_draw_params(ObjectType::Floor, view_center);
+                    if self.selected_object == SelectedObject::Floor(i) {
+                        // unlike the other object types, we don't draw the floor on top when it's highlighted
+                        // because it covers everything up and makes it hard to tell what's actually on the
+                        // given floor
+                        floor_draw_params.highlight();
+                    }
 
-                let shape = floor.gui_shape(&floor_draw_params);
-                ui.painter().add(shape);
+                    let shape = floor.gui_shape(&floor_draw_params);
+                    ui.painter().add(shape);
+                }
             }
 
             let mut collider_draw_params = self.config.get_draw_params(ObjectType::Collider, view_center);
-            for (i, collider) in self.colliders.iter().enumerate() {
-                if self.selected_object == SelectedObject::Collider(i) {
-                    continue;
-                }
+            if self.config.should_show(ObjectType::Collider) {
+                for (i, collider) in self.colliders.iter().enumerate() {
+                    if self.selected_object == SelectedObject::Collider(i) {
+                        continue;
+                    }
 
-                let shape = collider.gui_shape(&collider_draw_params);
-                ui.painter().add(shape);
+                    let shape = collider.gui_shape(&collider_draw_params);
+                    ui.painter().add(shape);
+                }
             }
 
             for (i, entity) in self.entities.iter().enumerate() {
@@ -506,7 +525,12 @@ impl eframe::App for App {
                     continue;
                 }
 
-                let entity_draw_params = self.config.get_draw_params(entity.sce().into(), view_center);
+                let object_type: ObjectType = entity.sce().into();
+                if !self.config.should_show(object_type) {
+                    continue;
+                }
+
+                let entity_draw_params = self.config.get_draw_params(object_type, view_center);
                 let shape = entity.gui_shape(&entity_draw_params);
                 ui.painter().add(shape);
             }
@@ -518,7 +542,12 @@ impl eframe::App for App {
                             continue;
                         };
 
-                        let char_draw_params = self.config.get_draw_params(character.type_().into(), view_center);
+                        let object_type: ObjectType = character.type_().into();
+                        if !self.config.should_show(object_type) {
+                            continue;
+                        }
+
+                        let char_draw_params = self.config.get_draw_params(object_type, view_center);
                         let shape = character.gui_shape(&char_draw_params, ui);
                         ui.painter().add(shape);
                     }
