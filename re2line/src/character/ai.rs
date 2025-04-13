@@ -80,6 +80,36 @@ impl AiCone {
     }
 }
 
+pub fn describe_player_ai_state(state: &[u8; 4]) -> &'static str {
+    match state {
+        [0x01, 0x00, _, _] => "Idle",
+        [0x01, 0x01, _, _] => "Walk",
+        [0x01, 0x02, _, _] => "Run",
+        [0x01, 0x03, _, _] => "Backpedal",
+        [0x01, 0x04, _, _] => "Turn",
+        [0x01, 0x05, _, _] => "Weapon",
+        [0x05, 0x00, 0x03, _] => "Grabbed",
+        [0x05, 0x00, 0x05, _] => "Push enemy",
+        _ => "Unknown",
+    }
+}
+
+pub fn describe_zombie_ai_state(state: &[u8; 4]) -> &'static str {
+    match state {
+        [0x01, 0x00, 0x03, _] => "Idle wander",
+        [0x01, 0x00, _, _] => "Idle",
+        [0x01, 0x01, _, _] => "Walk",
+        [0x01, 0x02, _, _] => "Walk (arms raised)",
+        [0x01, 0x03, _, _] => "Grab",
+        [0x01, 0x05, _, _] => "Knockdown",
+        [0x01, 0x08, _, _] => "Eat",
+        [0x01, 0x09, _, _] => "Knockback",
+        [0x01, 0x0C, _, _] => "Lunge",
+        [0x02, _, _, _] => "Hit",
+        _ => "Unknown",
+    }
+}
+
 pub const ZOMBIE_AI_CONES: [AiCone; 3] = [
     AiCone {
         name: "Aggro",

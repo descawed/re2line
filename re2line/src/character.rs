@@ -337,6 +337,16 @@ impl Character {
         )
     }
 
+    fn describe_state(&self) -> String {
+        String::from(if self.id.is_zombie() {
+            describe_zombie_ai_state(&self.state)
+        } else if self.id.is_player() {
+            describe_player_ai_state(&self.state)
+        } else {
+            "Unknown"
+        })
+    }
+
     pub fn describe(&self) -> Vec<(String, Vec<String>)> {
         let mut groups = Vec::new();
 
@@ -356,6 +366,7 @@ impl Character {
 
         groups.push((String::from("State"), vec![
             format!("{:02X} {:02X} {:02X} {:02X}", self.state[0], self.state[1], self.state[2], self.state[3]),
+            self.describe_state(),
         ]));
 
         groups
