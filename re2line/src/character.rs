@@ -268,6 +268,9 @@ impl CharacterId {
 #[derive(Debug, Clone)]
 pub struct Character {
     pub id: CharacterId,
+    pub center: Vec2,
+    pub width: UFixed12,
+    pub height: UFixed12,
     pub shape: EllipseCollider,
     pub angle: Fixed12,
     current_health: i16,
@@ -281,7 +284,13 @@ impl Character {
     pub const fn new(id: CharacterId, health: i16, x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, angle: Fixed12, velocity: Vec2) -> Self {
         Self {
             id,
-            shape: EllipseCollider::new(x, z, width, height),
+            center: Vec2 { x, z },
+            width,
+            height,
+            shape: EllipseCollider::new(
+                Fixed12((x.0 as i32 - width.0 as i32) as i16), Fixed12((z.0 as i32 - height.0 as i32) as i16),
+                UFixed12(width.0 << 1), UFixed12(height.0 << 1),
+            ),
             angle,
             current_health: health,
             max_health: health,
@@ -319,11 +328,14 @@ impl Character {
     }
 
     pub fn set_pos(&mut self, x: impl Into<Fixed12>, z: impl Into<Fixed12>) {
-        self.shape.set_pos(x.into(), z.into());
+        self.center = Vec2::new(x.into(), z.into());
+        self.shape.set_pos(self.center.x - self.width, self.center.z - self.height);
     }
 
     pub fn set_size(&mut self, width: impl Into<UFixed12>, height:  impl Into<UFixed12>) {
-        self.shape.set_size(width.into(), height.into());
+        self.width = width.into();
+        self.height = height.into();
+        self.shape.set_size(self.width << 1, self.height << 1);
     }
 
     pub fn label(&self) -> String {
@@ -356,12 +368,12 @@ impl Character {
         ]));
 
         groups.push((String::from("Position"), vec![
-            format!("X: {}", self.shape.pos().0),
-            format!("Z: {}", self.shape.pos().1),
+            format!("X: {}", self.center.x),
+            format!("Z: {}", self.center.z),
             format!("Angle: {:.1}°", self.angle.to_degrees()),
             format!("Floor: {}", self.floor),
-            format!("W: {}", self.shape.size().0),
-            format!("H: {}", self.shape.size().1),
+            format!("XR: {}", self.width),
+            format!("ZR: {}", self.height),
         ]));
 
         groups.push((String::from("State"), vec![
