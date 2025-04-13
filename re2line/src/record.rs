@@ -112,6 +112,15 @@ impl State {
     pub fn characters(&self) -> &[Option<Character>] {
         &self.characters
     }
+
+    pub fn characters_mut(&mut self) -> [Option<&mut Character>; NUM_CHARACTERS] {
+        let mut characters = [const { None }; NUM_CHARACTERS];
+        for (i, character) in self.characters.iter_mut().enumerate() {
+            characters[i] = character.as_mut();
+        }
+
+        characters
+    }
 }
 
 #[derive(Debug)]
@@ -177,6 +186,15 @@ impl Recording {
 
         let room_index = self.index - self.range.start;
         self.states.get(room_index)
+    }
+
+    pub fn current_state_mut(&mut self) -> Option<&mut State> {
+        if !self.range.contains(&self.index) {
+            return None;
+        }
+
+        let room_index = self.index - self.range.start;
+        self.states.get_mut(room_index)
     }
 
     pub fn current_room(&self) -> &[State] {

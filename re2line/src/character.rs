@@ -23,7 +23,7 @@ pub enum CharacterType {
     Enemy,
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 pub enum CharacterId {
     Leon = 0,
@@ -275,6 +275,10 @@ impl Character {
         Self::new(id, 0, Fixed12(0), Fixed12(0), UFixed12(0), UFixed12(0), Fixed12(0), Vec2::zero())
     }
 
+    pub const fn name(&self) -> &'static str {
+        self.id.name()
+    }
+
     pub const fn type_(&self) -> CharacterType {
         self.id.type_()
     }
@@ -313,38 +317,34 @@ impl Character {
         )
     }
 
-    pub fn gui_shape(&self, draw_params: &DrawParams, ui: &Ui) -> Shape {
+    pub fn describe(&self) -> Vec<(String, Vec<String>)> {
+        let mut groups = Vec::new();
+
+        groups.push((String::from("Character"), vec![
+            format!("Type: {} ({})", self.name(), self.id as u8),
+            format!("HP: {}/{}", self.current_health, self.max_health),
+        ]));
+
+        groups.push((String::from("Position"), vec![
+            format!("X: {}", self.shape.pos().0),
+            format!("Z: {}", self.shape.pos().1),
+            format!("Angle: {:.1}°", self.angle.to_degrees()),
+            format!("Floor: {}", self.floor),
+            format!("W: {}", self.shape.size().0),
+            format!("H: {}", self.shape.size().1),
+        ]));
+
+        groups.push((String::from("State"), vec![
+            format!("{:02X} {:02X} {:02X} {:02X}", self.state[0], self.state[1], self.state[2], self.state[3]),
+        ]));
+
+        groups
+    }
+
+    pub fn gui_shape(&self, draw_params: &DrawParams, ui: &Ui, show_tooltip: bool) -> Shape {
         let body_shape = self.shape.gui_shape(draw_params);
         let body_rect = body_shape.visual_bounding_rect();
         let body_center = body_rect.center();
-
-        let center_x = body_center.x;
-        let top_y = body_rect.min.y;
-        let font_id = TextStyle::Body.resolve(&*ui.style());
-
-        let bg_color = Color32::from_rgb(0x30, 0x30, 0x30);
-
-        let text_shape = ui.fonts(|fonts| {
-            // TODO: make colors configurable
-            let mut job = LayoutJob::simple(
-                self.label(),
-                font_id,
-                Color32::from_rgb(0xe0, 0xe0, 0xe0),
-                LABEL_WRAP_WIDTH,
-            );
-            job.halign = Align::Center;
-
-            let galley = fonts.layout_job(job);
-
-            Shape::Text(TextShape::new(
-                Pos2::new(center_x, top_y - galley.rect.height() - LABEL_MARGIN),
-                galley,
-                bg_color,
-            ))
-        });
-
-        let bg_rect = text_shape.visual_bounding_rect().expand(LABEL_PADDING);
-        let text_bg_shape = Shape::rect_filled(bg_rect, LABEL_CORNER_RADIUS, bg_color);
 
         let vector = egui::Vec2::angled(self.angle.to_radians()) * MOTION_PROJECTION_LENGTH;
         let dest_pos = body_center + vector;
@@ -372,6 +372,37 @@ impl Character {
             },
             fill: draw_params.fill_color,
         });
+
+        if !show_tooltip {
+            return Shape::Vec(vec![body_shape, shaft_shape, arrow_shape]);
+        }
+
+        let center_x = body_center.x;
+        let top_y = body_rect.min.y;
+        let font_id = TextStyle::Body.resolve(&*ui.style());
+        // TODO: make colors configurable
+        let bg_color = Color32::from_rgb(0x30, 0x30, 0x30);
+
+        let text_shape = ui.fonts(|fonts| {
+            let mut job = LayoutJob::simple(
+                self.label(),
+                font_id,
+                Color32::from_rgb(0xe0, 0xe0, 0xe0),
+                LABEL_WRAP_WIDTH,
+            );
+            job.halign = Align::Center;
+
+            let galley = fonts.layout_job(job);
+
+            Shape::Text(TextShape::new(
+                Pos2::new(center_x, top_y - galley.rect.height() - LABEL_MARGIN),
+                galley,
+                bg_color,
+            ))
+        });
+
+        let bg_rect = text_shape.visual_bounding_rect().expand(LABEL_PADDING);
+        let text_bg_shape = Shape::rect_filled(bg_rect, LABEL_CORNER_RADIUS, bg_color);
 
         Shape::Vec(vec![text_bg_shape, text_shape, body_shape, shaft_shape, arrow_shape])
     }

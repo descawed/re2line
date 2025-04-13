@@ -166,6 +166,10 @@ impl EllipseCollider {
         self.z = z;
     }
 
+    pub fn size(&self) -> (UFixed12, UFixed12) {
+        (self.width, self.height)
+    }
+
     pub fn set_size(&mut self, width: UFixed12, height: UFixed12) {
         self.width = width;
         self.height = height;

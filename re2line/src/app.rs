@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::io::BufReader;
@@ -12,10 +13,11 @@ use re2shared::record::FrameRecord;
 use rfd::FileDialog;
 
 use crate::aot::{Entity, SceType};
+use crate::character::{Character, CharacterId};
 use crate::collision::Collider;
 use crate::math::Fixed12;
 use crate::rdt::Rdt;
-use crate::record::{FRAME_DURATION, Recording};
+use crate::record::{FRAME_DURATION, Recording, State};
 
 mod config;
 use config::{Config, ObjectType};
@@ -31,6 +33,7 @@ enum SelectedObject {
     Entity(usize),
     Collider(usize),
     Floor(usize),
+    Character(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,6 +57,21 @@ impl BrowserTab {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+struct CharacterSettings {
+    pub show_tooltip: bool,
+    pub show_zones: bool,
+}
+
+impl Default for CharacterSettings {
+    fn default() -> Self {
+        Self {
+            show_tooltip: true,
+            show_zones: true,
+        }
+    }
+}
+
 pub struct App {
     center: (Fixed12, Fixed12),
     colliders: Vec<Collider>,
@@ -69,6 +87,7 @@ pub struct App {
     active_recording: Option<Recording>,
     is_recording_playing: bool,
     last_play_tick: Instant,
+    character_settings: HashMap<(RoomId, CharacterId, usize), CharacterSettings>,
 }
 
 impl App {
@@ -88,6 +107,7 @@ impl App {
             active_recording: None,
             is_recording_playing: false,
             last_play_tick: Instant::now(),
+            character_settings: HashMap::new(),
         })
     }
 
@@ -239,6 +259,8 @@ impl App {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
         self.active_recording = Some(Recording::read(reader)?);
+        // reset character display settings for new recording
+        self.character_settings.clear();
 
         Ok(())
     }
@@ -300,6 +322,20 @@ impl App {
                     aot_count += 1;
                 }
             });
+
+            if let Some(recording) = &mut self.active_recording {
+                if let Some(state) = recording.current_state() {
+                    ui.collapsing("Characters", |ui| {
+                        for (i, character) in state.characters().iter().enumerate() {
+                            let Some(character) = character.as_ref() else {
+                                continue;
+                            };
+
+                            ui.selectable_value(&mut self.selected_object, SelectedObject::Character(i), format!("#{}: {}", i, character.name()));
+                        }
+                    });
+                }
+            }
         });
     }
 
@@ -349,14 +385,40 @@ impl App {
         });
     }
 
+    fn get_character(&self, index: usize) -> Option<&Character> {
+        self.active_recording.as_ref().and_then(Recording::current_state).and_then(|state| {
+            state.characters().get(index)
+        }).and_then(Option::as_ref)
+    }
+
+    fn get_character_settings(&self, index: usize) -> Option<CharacterSettings> {
+        let room_id = self.active_recording.as_ref().and_then(Recording::current_state).map(State::room_id)?;
+        let character_id = self.get_character(index)?.id;
+        Some(self.character_settings.get(&(room_id, character_id, index)).copied().unwrap_or_default())
+    }
+
+    fn get_character_settings_mut(&mut self, index: usize) -> Option<&mut CharacterSettings> {
+        let room_id = self.active_recording.as_ref().and_then(Recording::current_state).map(State::room_id)?;
+        let character_id = self.get_character(index)?.id;
+        Some(self.character_settings.entry((room_id, character_id, index)).or_default())
+    }
+
     fn object_details(&mut self, ui: &mut Ui) {
         egui::ScrollArea::horizontal().show(ui, |ui| {
             let description = match self.selected_object {
                 SelectedObject::Floor(i) => self.floors[i].describe(),
                 SelectedObject::Entity(i) => self.entities[i].describe(),
                 SelectedObject::Collider(i) => self.colliders[i].describe(),
+                SelectedObject::Character(i) => match self.get_character(i) {
+                    Some(character) => character.describe(),
+                    None => vec![],
+                },
                 SelectedObject::None => return,
             };
+
+            if description.is_empty() {
+                return;
+            }
 
             let mut groups = description.into_iter();
             let (mut group_name, fields) = groups.next().unwrap();
@@ -408,6 +470,18 @@ impl App {
                         is_group_end = false;
 
                         ui.separator();
+                    }
+                }
+
+                if let SelectedObject::Character(i) = self.selected_object {
+                    if let Some(settings) = self.get_character_settings_mut(i) {
+                        // extra display options for characters
+                        ui.separator();
+                        ui.vertical(|ui| {
+                            ui.label(egui::RichText::new("Display").strong());
+                            ui.checkbox(&mut settings.show_tooltip, "Show tooltip");
+                            ui.checkbox(&mut settings.show_zones, "Show zones");
+                        });
                     }
                 }
 
@@ -535,10 +609,14 @@ impl eframe::App for App {
                 ui.painter().add(shape);
             }
 
-            if let Some(recording) = &mut self.active_recording {
+            if let Some(recording) = &self.active_recording {
                 if let Some(state) = recording.current_state() {
-                    for character in state.characters() {
-                        let Some(character) = character.as_ref() else {
+                    for (i, character) in state.characters().iter().enumerate() {
+                        if self.selected_object == SelectedObject::Character(i) {
+                            continue;
+                        }
+
+                        let (Some(character), Some(settings)) = (character.as_ref(), self.get_character_settings(i)) else {
                             continue;
                         };
 
@@ -548,7 +626,7 @@ impl eframe::App for App {
                         }
 
                         let char_draw_params = self.config.get_draw_params(object_type, view_center);
-                        let shape = character.gui_shape(&char_draw_params, ui);
+                        let shape = character.gui_shape(&char_draw_params, ui, settings.show_tooltip);
                         ui.painter().add(shape);
                     }
                 }
@@ -566,6 +644,16 @@ impl eframe::App for App {
                 SelectedObject::Collider(i) => {
                     collider_draw_params.highlight();
                     let shape = self.colliders[i].gui_shape(&collider_draw_params);
+                    ui.painter().add(shape);
+                }
+                SelectedObject::Character(i) => {
+                    let (Some(character), Some(settings)) = (self.get_character(i), self.get_character_settings(i)) else {
+                        return;
+                    };
+
+                    let object_type: ObjectType = character.type_().into();
+                    let char_draw_params = self.config.get_draw_params(object_type, view_center);
+                    let shape = character.gui_shape(&char_draw_params, ui, settings.show_tooltip);
                     ui.painter().add(shape);
                 }
             }
