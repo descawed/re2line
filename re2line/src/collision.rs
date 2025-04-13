@@ -157,6 +157,10 @@ impl EllipseCollider {
         })
     }
 
+    pub fn pos(&self) -> (Fixed12, Fixed12) {
+        (self.x, self.z)
+    }
+
     pub fn set_pos(&mut self, x: Fixed12, z: Fixed12) {
         self.x = x;
         self.z = z;

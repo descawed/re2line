@@ -116,7 +116,6 @@ impl State {
 
 #[derive(Debug)]
 pub struct Recording {
-    version: u16,
     frames: Vec<FrameRecord>,
     states: Vec<State>,
     checkpoints: Vec<State>, // one checkpoint per room transition
@@ -151,7 +150,6 @@ impl Recording {
         }
 
         let mut recording = Self {
-            version: header.version,
             frames,
             index: 0,
             states: Vec::with_capacity(max_room_size),
@@ -181,7 +179,7 @@ impl Recording {
         self.states.get(room_index)
     }
 
-    pub fn current_range(&self) -> &[State] {
+    pub fn current_room(&self) -> &[State] {
         &self.states
     }
 

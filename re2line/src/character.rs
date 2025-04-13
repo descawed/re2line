@@ -1,7 +1,15 @@
+use egui::{Align, Color32, Pos2, Shape, TextStyle, Ui};
+use epaint::TextShape;
+use epaint::text::LayoutJob;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::collision::{DrawParams, EllipseCollider};
 use crate::math::{Fixed12, UFixed12, Vec2};
+
+const LABEL_CORNER_RADIUS: f32 = 5.0;
+const LABEL_MARGIN: f32 = 10.0;
+const LABEL_PADDING: f32 = 5.0;
+const LABEL_WRAP_WIDTH: f32 = 100.0;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum CharacterType {
@@ -290,7 +298,43 @@ impl Character {
         self.shape.set_size(width.into(), height.into());
     }
 
-    pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
-        self.shape.gui_shape(draw_params)
+    pub fn label(&self) -> String {
+        let (x, z) = self.shape.pos();
+        format!("{}\nX: {:7} Z:{:7}\nHP: {}/{}", self.id.name(), x, z, self.current_health, self.max_health)
+    }
+
+    pub fn gui_shape(&self, draw_params: &DrawParams, ui: &Ui) -> Shape {
+        let body_shape = self.shape.gui_shape(draw_params);
+        let body_rect = body_shape.visual_bounding_rect();
+
+        let center_x = body_rect.center().x;
+        let top_y = body_rect.min.y;
+        let font_id = TextStyle::Body.resolve(&*ui.style());
+
+        let bg_color = Color32::from_rgb(0x30, 0x30, 0x30);
+
+        let text_shape = ui.fonts(|fonts| {
+            // TODO: make colors configurable
+            let mut job = LayoutJob::simple(
+                self.label(),
+                font_id,
+                Color32::from_rgb(0xe0, 0xe0, 0xe0),
+                LABEL_WRAP_WIDTH,
+            );
+            job.halign = Align::Center;
+
+            let galley = fonts.layout_job(job);
+
+            Shape::Text(TextShape::new(
+                Pos2::new(center_x, top_y - galley.rect.height() - LABEL_MARGIN),
+                galley,
+                bg_color,
+            ))
+        });
+
+        let bg_rect = text_shape.visual_bounding_rect().expand(LABEL_PADDING);
+        let text_bg_shape = Shape::rect_filled(bg_rect, LABEL_CORNER_RADIUS, bg_color);
+
+        Shape::Vec(vec![body_shape, text_bg_shape, text_shape])
     }
 }

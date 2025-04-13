@@ -519,7 +519,7 @@ impl eframe::App for App {
                         };
 
                         let char_draw_params = self.config.get_draw_params(character.type_().into(), view_center);
-                        let shape = character.gui_shape(&char_draw_params);
+                        let shape = character.gui_shape(&char_draw_params, ui);
                         ui.painter().add(shape);
                     }
                 }
@@ -556,9 +556,7 @@ impl eframe::App for App {
                     }
                 }
             }
-        }
 
-        if self.is_recording_playing {
             // re-draw regularly while we're animating
             ctx.request_repaint();
         }
