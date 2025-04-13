@@ -6,6 +6,9 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use crate::collision::{DrawParams, EllipseCollider};
 use crate::math::{Fixed12, UFixed12, Vec2};
 
+mod ai;
+use ai::*;
+
 const ARROW_HEAD_HEIGHT: f32 = 6.0;
 const ARROW_HEAD_WIDTH: f32 = 6.0;
 const ARROW_SHAFT_WIDTH: f32 = 1.5;
@@ -13,7 +16,7 @@ const LABEL_CORNER_RADIUS: f32 = 5.0;
 const LABEL_MARGIN: f32 = 10.0;
 const LABEL_PADDING: f32 = 5.0;
 const LABEL_WRAP_WIDTH: f32 = 150.0;
-const MOTION_PROJECTION_LENGTH: f32 = 25.0;
+const MOTION_PROJECTION_LENGTH: f32 = 0.25;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum CharacterType {
@@ -117,131 +120,148 @@ pub enum CharacterId {
 impl CharacterId {
     pub const fn name(&self) -> &'static str {
         match self {
-            CharacterId::Leon => "Leon",
-            CharacterId::Claire => "Claire",
-            CharacterId::Unknown2 => "Unknown 2",
-            CharacterId::Unknown3 => "Unknown 3",
-            CharacterId::LeonBandaged => "Leon (bandaged)",
-            CharacterId::ClaireBlackTop => "Claire (black top)",
-            CharacterId::Unknown6 => "Unknown 6",
-            CharacterId::Unknown7 => "Unknown 7",
-            CharacterId::LeonTankTop => "Leon (tank top)",
-            CharacterId::ClaireBiker => "Claire (biker)",
-            CharacterId::LeonSkullJacket => "Leon (skull jacket)",
-            CharacterId::Chris => "Chris",
-            CharacterId::Hunk => "Hunk",
-            CharacterId::Tofu => "Tofu",
-            CharacterId::Ada => "Ada",
-            CharacterId::Sherry => "Sherry",
-            CharacterId::ZombiePoliceHat => "Zombie (police hat)",
-            CharacterId::Brad => "Brad",
-            CharacterId::ZombieTornShirt => "Zombie (torn shirt)",
-            CharacterId::Misty => "Misty",
-            CharacterId::Unknown20 => "Unknown 20",
-            CharacterId::ZombieLabWhite => "Zombie (lab, white)",
-            CharacterId::ZombieLabYellow => "Zombie (lab, yellow)",
-            CharacterId::NakedZombie => "Naked zombie",
-            CharacterId::ZombieYellowShirt => "Zombie (yellow shirt)",
-            CharacterId::Unknown25 => "Unknown 25",
-            CharacterId::Unknown26 => "Unknown 26",
-            CharacterId::Unknown27 => "Unknown 27",
-            CharacterId::Unknown28 => "Unknown 28",
-            CharacterId::Unknown29 => "Unknown 29",
-            CharacterId::HeadlessZombieYellowShirt => "Headless zombie (yellow shirt)",
-            CharacterId::ZombieRandom => "Zombie (random)",
-            CharacterId::Dog => "Dog",
-            CharacterId::Crow => "Crow",
-            CharacterId::LickerRed => "Licker (red)",
-            CharacterId::Croc => "Croc",
-            CharacterId::LickerBlack => "Licker (black)",
-            CharacterId::Spider => "Spider",
-            CharacterId::SpiderBaby => "Baby spider",
-            CharacterId::GYoung => "G Young",
-            CharacterId::GAdult => "G Adult",
-            CharacterId::Roach => "Roach",
-            CharacterId::MrX => "Mr. X",
-            CharacterId::SuperX => "Super X",
-            CharacterId::Unknown44 => "Unknown 44",
-            CharacterId::Hands => "Hands",
-            CharacterId::Ivy => "Ivy",
-            CharacterId::Tentacle => "Tentacle",
-            CharacterId::G1 => "G1",
-            CharacterId::G2 => "G2",
-            CharacterId::Unknown50 => "Unknown 50",
-            CharacterId::G3 => "G3",
-            CharacterId::G4 => "G4",
-            CharacterId::Unknown53 => "Unknown 53",
-            CharacterId::G5 => "G5",
-            CharacterId::G5Tentacle => "G5 Tentacle",
-            CharacterId::Unknown56 => "Unknown 56",
-            CharacterId::PoisonIvy => "Poison Ivy",
-            CharacterId::Moth => "Moth",
-            CharacterId::Larva => "Larva",
-            CharacterId::Unknown60 => "Unknown 60",
-            CharacterId::Unknown61 => "Unknown 61",
-            CharacterId::Unknown62 => "Unknown 62",
-            CharacterId::FuseHousing => "Fuse Housing",
-            CharacterId::Irons => "Irons",
-            CharacterId::AdaNpc => "Ada (NPC)",
-            CharacterId::IronsTorso => "Irons (torso)",
-            CharacterId::AdaWounded => "Ada (wounded)",
-            CharacterId::BenDead => "Ben (dead)",
-            CharacterId::SherryNpc => "Sherry (NPC)",
-            CharacterId::Ben => "Ben",
-            CharacterId::Annette => "Annette",
-            CharacterId::Kendo => "Kendo",
-            CharacterId::Unknown73 => "Unknown 73",
-            CharacterId::Marvin => "Marvin",
-            CharacterId::MayorsDaughter => "Mayor's daughter",
-            CharacterId::Unknown76 => "Unknown 76",
-            CharacterId::Unknown77 => "Unknown 77",
-            CharacterId::Unknown78 => "Unknown 78",
-            CharacterId::SherryVest => "Sherry (vest)",
-            CharacterId::LeonNpc => "Leon (NPC)",
-            CharacterId::ClaireNpc => "Claire (NPC)",
-            CharacterId::Unknown82 => "Unknown 82",
-            CharacterId::Unknown83 => "Unknown 83",
-            CharacterId::LeonBandagedNpc => "Leon (bandaged, NPC)",
-            CharacterId::Unknown => "Unknown",
+            Self::Leon => "Leon",
+            Self::Claire => "Claire",
+            Self::Unknown2 => "Unknown 2",
+            Self::Unknown3 => "Unknown 3",
+            Self::LeonBandaged => "Leon (bandaged)",
+            Self::ClaireBlackTop => "Claire (black top)",
+            Self::Unknown6 => "Unknown 6",
+            Self::Unknown7 => "Unknown 7",
+            Self::LeonTankTop => "Leon (tank top)",
+            Self::ClaireBiker => "Claire (biker)",
+            Self::LeonSkullJacket => "Leon (skull jacket)",
+            Self::Chris => "Chris",
+            Self::Hunk => "Hunk",
+            Self::Tofu => "Tofu",
+            Self::Ada => "Ada",
+            Self::Sherry => "Sherry",
+            Self::ZombiePoliceHat => "Zombie (police hat)",
+            Self::Brad => "Brad",
+            Self::ZombieTornShirt => "Zombie (torn shirt)",
+            Self::Misty => "Misty",
+            Self::Unknown20 => "Unknown 20",
+            Self::ZombieLabWhite => "Zombie (lab, white)",
+            Self::ZombieLabYellow => "Zombie (lab, yellow)",
+            Self::NakedZombie => "Naked zombie",
+            Self::ZombieYellowShirt => "Zombie (yellow shirt)",
+            Self::Unknown25 => "Unknown 25",
+            Self::Unknown26 => "Unknown 26",
+            Self::Unknown27 => "Unknown 27",
+            Self::Unknown28 => "Unknown 28",
+            Self::Unknown29 => "Unknown 29",
+            Self::HeadlessZombieYellowShirt => "Headless zombie (yellow shirt)",
+            Self::ZombieRandom => "Zombie (random)",
+            Self::Dog => "Dog",
+            Self::Crow => "Crow",
+            Self::LickerRed => "Licker (red)",
+            Self::Croc => "Croc",
+            Self::LickerBlack => "Licker (black)",
+            Self::Spider => "Spider",
+            Self::SpiderBaby => "Baby spider",
+            Self::GYoung => "G Young",
+            Self::GAdult => "G Adult",
+            Self::Roach => "Roach",
+            Self::MrX => "Mr. X",
+            Self::SuperX => "Super X",
+            Self::Unknown44 => "Unknown 44",
+            Self::Hands => "Hands",
+            Self::Ivy => "Ivy",
+            Self::Tentacle => "Tentacle",
+            Self::G1 => "G1",
+            Self::G2 => "G2",
+            Self::Unknown50 => "Unknown 50",
+            Self::G3 => "G3",
+            Self::G4 => "G4",
+            Self::Unknown53 => "Unknown 53",
+            Self::G5 => "G5",
+            Self::G5Tentacle => "G5 Tentacle",
+            Self::Unknown56 => "Unknown 56",
+            Self::PoisonIvy => "Poison Ivy",
+            Self::Moth => "Moth",
+            Self::Larva => "Larva",
+            Self::Unknown60 => "Unknown 60",
+            Self::Unknown61 => "Unknown 61",
+            Self::Unknown62 => "Unknown 62",
+            Self::FuseHousing => "Fuse Housing",
+            Self::Irons => "Irons",
+            Self::AdaNpc => "Ada (NPC)",
+            Self::IronsTorso => "Irons (torso)",
+            Self::AdaWounded => "Ada (wounded)",
+            Self::BenDead => "Ben (dead)",
+            Self::SherryNpc => "Sherry (NPC)",
+            Self::Ben => "Ben",
+            Self::Annette => "Annette",
+            Self::Kendo => "Kendo",
+            Self::Unknown73 => "Unknown 73",
+            Self::Marvin => "Marvin",
+            Self::MayorsDaughter => "Mayor's daughter",
+            Self::Unknown76 => "Unknown 76",
+            Self::Unknown77 => "Unknown 77",
+            Self::Unknown78 => "Unknown 78",
+            Self::SherryVest => "Sherry (vest)",
+            Self::LeonNpc => "Leon (NPC)",
+            Self::ClaireNpc => "Claire (NPC)",
+            Self::Unknown82 => "Unknown 82",
+            Self::Unknown83 => "Unknown 83",
+            Self::LeonBandagedNpc => "Leon (bandaged, NPC)",
+            Self::Unknown => "Unknown",
         }
     }
 
     pub const fn type_(&self) -> CharacterType {
         match self {
-            CharacterId::Leon
-            | CharacterId::Claire
-            | CharacterId::Unknown2
-            | CharacterId::Unknown3
-            | CharacterId::LeonBandaged
-            | CharacterId::ClaireBlackTop
-            | CharacterId::Unknown6
-            | CharacterId::Unknown7
-            | CharacterId::LeonTankTop
-            | CharacterId::ClaireBiker
-            | CharacterId::LeonSkullJacket
-            | CharacterId::Chris
-            | CharacterId::Hunk
-            | CharacterId::Tofu
-            | CharacterId::Ada
-            | CharacterId::Sherry
+            Self::Leon
+            | Self::Claire
+            | Self::Unknown2
+            | Self::Unknown3
+            | Self::LeonBandaged
+            | Self::ClaireBlackTop
+            | Self::Unknown6
+            | Self::Unknown7
+            | Self::LeonTankTop
+            | Self::ClaireBiker
+            | Self::LeonSkullJacket
+            | Self::Chris
+            | Self::Hunk
+            | Self::Tofu
+            | Self::Ada
+            | Self::Sherry
             => CharacterType::Player,
-            CharacterId::AdaNpc | CharacterId::SherryNpc => CharacterType::Ally,
-            CharacterId::FuseHousing
-            | CharacterId::Irons
-            | CharacterId::IronsTorso
-            | CharacterId::AdaWounded
-            | CharacterId::BenDead
-            | CharacterId::Ben
-            | CharacterId::Annette
-            | CharacterId::Kendo
-            | CharacterId::Marvin
-            | CharacterId::MayorsDaughter
-            | CharacterId::LeonNpc
-            | CharacterId::ClaireNpc
-            | CharacterId::LeonBandagedNpc
+            Self::AdaNpc | Self::SherryNpc => CharacterType::Ally,
+            Self::FuseHousing
+            | Self::Irons
+            | Self::IronsTorso
+            | Self::AdaWounded
+            | Self::BenDead
+            | Self::Ben
+            | Self::Annette
+            | Self::Kendo
+            | Self::Marvin
+            | Self::MayorsDaughter
+            | Self::LeonNpc
+            | Self::ClaireNpc
+            | Self::LeonBandagedNpc
             => CharacterType::Neutral,
             _ => CharacterType::Enemy,
         }
+    }
+
+    pub const fn is_player(&self) -> bool {
+        matches!(self.type_(), CharacterType::Player)
+    }
+
+    pub const fn is_zombie(&self) -> bool {
+        // TODO: do Brad, Marvin, and naked zombies use the same AI as regular zombies?
+        matches!(self,
+            Self::ZombiePoliceHat
+            | Self::ZombieTornShirt
+            | Self::ZombieYellowShirt
+            | Self::ZombieRandom
+            | Self::ZombieLabWhite
+            | Self::ZombieLabYellow
+            | Self::Misty
+        )
     }
 }
 
@@ -309,7 +329,7 @@ impl Character {
     pub fn label(&self) -> String {
         let (x, z) = self.shape.pos();
         format!(
-            "{}\nState: {:02X} {:02X} {:02X} {:02X}\nX: {:7} Z:{:7}\nHP: {}/{}",
+            "{}\nState: {:02X} {:02X} {:02X} {:02X}\nX: {:7} Z: {:7}\nHP: {}/{}",
             self.id.name(),
             self.state[0], self.state[1], self.state[2], self.state[3],
             x, z,
@@ -341,12 +361,37 @@ impl Character {
         groups
     }
 
+    pub fn gui_ai(&self, draw_params: &DrawParams) -> Shape {
+        let mut shapes = Vec::new();
+        // TODO: add other types
+        if !self.id.is_zombie() {
+            return Shape::Vec(shapes);
+        }
+
+        let body_shape = self.shape.gui_shape(draw_params);
+        let body_center = body_shape.visual_bounding_rect().center();
+
+        for ai_cone in &ZOMBIE_AI_CONES {
+            let mut draw_params = draw_params.clone();
+            draw_params.origin = body_center;
+            draw_params.fill_color = ai_cone.behavior_type.default_color();
+            if !ai_cone.check_state(&self.state) {
+                // cone is not active in this state; make it more transparent
+                draw_params.fill_color = draw_params.fill_color.gamma_multiply(0.5);
+            }
+
+            shapes.push(ai_cone.gui_shape(self.angle.to_radians(), draw_params));
+        }
+
+        Shape::Vec(shapes)
+    }
+
     pub fn gui_shape(&self, draw_params: &DrawParams, ui: &Ui, show_tooltip: bool) -> Shape {
         let body_shape = self.shape.gui_shape(draw_params);
         let body_rect = body_shape.visual_bounding_rect();
         let body_center = body_rect.center();
 
-        let vector = egui::Vec2::angled(self.angle.to_radians()) * MOTION_PROJECTION_LENGTH;
+        let vector = egui::Vec2::angled(self.angle.to_radians()) * MOTION_PROJECTION_LENGTH * draw_params.scale;
         let dest_pos = body_center + vector;
         let vector_len = vector.length();
         let shaft_pos = body_center + ((vector_len - ARROW_HEAD_HEIGHT) / vector_len).max(0.0) * vector;
@@ -404,6 +449,6 @@ impl Character {
         let bg_rect = text_shape.visual_bounding_rect().expand(LABEL_PADDING);
         let text_bg_shape = Shape::rect_filled(bg_rect, LABEL_CORNER_RADIUS, bg_color);
 
-        Shape::Vec(vec![text_bg_shape, text_shape, body_shape, shaft_shape, arrow_shape])
+        Shape::Vec(vec![body_shape, shaft_shape, arrow_shape, text_bg_shape, text_shape])
     }
 }

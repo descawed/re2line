@@ -5,10 +5,11 @@ use std::io::BufReader;
 use std::str::FromStr;
 use std::time::Instant;
 
-use anyhow::{Result, bail, anyhow};
+use anyhow::{anyhow, bail, Result};
 use eframe::{Frame, Storage};
 use egui::{Context, Key, Ui, ViewportCommand};
 use egui::widgets::color_picker::Alpha;
+use re2shared::game::NUM_CHARACTERS;
 use re2shared::record::FrameRecord;
 use rfd::FileDialog;
 
@@ -17,7 +18,7 @@ use crate::character::{Character, CharacterId};
 use crate::collision::Collider;
 use crate::math::Fixed12;
 use crate::rdt::Rdt;
-use crate::record::{FRAME_DURATION, Recording, State};
+use crate::record::{Recording, State, FRAME_DURATION};
 
 mod config;
 use config::{Config, ObjectType};
@@ -60,14 +61,14 @@ impl BrowserTab {
 #[derive(Debug, Copy, Clone)]
 struct CharacterSettings {
     pub show_tooltip: bool,
-    pub show_zones: bool,
+    pub show_ai: bool,
 }
 
 impl Default for CharacterSettings {
     fn default() -> Self {
         Self {
             show_tooltip: true,
-            show_zones: true,
+            show_ai: true,
         }
     }
 }
@@ -494,7 +495,7 @@ impl App {
                         ui.vertical(|ui| {
                             ui.label(egui::RichText::new("Display").strong());
                             ui.checkbox(&mut settings.show_tooltip, "Show tooltip");
-                            ui.checkbox(&mut settings.show_zones, "Show zones");
+                            ui.checkbox(&mut settings.show_ai, "Show AI");
                         });
                     }
                 }
@@ -627,6 +628,9 @@ impl eframe::App for App {
 
             if let Some(recording) = &self.active_recording {
                 if let Some(state) = recording.current_state() {
+                    let mut ai_zones = Vec::with_capacity(NUM_CHARACTERS);
+                    let mut character_icons = Vec::with_capacity(NUM_CHARACTERS);
+
                     for (i, character) in state.characters().iter().enumerate() {
                         if self.selected_object == SelectedObject::Character(i) {
                             continue;
@@ -642,8 +646,32 @@ impl eframe::App for App {
                         }
 
                         let char_draw_params = self.config.get_draw_params(object_type, view_center);
-                        let shape = character.gui_shape(&char_draw_params, ui, settings.show_tooltip);
-                        ui.painter().add(shape);
+                        character_icons.push(character.gui_shape(&char_draw_params, ui, settings.show_tooltip));
+                        if settings.show_ai {
+                            ai_zones.push(character.gui_ai(&char_draw_params));
+                        }
+                    }
+
+                    // draw all AI zones first, then all characters, so characters are always on top of the zones
+                    for ai_zone in ai_zones {
+                        ui.painter().add(ai_zone);
+                    }
+
+                    // if the current selected object is a character, and that character has AI zones, draw those
+                    // zones after all other zones, but still before characters, because we always want those to
+                    // be on top
+                    if let SelectedObject::Character(i) = self.selected_object {
+                        if let (Some(Some(character)), Some(settings)) = (state.characters().iter().nth(i).map(Option::as_ref), self.get_character_settings(i)) {
+                            let object_type: ObjectType = character.type_().into();
+                            if settings.show_ai && self.config.should_show(object_type) {
+                                let char_draw_params = self.config.get_draw_params(object_type, view_center);
+                                ui.painter().add(character.gui_ai(&char_draw_params));
+                            }
+                        }
+                    }
+
+                    for character_icon in character_icons {
+                        ui.painter().add(character_icon);
                     }
                 }
             }
@@ -669,8 +697,7 @@ impl eframe::App for App {
 
                     let object_type: ObjectType = character.type_().into();
                     let char_draw_params = self.config.get_draw_params(object_type, view_center);
-                    let shape = character.gui_shape(&char_draw_params, ui, settings.show_tooltip);
-                    ui.painter().add(shape);
+                    ui.painter().add(character.gui_shape(&char_draw_params, ui, settings.show_tooltip));
                 }
             }
         });

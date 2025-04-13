@@ -5,7 +5,7 @@ const HIGHLIGHT: egui::Rgba = egui::Rgba::from_rgba_premultiplied(0.25, 0.25, 0.
 const HIGHLIGHT_STROKE: f32 = 2.0;
 const HIGHLIGHT_ALPHA: f32 = 1.5;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DrawParams {
     pub origin: egui::Pos2,
     pub scale: f32,
