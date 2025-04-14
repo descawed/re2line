@@ -367,7 +367,7 @@ impl Character {
 
         groups.push((String::from("Character"), vec![
             format!("Type: {} ({})", self.name(), self.id as u8),
-            format!("Sub-type: {}", self.type_),
+            format!("Sub-type: {}", self.type_ & 0x3f),
             format!("HP: {}/{}", self.current_health, self.max_health),
         ]));
 
@@ -399,13 +399,14 @@ impl Character {
         let body_center = body_shape.visual_bounding_rect().center();
 
         for ai_cone in &ZOMBIE_AI_CONES {
+            if !ai_cone.check_state(&self.state) {
+                // cone is not active in this state; skip it
+                continue;
+            }
+
             let mut draw_params = draw_params.clone();
             draw_params.origin = body_center;
             draw_params.fill_color = ai_cone.behavior_type.default_color();
-            if !ai_cone.check_state(&self.state) {
-                // cone is not active in this state; make it more transparent
-                draw_params.fill_color = draw_params.fill_color.gamma_multiply(0.3);
-            }
 
             let facing_angle = self.angle.to_radians();
             if let Some(player_pos) = player_pos {

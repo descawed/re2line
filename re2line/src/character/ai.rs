@@ -1,7 +1,7 @@
 use std::f32::consts::{PI, TAU};
 
 use egui::{Color32, Shape};
-use epaint::{ColorMode, PathShape, PathStroke};
+use epaint::{CircleShape, ColorMode, PathShape, PathStroke};
 
 use crate::collision::DrawParams;
 use crate::draw::*;
@@ -58,8 +58,19 @@ pub struct AiCone {
 
 impl AiCone {
     pub fn gui_shape(&self, facing_angle: f32, draw_params: DrawParams) -> Shape {
+        let radians = self.half_angle.to_radians();
         let radius = self.radius.to_f32() * draw_params.scale;
-        let points = get_path_for_semicircle(draw_params.origin, radius, facing_angle, self.half_angle.to_radians(), self.inverted);
+        if radians.abs() >= PI {
+            // just use a circle
+            return Shape::Circle(CircleShape {
+                center: draw_params.origin,
+                radius,
+                fill: draw_params.fill_color,
+                stroke: draw_params.stroke.clone(),
+            });
+        }
+
+        let points = get_path_for_semicircle(draw_params.origin, radius, facing_angle, radians, self.inverted);
         Shape::Path(PathShape {
             points,
             closed: true,
@@ -138,15 +149,33 @@ pub fn describe_zombie_ai_state(state: &[u8; 4]) -> &'static str {
     }
 }
 
-pub const ZOMBIE_AI_CONES: [AiCone; 3] = [
+pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
     AiCone {
         name: "Aggro",
-        description: "Zombie will begin moving towards you if it's not already",
+        description: "Zombie will begin to pursue you",
         behavior_type: BehaviorType::Aggro,
         half_angle: Fixed12(0x400),
         radius: UFixed12(5000),
         inverted: false,
-        state_mask: [StateMask::Exactly(0x01), StateMask::None, StateMask::None, StateMask::None],
+        state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::None, StateMask::None],
+    },
+    AiCone {
+        name: "Passive aggro",
+        description: "Zombie will begin to pursue you if you are within this zone after a random amount of time",
+        behavior_type: BehaviorType::Aggro,
+        half_angle: Fixed12(0x800),
+        radius: UFixed12(7500),
+        inverted: false,
+        state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::Any2(0x01, 0x03), StateMask::None],
+    },
+    AiCone {
+        name: "Wander aggro",
+        description: "Zombie will begin to pursue you if you enter this zone while the zombie is wandering",
+        behavior_type: BehaviorType::Aggro,
+        half_angle: Fixed12(0x800),
+        radius: UFixed12(3000),
+        inverted: false,
+        state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::Exactly(0x03), StateMask::None],
     },
     AiCone {
         name: "Far lunge",
@@ -155,7 +184,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 3] = [
         half_angle: Fixed12(800),
         radius: UFixed12(3000),
         inverted: true,
-        state_mask: [StateMask::Exactly(0x01), StateMask::None, StateMask::None, StateMask::None],
+        state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::None, StateMask::None],
     },
     AiCone {
         name: "Near lunge",
@@ -164,6 +193,54 @@ pub const ZOMBIE_AI_CONES: [AiCone; 3] = [
         half_angle: Fixed12(0x400),
         radius: UFixed12(2000),
         inverted: true,
-        state_mask: [StateMask::Exactly(0x01), StateMask::None, StateMask::None, StateMask::None],
+        state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::None, StateMask::None],
     },
+    AiCone {
+        name: "Aggro far lunge",
+        description: "Zombie has a 25% chance to lunge at you each frame",
+        behavior_type: BehaviorType::Attack,
+        half_angle: Fixed12(0x400),
+        radius: UFixed12(3500),
+        inverted: true,
+        state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::None, StateMask::None],
+    },
+    AiCone {
+        name: "Aggro near lunge",
+        description: "Zombie has a 50% chance to lunge at you each frame, in addition to the aggro far lunge chance",
+        behavior_type: BehaviorType::Attack,
+        half_angle: Fixed12(0x400),
+        radius: UFixed12(2500),
+        inverted: true,
+        state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::None, StateMask::None],
+    },
+    AiCone {
+        name: "Bite",
+        description: "Zombie will bite you if you are within this zone",
+        behavior_type: BehaviorType::Attack,
+        half_angle: Fixed12(0x200),
+        radius: UFixed12(1200),
+        inverted: false,
+        state_mask: [StateMask::Exactly(0x01), StateMask::Any2(0x01, 0x02), StateMask::None, StateMask::None],
+    },
+    AiCone {
+        name: "Raised arm lunge",
+        description: "Zombie has a 50% chance to lunge at you each frame",
+        behavior_type: BehaviorType::Attack,
+        half_angle: Fixed12(0x400),
+        radius: UFixed12(3000),
+        inverted: true,
+        state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x02), StateMask::None, StateMask::None],
+    },
+    AiCone {
+        name: "Lunge bite",
+        description: "Zombie will bite you if you are within this zone",
+        behavior_type: BehaviorType::Attack,
+        half_angle: Fixed12(0x200),
+        radius: UFixed12(1300),
+        inverted: false,
+        state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0C), StateMask::Exactly(0x03), StateMask::None],
+    },
+    // TODO: puke attack; don't understand all the conditions here
+    // could include zone for zombie raising its arms, but doesn't seem super useful
+    // could include zone within which zombie will keep its arms raised until the timer expires, but that also doesn't seem super useful
 ];
