@@ -352,8 +352,14 @@ impl Character {
         )
     }
 
+    fn is_crawling_zombie(&self) -> bool {
+        self.id.is_zombie() && matches!(self.type_ & 0x3f, 1 | 3 | 5 | 7 | 9 | 11 | 13)
+    }
+
     fn describe_state(&self) -> String {
-        String::from(if self.id.is_zombie() {
+        String::from(if self.is_crawling_zombie() {
+            describe_crawling_zombie_ai_state(&self.state)
+        } else if self.id.is_zombie() {
             describe_zombie_ai_state(&self.state)
         } else if self.id.is_player() {
             describe_player_ai_state(&self.state)
@@ -395,10 +401,16 @@ impl Character {
             return Shape::Vec(shapes);
         }
 
+        let ai_cones = if self.is_crawling_zombie() {
+            &CRAWLING_ZOMBIE_AI_CONES[..]
+        } else {
+            &ZOMBIE_AI_CONES[..]
+        };
+
         let body_shape = self.shape.gui_shape(draw_params);
         let body_center = body_shape.visual_bounding_rect().center();
 
-        for ai_cone in &ZOMBIE_AI_CONES {
+        for ai_cone in ai_cones {
             if !ai_cone.check_state(&self.state) {
                 // cone is not active in this state; skip it
                 continue;

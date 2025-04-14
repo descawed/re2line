@@ -130,6 +130,17 @@ pub fn describe_player_ai_state(state: &[u8; 4]) -> &'static str {
     }
 }
 
+pub fn describe_crawling_zombie_ai_state(state: &[u8; 4]) -> &'static str {
+    match state {
+        [0x01, 0x00, _, _] => "Crawl",
+        [0x01, 0x01, _, _] => "Bite",
+        [0x02, _, _, _] => "Hit",
+        [0x03, _, _, _] => "Dying",
+        [0x07, _, _, _] => "Dead",
+        _ => "Unknown",
+    }
+}
+
 pub fn describe_zombie_ai_state(state: &[u8; 4]) -> &'static str {
     match state {
         [0x01, 0x00, 0x03, _] => "Idle wander",
@@ -148,6 +159,18 @@ pub fn describe_zombie_ai_state(state: &[u8; 4]) -> &'static str {
         _ => "Unknown",
     }
 }
+
+pub const CRAWLING_ZOMBIE_AI_CONES: [AiCone; 1] = [
+    AiCone {
+        name: "Bite",
+        description: "Zombie will bite you",
+        behavior_type: BehaviorType::Attack,
+        half_angle: Fixed12(0x200),
+        radius: UFixed12(1300),
+        inverted: false,
+        state_mask: [StateMask::Exactly(0x01), StateMask::Any2(0x00, 0x02), StateMask::None, StateMask::None],
+    },
+];
 
 pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
     AiCone {
