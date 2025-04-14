@@ -206,6 +206,14 @@ impl Recording {
         self.set_index(self.index + 1)
     }
 
+    pub fn prev(&mut self) -> Option<&State> {
+        if self.index > 0 {
+            self.set_index(self.index - 1)
+        } else {
+            None
+        }
+    }
+
     pub fn set_index(&mut self, index: usize) -> Option<&State> {
         self.index = index;
         if !self.range.contains(&index) {

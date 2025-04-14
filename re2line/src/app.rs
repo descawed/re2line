@@ -135,8 +135,18 @@ impl App {
 
                 self.config.zoom_scale += i.smooth_scroll_delta.y * 0.05;
 
-                if !egui_wants_kb_input && i.key_pressed(Key::Space) {
-                    self.toggle_play_recording();
+                if !egui_wants_kb_input {
+                    if i.key_pressed(Key::Space) {
+                        self.toggle_play_recording();
+                    }
+
+                    if self.active_recording.is_some() && !self.is_recording_playing {
+                        if i.key_pressed(Key::ArrowRight) {
+                            self.next_recording_frame();
+                        } else if i.key_pressed(Key::ArrowLeft) {
+                            self.prev_recording_frame();
+                        }
+                    }
                 }
             }
 
@@ -504,6 +514,31 @@ impl App {
             });
         });
     }
+
+    fn change_recording_frame<F>(&mut self, func: F)
+    where F: FnOnce(&mut Recording) -> Option<&State>
+    {
+        self.last_play_tick = Instant::now();
+        if let Some(next_state) = self.active_recording.as_mut().and_then(func) {
+            let new_room_id = next_state.room_id();
+            if self.config.last_rdt != Some(new_room_id) {
+                if let Err(e) = self.load_room(new_room_id) {
+                    eprintln!("Failed to load room {}: {}", new_room_id, e);
+                }
+            }
+        } else {
+            // pause once we reach the end of the recording
+            self.is_recording_playing = false;
+        }
+    }
+
+    fn prev_recording_frame(&mut self) {
+        self.change_recording_frame(Recording::prev);
+    }
+
+    fn next_recording_frame(&mut self) {
+        self.change_recording_frame(Recording::next);
+    }
 }
 
 impl eframe::App for App {
@@ -707,22 +742,11 @@ impl eframe::App for App {
             }
         });
 
-        if let (Some(recording), true) = (&mut self.active_recording, self.is_recording_playing) {
+        if self.active_recording.is_some() && self.is_recording_playing {
             let now = Instant::now();
             let duration = now - self.last_play_tick;
             if duration >= FRAME_DURATION {
-                self.last_play_tick = now;
-                if let Some(next_state) = recording.next() {
-                    let new_room_id = next_state.room_id();
-                    if self.config.last_rdt != Some(new_room_id) {
-                        if let Err(e) = self.load_room(new_room_id) {
-                            eprintln!("Failed to load room {}: {}", new_room_id, e);
-                        }
-                    }
-                } else {
-                    // pause once we reach the end of the recording
-                    self.is_recording_playing = false;
-                }
+                self.next_recording_frame();
             }
 
             // re-draw regularly while we're animating
