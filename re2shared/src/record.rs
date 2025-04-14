@@ -19,6 +19,7 @@ pub enum CharacterField {
     #[brw(magic = 7u8)] Velocity(SVECTOR),
     #[brw(magic = 8u8)] Health(i16),
     #[brw(magic = 9u8)] Removed,
+    #[brw(magic = 10u8)] Type(u8),
 }
 
 #[binrw]

@@ -91,7 +91,7 @@ pub enum CharacterId {
     Larva = 59,
     Unknown60 = 60,
     Unknown61 = 61,
-    Unknown62 = 62,
+    FuseArm = 62,
     FuseHousing = 63,
     Irons = 64,
     AdaNpc = 65,
@@ -182,7 +182,7 @@ impl CharacterId {
             Self::Larva => "Larva",
             Self::Unknown60 => "Unknown 60",
             Self::Unknown61 => "Unknown 61",
-            Self::Unknown62 => "Unknown 62",
+            Self::FuseArm => "Fuse Arm",
             Self::FuseHousing => "Fuse Housing",
             Self::Irons => "Irons",
             Self::AdaNpc => "Ada (NPC)",
@@ -229,7 +229,8 @@ impl CharacterId {
             | Self::Sherry
             => CharacterType::Player,
             Self::AdaNpc | Self::SherryNpc => CharacterType::Ally,
-            Self::FuseHousing
+            Self::FuseArm
+            | Self::FuseHousing
             | Self::Irons
             | Self::IronsTorso
             | Self::AdaWounded
@@ -278,6 +279,7 @@ pub struct Character {
     pub state: [u8; 4],
     pub floor: u8,
     pub velocity: Vec2,
+    pub type_: u8,
 }
 
 impl Character {
@@ -297,6 +299,7 @@ impl Character {
             state: [0; 4],
             floor: 0,
             velocity,
+            type_: 0,
         }
     }
 
@@ -364,6 +367,7 @@ impl Character {
 
         groups.push((String::from("Character"), vec![
             format!("Type: {} ({})", self.name(), self.id as u8),
+            format!("Sub-type: {}", self.type_),
             format!("HP: {}/{}", self.current_health, self.max_health),
         ]));
 

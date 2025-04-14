@@ -81,6 +81,7 @@ impl State {
                     }
                     CharacterField::Health(health) => character.set_health(*health),
                     CharacterField::Removed => unreachable!(),
+                    CharacterField::Type(type_) => character.type_ = *type_,
                 }
             }
         }

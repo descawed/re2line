@@ -15,6 +15,7 @@ pub struct CharacterState {
     floor: u8,
     velocity: SVECTOR,
     health: i16,
+    type_: u8,
 }
 
 impl CharacterState {
@@ -30,6 +31,7 @@ impl CharacterState {
             floor: char.floor,
             velocity: char.velocity.clone(),
             health: char.health,
+            type_: (char.type_ & 0xff) as u8,
         }
     }
 
@@ -44,6 +46,7 @@ impl CharacterState {
             CharacterField::Floor(self.floor),
             CharacterField::Velocity(self.velocity.clone()),
             CharacterField::Health(self.health),
+            CharacterField::Type(self.type_),
         ]
     }
 
@@ -94,6 +97,12 @@ impl CharacterState {
         if self.health != char.health {
             self.health = char.health;
             fields.push(CharacterField::Health(char.health));
+        }
+
+        let type_ = (char.type_ & 0xff) as u8;
+        if self.type_ != type_ {
+            self.type_ = type_;
+            fields.push(CharacterField::Type(type_));
         }
 
         fields
