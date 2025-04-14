@@ -1,6 +1,6 @@
 use std::f32::consts::{PI, TAU};
 
-use egui::{Color32, Shape};
+use egui::{Color32, Shape, Stroke};
 use epaint::{CircleShape, ColorMode, PathShape, PathStroke};
 
 use crate::collision::DrawParams;
@@ -62,11 +62,25 @@ impl AiCone {
         let radius = self.radius.to_f32() * draw_params.scale;
         if radians.abs() >= PI {
             // just use a circle
-            return Shape::Circle(CircleShape {
-                center: draw_params.origin,
-                radius,
-                fill: draw_params.fill_color,
-                stroke: draw_params.stroke.clone(),
+            // for an inverted circle, we treat the outside of the circle as being in the zone, and
+            // we just draw an outline rather than doing a fill out to the edges of the map
+            return Shape::Circle(if self.inverted {
+                CircleShape {
+                    center: draw_params.origin,
+                    radius,
+                    fill: Color32::TRANSPARENT,
+                    stroke: Stroke {
+                        width: 2.0,
+                        color: draw_params.fill_color,
+                    },
+                }
+            } else {
+                CircleShape {
+                    center: draw_params.origin,
+                    radius,
+                    fill: draw_params.fill_color,
+                    stroke: draw_params.stroke.clone(),
+                }
             });
         }
 
@@ -159,6 +173,37 @@ pub fn describe_zombie_ai_state(state: &[u8; 4]) -> &'static str {
         _ => "Unknown",
     }
 }
+
+pub const LICKER_AI_CONES: [AiCone; 3] = [
+    AiCone {
+        name: "Slash",
+        description: "Licker will slash at you with its claws",
+        behavior_type: BehaviorType::Attack,
+        half_angle: Fixed12(0x300),
+        radius: UFixed12(2000),
+        inverted: false,
+        state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x06), StateMask::None, StateMask::None],
+    },
+    AiCone {
+        name: "Jump",
+        description: "Licker has a random chance to jump at you outside this range (3/8 chance on fine health, 2/8 chance on lower health)",
+        behavior_type: BehaviorType::Attack,
+        half_angle: Fixed12(0x800),
+        radius: UFixed12(4000),
+        inverted: true,
+        state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x06), StateMask::None, StateMask::None],
+    },
+    AiCone {
+        name: "Slash hit",
+        description: "Licker's slash attack hits you",
+        behavior_type: BehaviorType::Attack,
+        half_angle: Fixed12(0x154),
+        radius: UFixed12(2800),
+        inverted: false,
+        state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x09), StateMask::None, StateMask::None],
+    },
+    // TODO: logic for when jump attack hits
+];
 
 pub const CRAWLING_ZOMBIE_AI_CONES: [AiCone; 1] = [
     AiCone {

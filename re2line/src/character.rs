@@ -396,15 +396,15 @@ impl Character {
 
     pub fn gui_ai(&self, draw_params: &DrawParams, player_pos: Option<Vec2>) -> Shape {
         let mut shapes = Vec::new();
-        // TODO: add other types
-        if !self.id.is_zombie() {
-            return Shape::Vec(shapes);
-        }
 
         let ai_cones = if self.is_crawling_zombie() {
             &CRAWLING_ZOMBIE_AI_CONES[..]
-        } else {
+        } else if self.id.is_zombie() {
             &ZOMBIE_AI_CONES[..]
+        } else if matches!(self.id, CharacterId::LickerRed) {
+            &LICKER_AI_CONES[..]
+        } else {
+            return Shape::Vec(shapes);
         };
 
         let body_shape = self.shape.gui_shape(draw_params);
