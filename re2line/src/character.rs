@@ -264,6 +264,10 @@ impl CharacterId {
             | Self::Misty
         )
     }
+
+    pub const fn is_licker(&self) -> bool {
+        matches!(self, Self::LickerRed | Self::LickerBlack)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -363,6 +367,8 @@ impl Character {
             describe_zombie_ai_state(&self.state)
         } else if self.id.is_player() {
             describe_player_ai_state(&self.state)
+        } else if self.id.is_licker() {
+            describe_licker_ai_state(&self.state)
         } else {
             "Unknown"
         })
@@ -397,14 +403,12 @@ impl Character {
     pub fn gui_ai(&self, draw_params: &DrawParams, player_pos: Option<Vec2>) -> Shape {
         let mut shapes = Vec::new();
 
-        let ai_cones = if self.is_crawling_zombie() {
-            &CRAWLING_ZOMBIE_AI_CONES[..]
-        } else if self.id.is_zombie() {
-            &ZOMBIE_AI_CONES[..]
-        } else if matches!(self.id, CharacterId::LickerRed) {
-            &LICKER_AI_CONES[..]
-        } else {
-            return Shape::Vec(shapes);
+        let ai_cones = match self.id {
+            CharacterId::LickerRed => &RED_LICKER_AI_CONES[..],
+            CharacterId::LickerBlack => &BLACK_LICKER_AI_CONES[..],
+            _ if self.is_crawling_zombie() => &CRAWLING_ZOMBIE_AI_CONES[..],
+            _ if self.id.is_zombie() => &ZOMBIE_AI_CONES[..],
+            _ => return Shape::Vec(shapes),
         };
 
         let body_shape = self.shape.gui_shape(draw_params);
