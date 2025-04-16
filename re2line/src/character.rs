@@ -253,7 +253,6 @@ impl CharacterId {
     }
 
     pub const fn is_zombie(&self) -> bool {
-        // TODO: do Brad, Marvin, and naked zombies use the same AI as regular zombies?
         matches!(self,
             Self::ZombiePoliceHat
             | Self::ZombieTornShirt
@@ -262,6 +261,14 @@ impl CharacterId {
             | Self::ZombieLabWhite
             | Self::ZombieLabYellow
             | Self::Misty
+            | Self::Unknown20
+            | Self::Unknown25
+            | Self::Unknown26
+            | Self::Unknown27
+            | Self::Unknown28
+            | Self::Unknown29
+            | Self::Brad
+            | Self::NakedZombie
         )
     }
 

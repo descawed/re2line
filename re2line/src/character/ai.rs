@@ -728,7 +728,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
     },
     AiCone {
         name: "Aggro far lunge",
-        description: "Zombie has a 25% chance to lunge at you each frame",
+        description: "Zombie has a 25% chance to lunge at you each loud sound",
         behavior_type: BehaviorType::Attack,
         half_angle: Fixed12(0x400),
         offset_angle: Fixed12(0),
@@ -748,7 +748,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
     },
     AiCone {
         name: "Far lunge",
-        description: "Zombie has a 50% chance to lunge at you each frame",
+        description: "Zombie has a 50% chance to lunge at you each loud sound",
         behavior_type: BehaviorType::Attack,
         half_angle: Fixed12(800),
         offset_angle: Fixed12(0),
@@ -758,7 +758,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
     },
     AiCone {
         name: "Raised arm lunge",
-        description: "Zombie has a 50% chance to lunge at you each frame",
+        description: "Zombie has a 50% chance to lunge at you each sound",
         behavior_type: BehaviorType::Attack,
         half_angle: Fixed12(0x400),
         offset_angle: Fixed12(0),
@@ -768,7 +768,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
     },
     AiCone {
         name: "Aggro near lunge",
-        description: "Zombie has a 50% chance to lunge at you each frame, in addition to the aggro far lunge chance",
+        description: "Zombie has a 50% chance to lunge at you each sound, in addition to the aggro far lunge chance",
         behavior_type: BehaviorType::Attack,
         half_angle: Fixed12(0x400),
         offset_angle: Fixed12(0),
@@ -778,7 +778,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
     },
     AiCone {
         name: "Near lunge",
-        description: "Zombie has a second 50% chance to lunge at you each frame, in addition to the far lunge chance",
+        description: "Zombie has a second 50% chance to lunge at you each sound, in addition to the far lunge chance",
         behavior_type: BehaviorType::Attack,
         half_angle: Fixed12(0x400),
         offset_angle: Fixed12(0),
