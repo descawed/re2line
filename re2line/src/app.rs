@@ -539,6 +539,10 @@ impl App {
     fn next_recording_frame(&mut self) {
         self.change_recording_frame(Recording::next);
     }
+
+    fn set_recording_frame(&mut self, frame: usize) {
+        self.change_recording_frame(|recording| recording.set_index(frame));
+    }
 }
 
 impl eframe::App for App {
@@ -588,6 +592,7 @@ impl eframe::App for App {
             let width = ui.max_rect().width();
             ui.vertical(|ui| {
                 let mut need_toggle = false;
+                let mut new_frame_index = None;
                 if let Some(recording) = &mut self.active_recording {
                     ui.horizontal(|ui| {
                         let play_pause = if self.is_recording_playing {
@@ -603,13 +608,19 @@ impl eframe::App for App {
                         let time = recording.current_frame().map(FrameRecord::time).unwrap_or_else(|| String::from("00:00:00"));
                         ui.style_mut().spacing.slider_width = width * 0.6;
                         ui.add(egui::Slider::new(&mut pos, 0..=num_frames).text(time));
-                        recording.set_index(pos);
+                        if pos != recording.index() {
+                            new_frame_index = Some(pos);
+                        }
                     });
                     ui.separator();
                 }
 
                 if need_toggle {
                     self.toggle_play_recording();
+                }
+
+                if let Some(index) = new_frame_index {
+                    self.set_recording_frame(index);
                 }
 
                 self.object_details(ui);
