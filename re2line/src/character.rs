@@ -1,13 +1,15 @@
 use egui::{Align, Color32, Pos2, Shape, Stroke, TextStyle, Ui};
-use epaint::{ColorMode, PathShape, PathStroke, TextShape};
+use epaint::{CircleShape, ColorMode, PathShape, PathStroke, TextShape};
 use epaint::text::LayoutJob;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-use crate::collision::{DrawParams, EllipseCollider};
+use crate::collision::{DrawParams, EllipseCollider, RectCollider};
 use crate::math::{Fixed12, UFixed12, Vec2};
 
 mod ai;
 use ai::*;
+
+const INTERACTION_DISTANCE: UFixed12 = UFixed12(620);
 
 const ARROW_HEAD_HEIGHT: f32 = 6.0;
 const ARROW_HEAD_WIDTH: f32 = 6.0;
@@ -17,6 +19,7 @@ const LABEL_MARGIN: f32 = 10.0;
 const LABEL_PADDING: f32 = 5.0;
 const LABEL_WRAP_WIDTH: f32 = 150.0;
 const MOTION_PROJECTION_LENGTH: f32 = 0.25;
+const POINT_RADIUS: f32 = 3.0;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum CharacterType {
@@ -284,6 +287,7 @@ pub struct Character {
     pub width: UFixed12,
     pub height: UFixed12,
     pub shape: EllipseCollider,
+    pub outline_shape: RectCollider,
     pub angle: Fixed12,
     current_health: i16,
     max_health: i16,
@@ -295,15 +299,18 @@ pub struct Character {
 
 impl Character {
     pub const fn new(id: CharacterId, health: i16, x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, angle: Fixed12, velocity: Vec2) -> Self {
+        let game_x = Fixed12((x.0 as i32 - width.0 as i32) as i16);
+        let game_z = Fixed12((z.0 as i32 - height.0 as i32) as i16);
+        let game_width = UFixed12(width.0 << 1);
+        let game_height = UFixed12(height.0 << 1);
+
         Self {
             id,
             center: Vec2 { x, z },
             width,
             height,
-            shape: EllipseCollider::new(
-                Fixed12((x.0 as i32 - width.0 as i32) as i16), Fixed12((z.0 as i32 - height.0 as i32) as i16),
-                UFixed12(width.0 << 1), UFixed12(height.0 << 1),
-            ),
+            shape: EllipseCollider::new(game_x, game_z, game_width, game_height),
+            outline_shape: RectCollider::new(game_x, game_z, game_width, game_height, 0.0),
             angle,
             current_health: health,
             max_health: health,
@@ -341,15 +348,30 @@ impl Character {
         }
     }
 
+    pub fn gui_interaction_point(&self, draw_params: &DrawParams) -> Pos2 {
+        let interaction_vec = egui::Vec2::angled(self.angle.to_radians()) * INTERACTION_DISTANCE.to_f32() * draw_params.scale;
+        let center_point = Pos2::new(self.center.x.to_f32() * draw_params.scale, -self.center.z.to_f32() * draw_params.scale);
+        (center_point - draw_params.origin.to_vec2()) + interaction_vec
+    }
+
+    pub fn interaction_point(&self) -> Vec2 {
+        let interaction_vec = egui::Vec2::angled(self.angle.to_radians()) * INTERACTION_DISTANCE.to_f32();
+        let center_point = Pos2::new(self.center.x.to_f32(), -self.center.z.to_f32());
+        let interaction_point = center_point + interaction_vec;
+        Vec2::new(interaction_point.x, -interaction_point.y)
+    }
+
     pub fn set_pos(&mut self, x: impl Into<Fixed12>, z: impl Into<Fixed12>) {
         self.center = Vec2::new(x.into(), z.into());
         self.shape.set_pos(self.center.x - self.width, self.center.z - self.height);
+        self.outline_shape.set_pos(self.center.x - self.width, self.center.z - self.height);
     }
 
     pub fn set_size(&mut self, width: impl Into<UFixed12>, height:  impl Into<UFixed12>) {
         self.width = width.into();
         self.height = height.into();
         self.shape.set_size(self.width << 1, self.height << 1);
+        self.outline_shape.set_size(self.width << 1, self.height << 1);
     }
 
     pub fn label(&self) -> String {
@@ -393,7 +415,7 @@ impl Character {
         groups.push((String::from("Position"), vec![
             format!("X: {}", self.center.x),
             format!("Z: {}", self.center.z),
-            format!("Angle: {:.1}°", self.angle.to_degrees()),
+            format!("Angle: {:.1}°", self.angle.to_degrees() % 360.0),
             format!("Floor: {}", self.floor),
             format!("XR: {}", self.width),
             format!("ZR: {}", self.height),
@@ -451,6 +473,13 @@ impl Character {
         let body_rect = body_shape.visual_bounding_rect();
         let body_center = body_rect.center();
 
+        let mut outline_draw_params = draw_params.clone();
+        outline_draw_params.stroke.color = outline_draw_params.fill_color;
+        outline_draw_params.stroke.width = ARROW_SHAFT_WIDTH;
+        outline_draw_params.stroke_kind = egui::StrokeKind::Inside;
+        outline_draw_params.fill_color = Color32::TRANSPARENT;
+        let outline_shape = self.outline_shape.gui_shape(&outline_draw_params);
+
         let vector = egui::Vec2::angled(self.angle.to_radians()) * MOTION_PROJECTION_LENGTH * draw_params.scale;
         let dest_pos = body_center + vector;
         let vector_len = vector.length();
@@ -478,8 +507,21 @@ impl Character {
             fill: draw_params.fill_color,
         });
 
+        let mut shapes = vec![outline_shape, body_shape, shaft_shape, arrow_shape];
+
+        if self.id.is_player() {
+            let interaction_point = Shape::Circle(CircleShape {
+                center: self.gui_interaction_point(&draw_params),
+                radius: POINT_RADIUS,
+                fill: draw_params.fill_color,
+                stroke: draw_params.stroke,
+            });
+
+            shapes.push(interaction_point);
+        }
+
         if !show_tooltip {
-            return Shape::Vec(vec![body_shape, shaft_shape, arrow_shape]);
+            return Shape::Vec(shapes);
         }
 
         let center_x = body_center.x;
@@ -509,6 +551,8 @@ impl Character {
         let bg_rect = text_shape.visual_bounding_rect().expand(LABEL_PADDING);
         let text_bg_shape = Shape::rect_filled(bg_rect, LABEL_CORNER_RADIUS, bg_color);
 
-        Shape::Vec(vec![body_shape, shaft_shape, arrow_shape, text_bg_shape, text_shape])
+        shapes.extend([text_bg_shape, text_shape]);
+
+        Shape::Vec(shapes)
     }
 }

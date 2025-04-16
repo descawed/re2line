@@ -588,14 +588,15 @@ pub enum Instruction {
 impl Instruction {
     pub fn to_entity(&self) -> Option<Entity> {
         Some(match self {
-            Self::AotSet { aot, sce, n_floor, x, z, w, h, .. } => Entity::new(
+            Self::AotSet { aot, sce, sat, n_floor, x, z, w, h, .. } => Entity::new(
                 EntityForm::Other,
                 Collider::Rect(RectCollider::new(*x, *z, *w, *h, 0.0)),
                 *n_floor,
                 *aot as u8,
                 *sce,
+                *sat,
             ),
-            Self::DoorAotSet { aot, sce, n_floor, x, z, w, h, next_pos_x, next_pos_y, next_pos_z, next_cdir_y, next_stage, next_room, next_nfloor, .. } =>
+            Self::DoorAotSet { aot, sce, sat, n_floor, x, z, w, h, next_pos_x, next_pos_y, next_pos_z, next_cdir_y, next_stage, next_room, next_nfloor, .. } =>
                 Entity::new(
                     EntityForm::Door {
                         next_pos_x: *next_pos_x,
@@ -610,15 +611,17 @@ impl Instruction {
                     *n_floor,
                     *aot,
                     *sce,
+                    *sat,
                 ),
-            Self::AotSet4p { aot, sce, n_floor, x0, z0, x1, z1, x2, z2, x3, z3, .. } => Entity::new(
+            Self::AotSet4p { aot, sce, sat, n_floor, x0, z0, x1, z1, x2, z2, x3, z3, .. } => Entity::new(
                 EntityForm::Other,
                 Collider::Quad(QuadCollider::new(*x0, *z0, *x1, *z1, *x2, *z2, *x3, *z3)),
                 *n_floor,
                 *aot,
                 *sce,
+                *sat,
             ),
-            Self::DoorAotSet4p { aot, sce, n_floor, x0, z0, x1, z1, x2, z2, x3, z3, next_pos_x, next_pos_y, next_pos_z, next_cdir_y, next_stage, next_room, next_nfloor, .. } =>
+            Self::DoorAotSet4p { aot, sce, sat, n_floor, x0, z0, x1, z1, x2, z2, x3, z3, next_pos_x, next_pos_y, next_pos_z, next_cdir_y, next_stage, next_room, next_nfloor, .. } =>
                 Entity::new(
                     EntityForm::Door {
                         next_pos_x: *next_pos_x,
@@ -633,8 +636,9 @@ impl Instruction {
                     *n_floor,
                     *aot,
                     *sce,
+                    *sat,
                 ),
-            Self::ItemAotSet4p { aot, sce, n_floor, x0, z0, x1, z1, x2, z2, x3, z3, i_item, n_item, flag, md1, action, .. } => Entity::new(
+            Self::ItemAotSet4p { aot, sce, sat, n_floor, x0, z0, x1, z1, x2, z2, x3, z3, i_item, n_item, flag, md1, action, .. } => Entity::new(
                 EntityForm::Item {
                     i_item: *i_item,
                     n_item: *n_item,
@@ -646,9 +650,10 @@ impl Instruction {
                 *n_floor,
                 *aot,
                 *sce,
+                *sat,
             ),
-            Self::ItemAotSet { aot, sce, n_floor, x, z, w, h, i_item, n_item, flag, md1, action, .. } |
-            Self::ItemAotSet2 { aot, sce, n_floor, x, z, w, h, i_item, n_item, flag, md1, action, .. } => Entity::new(
+            Self::ItemAotSet { aot, sce, sat, n_floor, x, z, w, h, i_item, n_item, flag, md1, action, .. } |
+            Self::ItemAotSet2 { aot, sce, sat, n_floor, x, z, w, h, i_item, n_item, flag, md1, action, .. } => Entity::new(
                 EntityForm::Item {
                     i_item: *i_item,
                     n_item: *n_item,
@@ -660,6 +665,7 @@ impl Instruction {
                 *n_floor,
                 *aot,
                 *sce,
+                *sat,
             ),
             _ => return None,
         })

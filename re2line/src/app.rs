@@ -16,7 +16,7 @@ use rfd::FileDialog;
 use crate::aot::{Entity, SceType};
 use crate::character::{Character, CharacterId};
 use crate::collision::Collider;
-use crate::math::Fixed12;
+use crate::math::{Fixed12, Vec2};
 use crate::rdt::Rdt;
 use crate::record::{Recording, State, FRAME_DURATION};
 
@@ -543,6 +543,13 @@ impl App {
     fn set_recording_frame(&mut self, frame: usize) {
         self.change_recording_frame(|recording| recording.set_index(frame));
     }
+
+    fn player_positions(&self) -> Option<(Vec2, Vec2, u8)> {
+        let recording = self.active_recording.as_ref()?;
+        let state = recording.current_state()?;
+        let player = state.characters().get(0)?.as_ref()?;
+        Some((player.center, player.interaction_point(), player.floor))
+    }
 }
 
 impl eframe::App for App {
@@ -629,6 +636,10 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let view_center = self.calculate_origin(ctx, ui.ui_contains_pointer());
+            let (player_pos, player_interaction_pos, player_floor) = match self.player_positions() {
+                Some((player_pos, player_interaction_pos, player_floor)) => (Some(player_pos), Some(player_interaction_pos), Some(player_floor)),
+                None => (None, None, None),
+            };
 
             if self.config.should_show(ObjectType::Floor) {
                 for (i, floor) in self.floors.iter().enumerate() {
@@ -667,7 +678,19 @@ impl eframe::App for App {
                     continue;
                 }
 
-                let entity_draw_params = self.config.get_draw_params(object_type, view_center);
+                let mut entity_draw_params = self.config.get_draw_params(object_type, view_center);
+
+                let trigger_point = if entity.is_trigger_on_enter() {
+                    player_pos
+                } else {
+                    player_interaction_pos
+                };
+                if let (Some(trigger_point), Some(trigger_floor)) = (trigger_point, player_floor) {
+                    if entity.could_trigger(trigger_point, trigger_floor) {
+                        entity_draw_params.outline();
+                    }
+                }
+
                 let shape = entity.gui_shape(&entity_draw_params);
                 ui.painter().add(shape);
             }
@@ -676,13 +699,8 @@ impl eframe::App for App {
                 if let Some(state) = recording.current_state() {
                     let mut ai_zones = Vec::with_capacity(NUM_CHARACTERS);
                     let mut character_icons = Vec::with_capacity(NUM_CHARACTERS);
-                    let mut player_pos = None;
 
                     for (i, character) in state.characters().iter().enumerate() {
-                        if let (0, Some(character)) = (i, character.as_ref()) {
-                            player_pos = Some(character.center);
-                        }
-
                         if self.selected_object == SelectedObject::Character(i) {
                             continue;
                         }

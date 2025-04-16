@@ -58,9 +58,18 @@ impl DrawParams {
             self.stroke.width *= HIGHLIGHT_STROKE;
         }
     }
+
+    pub fn outline(&mut self) {
+        if self.is_stroke() {
+            return;
+        }
+
+        self.stroke.color = egui::Color32::BLACK;
+        self.stroke.width = HIGHLIGHT_STROKE;
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RectCollider {
     x: Fixed12,
     z: Fixed12,
@@ -90,6 +99,20 @@ impl RectCollider {
             draw_params.stroke,
             draw_params.stroke_kind,
         ))
+    }
+
+    pub fn contains_point(&self, x: Fixed12, z: Fixed12) -> bool {
+        x >= self.x && x < self.x + self.width && z >= self.z && z < self.z + self.height
+    }
+
+    pub fn set_pos(&mut self, x: Fixed12, z: Fixed12) {
+        self.x = x;
+        self.z = z;
+    }
+
+    pub fn set_size(&mut self, width: UFixed12, height: UFixed12) {
+        self.width = width;
+        self.height = height;
     }
 }
 
@@ -396,6 +419,14 @@ impl Collider {
             Self::Ellipse(ellipse) => ellipse.gui_shape(draw_params),
             Self::Triangle(triangle) => triangle.gui_shape(draw_params),
             Self::Quad(quad) => quad.gui_shape(draw_params),
+        }
+    }
+
+    pub fn contains_point(&self, x: Fixed12, z: Fixed12) -> bool {
+        match self {
+            Self::Rect(rect) => rect.contains_point(x, z),
+            // TODO: implement remaining shapes
+            _ => false,
         }
     }
 }

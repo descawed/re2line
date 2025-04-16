@@ -145,6 +145,7 @@ pub fn describe_player_ai_state(state: &[u8; 4]) -> &'static str {
         [0x01, 0x03, _, _] => "Backpedal",
         [0x01, 0x04, _, _] => "Turn",
         [0x01, 0x05, _, _] => "Weapon",
+        [0x01, 0x0A, _, _] => "Push object",
         [0x05, 0x00, 0x03, _] => "Grabbed",
         [0x05, 0x00, 0x05, _] => "Push enemy",
         _ => "Unknown",

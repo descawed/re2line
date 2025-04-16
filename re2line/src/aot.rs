@@ -1,5 +1,7 @@
 use crate::collision::{Collider, DrawParams};
-use crate::math::Fixed12;
+use crate::math::{Fixed12, Vec2};
+
+const TRIGGER_ON_ENTER: u8 = 0x40;
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -23,7 +25,7 @@ pub enum SceType {
 }
 
 impl SceType {
-    fn name(&self) -> &'static str {
+    const fn name(&self) -> &'static str {
         match self {
             Self::Auto => "Auto",
             Self::Door => "Door",
@@ -42,6 +44,10 @@ impl SceType {
             Self::Windows => "Windows",
             Self::Unknown => "Unknown",
         }
+    }
+
+    const fn is_trigger(&self) -> bool {
+        matches!(self, Self::Door | Self::Event | Self::FlagChg | Self::Item | Self::ItemBox | Self::Save | Self::Damage | Self::Message)
     }
 }
 
@@ -96,17 +102,27 @@ pub struct Entity {
     floor: u8,
     id: u8,
     sce: SceType,
+    sat: u8,
 }
 
 impl Entity {
-    pub fn new(form: EntityForm, collider: Collider, floor: u8, id: u8, sce: u8) -> Self {
+    pub fn new(form: EntityForm, collider: Collider, floor: u8, id: u8, sce: u8, sat: u8) -> Self {
         Self {
             form,
             collider,
             floor,
             id,
             sce: SceType::from(sce),
+            sat,
         }
+    }
+
+    pub const fn is_trigger_on_enter(&self) -> bool {
+        self.sat & TRIGGER_ON_ENTER != 0
+    }
+
+    pub fn could_trigger(&self, point: Vec2, floor: u8) -> bool {
+        self.sce.is_trigger() && self.floor == floor && self.collider.contains_point(point.x, point.z)
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
