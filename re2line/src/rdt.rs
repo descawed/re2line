@@ -8,7 +8,7 @@ use crate::collision;
 use crate::math::{Fixed12, UFixed12};
 use crate::script::Instruction;
 
-const CORNER_RADIUS: f32 = Fixed12(400).to_f32();
+const CORNER_RADIUS: f32 = Fixed12(2200).to_f32();
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum CollisionShape {
@@ -36,7 +36,6 @@ impl TryFrom<u32> for CollisionShape {
             5 => Ok(Self::Diamond),
             6 => Ok(Self::Circle),
             // FIXME: these two types are not identical
-            //  also, think these might be capsules rather than rectangles with rounded corners?
             7 | 8 => Ok(Self::RoundedRectangle),
             _ => Err(anyhow!("Unknown collision shape type {}", value)),
         }
