@@ -27,6 +27,7 @@ pub use config::RoomId;
 pub const APP_NAME: &str = "re2line";
 
 const DETAIL_MAX_ROWS: usize = 4;
+const FAST_FORWARD: isize = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SelectedObject {
@@ -140,11 +141,21 @@ impl App {
                         self.toggle_play_recording();
                     }
 
-                    if self.active_recording.is_some() && !self.is_recording_playing {
-                        if i.key_pressed(Key::ArrowRight) {
-                            self.next_recording_frame();
-                        } else if i.key_pressed(Key::ArrowLeft) {
-                            self.prev_recording_frame();
+                    if self.active_recording.is_some() {
+                        if self.is_recording_playing {
+                            // skip forward or back in chunks
+                            if i.key_pressed(Key::ArrowRight) {
+                                self.move_recording_frame(FAST_FORWARD);
+                            } else if i.key_pressed(Key::ArrowLeft) {
+                                self.move_recording_frame(-FAST_FORWARD);
+                            }
+                        } else {
+                            // frame-by-frame
+                            if i.key_pressed(Key::ArrowRight) {
+                                self.next_recording_frame();
+                            } else if i.key_pressed(Key::ArrowLeft) {
+                                self.prev_recording_frame();
+                            }
                         }
                     }
                 }
@@ -551,6 +562,15 @@ impl App {
 
     fn set_recording_frame(&mut self, frame: usize) {
         self.change_recording_frame(|recording| recording.set_index(frame));
+    }
+    
+    fn move_recording_frame(&mut self, delta: isize) {
+        let Some(index) = self.active_recording.as_ref().map(Recording::index) else {
+            return;
+        };
+        
+        let new_index = (index as isize + delta).max(0) as usize;
+        self.set_recording_frame(new_index);
     }
 
     fn player_positions(&self) -> Option<(Vec2, Vec2, u8)> {
