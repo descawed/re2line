@@ -297,6 +297,15 @@ impl App {
 
         self.load_recording(path)
     }
+    
+    fn close_recording(&mut self) {
+        self.active_recording = None;
+        self.is_recording_playing = false;
+        self.character_settings.clear();
+        if matches!(self.selected_object, SelectedObject::Character(_)) {
+            self.selected_object = SelectedObject::None;
+        }
+    }
 
     fn room_browser(&mut self, ui: &mut Ui) {
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
@@ -572,6 +581,12 @@ impl eframe::App for App {
                         if let Err(e) = self.prompt_load_recording() {
                             eprintln!("Failed to open recording: {}", e);
                         }
+                    }
+                    
+                    ui.separator(); // don't want open button too close to close button
+                    
+                    if ui.button("Close recording").clicked() && self.active_recording.is_some() {
+                        self.close_recording();
                     }
                 });
             });
