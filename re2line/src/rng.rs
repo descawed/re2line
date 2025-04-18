@@ -42,7 +42,7 @@ fn bool_text(value: bool) -> String {
 }
 
 fn zombie_stagger_threshold(seed: u16, base: u8) -> String {
-    let threshold = roll8(seed) + base;
+    let threshold = (roll8(seed) & 0xf) + base;
     let description = if threshold <= ZOMBIE_ONE_SHOT_STAGGER_THRESHOLD {
         "one-shot stagger"
     } else {
@@ -93,7 +93,7 @@ fn and_two_zero(seed: u16) -> String {
 
 fn zombie_appearance(seed: u16) -> String {
     let (first, second, third) = roll_three(seed);
-    format!("{}", (third + (second << (first & 3))) % 3 + 1)
+    format!("{}", (third as usize + ((second as usize) << (first as usize & 3))) % 3 + 1)
 }
 
 fn zombie_appearance2(seed: u16) -> String {

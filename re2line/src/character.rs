@@ -272,6 +272,7 @@ impl CharacterId {
             | Self::Unknown29
             | Self::Brad
             | Self::NakedZombie
+            | Self::HeadlessZombieYellowShirt
         )
     }
 
