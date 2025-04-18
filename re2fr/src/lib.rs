@@ -11,7 +11,7 @@ use hook86::asm;
 use hook86::mem;
 use hook86::patch::patch;
 use log::LevelFilter;
-use re2shared::record::RecordHeader;
+use re2shared::record::{GameField, RecordHeader};
 use simplelog::{Config, WriteLogger};
 use windows::Win32::Foundation::HMODULE;
 use windows::Win32::System::SystemServices::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH};
@@ -45,7 +45,7 @@ struct FlightRecorder {
     file: Option<File>,
     rng_track: RngTrack,
     frame_tick: FrameTick,
-    rng_calls: Vec<usize>,
+    rng_calls: Vec<GameField>,
 }
 
 impl FlightRecorder {
@@ -88,7 +88,7 @@ impl FlightRecorder {
 
         let mut frame_record = self.tracker.track_delta(&self.game);
         frame_record.num_rng_rolls = self.rng_calls.len() as u16;
-        self.rng_calls.clear();
+        frame_record.game_changes.extend(self.rng_calls.drain(..));
         file.write_le(&frame_record)?;
         Ok(())
     }
@@ -102,7 +102,28 @@ impl FlightRecorder {
 static FLIGHT_RECORDER: OnceLock<Mutex<FlightRecorder>> = OnceLock::new();
 
 extern "C" fn track_rng(_ecx: usize, _return: usize, caller: usize) {
-    recorder().rng_calls.push(caller);
+    let mut recorder = recorder();
+    let rng_value = (recorder.game.rng() & 0xffff) as u16;
+    for (address, roll_type) in recorder.game.known_rng_rolls() {
+        if caller == *address {
+            if roll_type.is_character_roll() {
+                let char_index = recorder.game.current_char_index().map(|i| i as u8).unwrap_or(u8::MAX);
+                recorder.rng_calls.push(GameField::CharacterRng {
+                    char_index,
+                    roll_type: *roll_type,
+                    start_value: rng_value,
+                });
+            } else {
+                recorder.rng_calls.push(GameField::KnownRng {
+                    roll_type: *roll_type,
+                    start_value: rng_value,
+                });
+            }
+            
+            return;
+        }
+    }
+    recorder.rng_calls.push(GameField::RngRoll(caller as u32, rng_value));
 }
 
 extern "C" fn frame_tick() {

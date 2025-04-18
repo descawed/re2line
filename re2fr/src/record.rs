@@ -73,10 +73,11 @@ impl CharacterState {
             fields.push(CharacterField::MotionAngle(char.motion_angle));
         }
 
-        if self.motion != char.motion {
+        // stop tracking this for now as it doesn't immediately appear to be useful
+        /*if self.motion != char.motion {
             self.motion = char.motion;
             fields.push(CharacterField::Motion(char.motion));
-        }
+        }*/
 
         if self.x_size != char.x_size || self.z_size != char.z_size {
             self.x_size = char.x_size;
@@ -134,7 +135,7 @@ impl GameState {
     }
 
     pub fn track_delta(&mut self, game: &Game) -> Vec<GameField> {
-        let mut fields = Vec::with_capacity(MAX_GAME_CHANGES);
+        let mut fields = Vec::new();
 
         let rng = game.rng();
         let keys_down = game.keys_down();

@@ -10,6 +10,7 @@ mod aot;
 mod character;
 mod record;
 mod draw;
+mod rng;
 
 fn make_eframe_error(e: anyhow::Error) -> eframe::Error {
     eframe::Error::AppCreation(std::io::Error::new(std::io::ErrorKind::Other, e).into())

@@ -1,13 +1,13 @@
 use binrw::binrw;
 
 use crate::game::{FRAMES_PER_SECOND, MATRIX, SVECTOR};
+use crate::rng::RollType;
 
 pub const RECORD_VERSION: u16 = 1;
-pub const MAX_CHARACTER_CHANGES: usize = 9;
-pub const MAX_GAME_CHANGES: usize = 6;
+pub const MAX_CHARACTER_CHANGES: usize = 10;
 
 #[binrw]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CharacterField {
     #[brw(magic = 0u8)] State([u8; 4]),
     #[brw(magic = 1u8)] Id(u8),
@@ -23,7 +23,7 @@ pub enum CharacterField {
 }
 
 #[binrw]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum GameField {
     #[brw(magic = 0u8)] KeysDown(u32),
     #[brw(magic = 1u8)] KeysDownThisFrame(u32),
@@ -32,6 +32,21 @@ pub enum GameField {
     #[brw(magic = 4u8)] Rng(u16),
     #[brw(magic = 5u8)] StageOffset(u8),
     #[brw(magic = 6u8)] Scenario(u8),
+    #[brw(magic = 7u8)]
+    CharacterRng {
+        char_index: u8,
+        roll_type: RollType,
+        start_value: u16,
+    },
+    #[brw(magic = 8u8)]
+    KnownRng {
+        roll_type: RollType,
+        start_value: u16,
+    },
+    #[brw(magic = 9u8)]
+    ScriptRng(u16),
+    #[brw(magic = 10u8)]
+    RngRoll(u32, u16),
 }
 
 #[binrw]

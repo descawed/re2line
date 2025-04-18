@@ -339,7 +339,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         description: "Jump attack will hit you",
         behavior_type: BehaviorType::Hit,
         half_angle: Fixed12(461),
-        offset_angle: Fixed12(-262), // FIXME: not sure if it's right for this to be negative
+        offset_angle: Fixed12(262), // FIXME: hit detection seems weird?
         radius: UFixed12(2199),
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0A), StateMask::Either(4, 5), StateMask::Any],
@@ -686,7 +686,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         description: "Jump attack will hit you",
         behavior_type: BehaviorType::Hit,
         half_angle: Fixed12(461),
-        offset_angle: Fixed12(-262),
+        offset_angle: Fixed12(262),
         radius: UFixed12(2199),
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0A), StateMask::Either(4, 5), StateMask::Any],

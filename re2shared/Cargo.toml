@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 binrw = "0.14.1"
+enum-map = "2.7.3"

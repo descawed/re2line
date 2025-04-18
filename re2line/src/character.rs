@@ -374,10 +374,11 @@ impl Character {
         self.outline_shape.set_size(self.width << 1, self.height << 1);
     }
 
-    pub fn label(&self) -> String {
+    pub fn label(&self, index: usize) -> String {
         let (x, z) = self.shape.pos();
         format!(
-            "{}\nState: {:02X} {:02X} {:02X} {:02X}\nX: {:7} Z: {:7}\nHP: {}/{}",
+            "#{} {}\nState: {:02X} {:02X} {:02X} {:02X}\nX: {:7} Z: {:7}\nHP: {}/{}",
+            index,
             self.id.name(),
             self.state[0], self.state[1], self.state[2], self.state[3],
             x, z,
@@ -468,7 +469,7 @@ impl Character {
         Shape::Vec(shapes)
     }
 
-    pub fn gui_shape(&self, draw_params: &DrawParams, ui: &Ui, show_tooltip: bool) -> Shape {
+    pub fn gui_shape(&self, draw_params: &DrawParams, ui: &Ui, index: usize, show_tooltip: bool) -> Shape {
         let body_shape = self.shape.gui_shape(draw_params);
         let body_rect = body_shape.visual_bounding_rect();
         let body_center = body_rect.center();
@@ -532,7 +533,7 @@ impl Character {
 
         let text_shape = ui.fonts(|fonts| {
             let mut job = LayoutJob::simple(
-                self.label(),
+                self.label(index),
                 font_id,
                 Color32::from_rgb(0xe0, 0xe0, 0xe0),
                 LABEL_WRAP_WIDTH,

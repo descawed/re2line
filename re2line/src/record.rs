@@ -10,6 +10,7 @@ use re2shared::record::*;
 use crate::app::RoomId;
 use crate::character::*;
 use crate::math::*;
+use crate::rng::ROLL_DESCRIPTIONS;
 
 pub const FRAME_DURATION: Duration = Duration::from_micros(1000000 / 30);
 
@@ -248,5 +249,39 @@ impl Recording {
 
     pub fn index(&self) -> usize {
         self.index
+    }
+    
+    pub fn get_rng_descriptions(&self) -> Vec<String> {
+        let mut rng_descriptions = Vec::new();
+        let end = self.index.min(self.frames.len() - 1);
+        for i in self.range.start..=end {
+            let frame_record = &self.frames[i];
+            let state = &self.states[i - self.range.start];
+            
+            let time = frame_record.time();
+            let prefix = format!("{} ({})", time, i);
+            for change in &frame_record.game_changes {
+                match change {
+                    GameField::RngRoll(address, value) => {
+                        rng_descriptions.push(format!("{} - {:08X} rolled on {:04X}", prefix, address, value));
+                    }
+                    GameField::KnownRng { roll_type, start_value } => {
+                        let description_data = &ROLL_DESCRIPTIONS[*roll_type];
+                        rng_descriptions.push(format!("{} - {}", prefix, description_data.describe(*start_value, None)));
+                    }
+                    GameField::CharacterRng { char_index, roll_type, start_value } => {
+                        let description_data = &ROLL_DESCRIPTIONS[*roll_type];
+                        let character_name = state.characters()
+                            .get(*char_index as usize)
+                            .and_then(|c| c.as_ref().map(Character::name))
+                            .map(|n| format!("#{} {}", char_index, n));
+                        rng_descriptions.push(format!("{} - {}", prefix, description_data.describe(*start_value, character_name.as_ref().map(String::as_str))));
+                    }
+                    _ => (),
+                }
+            }
+        }
+        
+        rng_descriptions
     }
 }

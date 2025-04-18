@@ -2739,6 +2739,7 @@ name = "re2shared"
 version = "0.1.0"
 dependencies = [
  "binrw",
+ "enum-map",
 ]
 
 [[package]]

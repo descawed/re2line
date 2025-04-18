@@ -43,11 +43,12 @@ enum BrowserTab {
     Game,
     Room,
     Settings,
+    Rng,
 }
 
 impl BrowserTab {
-    const fn list() -> [BrowserTab; 3] {
-        [BrowserTab::Game, BrowserTab::Room, BrowserTab::Settings]
+    const fn list() -> [BrowserTab; 4] {
+        [BrowserTab::Game, BrowserTab::Room, BrowserTab::Rng, BrowserTab::Settings]
     }
 
     const fn name(&self) -> &'static str {
@@ -55,6 +56,7 @@ impl BrowserTab {
             Self::Game => "Game",
             Self::Room => "Room",
             Self::Settings => "Settings",
+            Self::Rng => "RNG",
         }
     }
 }
@@ -418,6 +420,19 @@ impl App {
             });
         });
     }
+    
+    fn rng_browser(&mut self, ui: &mut Ui) {
+        egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
+            let Some(ref recording) = self.active_recording else {
+                return;
+            };
+            
+            // show in reverse order so newest items are at the top
+            for roll in recording.get_rng_descriptions().into_iter().rev() {
+                ui.label(roll);
+            }
+        });
+    }
 
     fn settings_browser(&mut self, ui: &mut Ui) {
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
@@ -626,6 +641,7 @@ impl eframe::App for App {
                     BrowserTab::Game => self.rdt_browser(ui),
                     BrowserTab::Room => self.room_browser(ui),
                     BrowserTab::Settings => self.settings_browser(ui),
+                    BrowserTab::Rng => self.rng_browser(ui),
                 }
             });
         });
@@ -750,7 +766,7 @@ impl eframe::App for App {
                         }
 
                         let char_draw_params = self.config.get_draw_params(object_type, view_center);
-                        character_icons.push(character.gui_shape(&char_draw_params, ui, settings.show_tooltip));
+                        character_icons.push(character.gui_shape(&char_draw_params, ui, i, settings.show_tooltip));
                         if settings.show_ai {
                             ai_zones.push(character.gui_ai(&char_draw_params, player_pos));
                         }
@@ -801,7 +817,7 @@ impl eframe::App for App {
 
                     let object_type: ObjectType = character.type_().into();
                     let char_draw_params = self.config.get_draw_params(object_type, view_center);
-                    ui.painter().add(character.gui_shape(&char_draw_params, ui, settings.show_tooltip));
+                    ui.painter().add(character.gui_shape(&char_draw_params, ui, i, settings.show_tooltip));
                 }
             }
         });
