@@ -376,13 +376,11 @@ impl Character {
     }
 
     pub fn label(&self, index: usize) -> String {
-        let (x, z) = self.shape.pos();
         format!(
-            "#{} {}\nState: {:02X} {:02X} {:02X} {:02X}\nX: {:7} Z: {:7}\nHP: {}/{}",
+            "#{} {}\nState: {:02X} {:02X} {:02X} {:02X}\nHP: {}/{}",
             index,
             self.id.name(),
             self.state[0], self.state[1], self.state[2], self.state[3],
-            x, z,
             self.current_health, self.max_health,
         )
     }
