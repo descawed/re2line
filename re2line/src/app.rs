@@ -325,6 +325,21 @@ impl App {
 
     fn room_browser(&mut self, ui: &mut Ui) {
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
+            if let Some(ref recording) = self.active_recording {
+                let stats = recording.get_room_stats();
+
+                ui.label(format!("Frames:\t{}", stats.num_frames));
+                
+                let seconds = stats.total_time.as_secs_f32();
+                let minutes = (seconds / 60.0) as i32;
+                let seconds = seconds % 60.0;
+                ui.label(format!("Time:\t{:02}:{:05.2}", minutes, seconds));
+                
+                ui.label(format!("RNG rolls:\t{}", stats.num_rng_rolls));
+
+                ui.separator();
+            }
+
             ui.collapsing("Floor", |ui| {
                 for i in 0..self.floors.len() {
                     ui.selectable_value(&mut self.selected_object, SelectedObject::Floor(i), format!("Floor {}", i));
@@ -441,7 +456,7 @@ impl App {
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
             ui.checkbox(&mut self.config.show_sounds, "Show sounds");
             ui.separator();
-            
+
             for (object_type, object_settings) in &mut self.config.object_settings {
                 ui.label(egui::RichText::new(object_type.name()).strong());
                 ui.checkbox(&mut object_settings.show, "Show");
@@ -600,42 +615,42 @@ impl App {
         let player = state.characters().get(0)?.as_ref()?;
         Some((player.center, player.interaction_point(), player.floor))
     }
-    
+
     fn get_sound_text_box(sound: &PlayerSound, draw_params: &DrawParams, ui: &Ui) -> egui::Shape {
         let (x, y, _, _) = draw_params.transform(sound.pos.x, sound.pos.z, UFixed12(0), UFixed12(0));
         let pos = egui::Pos2::new(x, y);
-        
+
         let age = 1.0 - (sound.age as f32 / MAX_SOUND_AGE as f32);
 
         let bg_color = draw_params.fill_color.gamma_multiply(age);
         let text_color = draw_params.stroke.color.gamma_multiply(age);
-        
+
         let mut sounds = Vec::new();
-        
+
         if sound.sounds.is_gunshot_audible() {
             sounds.push("🔫");
         }
-        
+
         if sound.sounds.is_walking_footstep_audible() {
             sounds.push("👞");
         }
-        
+
         if sound.sounds.is_running_footstep_audible() {
             sounds.push("👟");
         }
-        
+
         if sound.sounds.is_knife_audible() {
             sounds.push("🔪");
         }
-        
+
         if sound.sounds.is_aim_audible() {
             sounds.push("🎯");
         }
-        
+
         let sound_string = sounds.join("\n");
-        
+
         let (bg, text) = text_box(sound_string, pos, VAlign::Center, bg_color, text_color, ui);
-        
+
         egui::Shape::Vec(vec![bg, text])
     }
 }

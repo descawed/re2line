@@ -60,6 +60,13 @@ pub struct PlayerSound {
 }
 
 #[derive(Debug, Clone)]
+pub struct RoomStats {
+    pub num_frames: usize,
+    pub total_time: Duration,
+    pub num_rng_rolls: usize,
+}
+
+#[derive(Debug, Clone)]
 pub struct State {
     frame_index: usize,
     room_index: usize,
@@ -360,5 +367,21 @@ impl Recording {
         }
         
         sounds
+    }
+    
+    pub fn get_room_stats(&self) -> RoomStats {
+        RoomStats {
+            num_frames: self.range.len(),
+            total_time: FRAME_DURATION * (self.range.len() as u32),
+            num_rng_rolls: self.frames[self.range.start..self.range.end]
+                .iter()
+                .map(|frame| {
+                    frame.game_changes
+                        .iter()
+                        .filter(|change| matches!(change, GameField::RngRoll(_, _) | GameField::KnownRng { .. } | GameField::CharacterRng { .. }))
+                        .count()
+                })
+                .sum(),
+        }
     }
 }
