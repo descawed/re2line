@@ -119,6 +119,7 @@ pub struct GameState {
     room_index: u16,
     stage_offset: u32,
     scenario: u8,
+    sound_flags: u8,
 }
 
 impl GameState {
@@ -131,6 +132,7 @@ impl GameState {
             room_index: game.room_index(),
             stage_offset: game.stage_offset(),
             scenario: if game.is_claire() { 1 } else { 0 },
+            sound_flags: game.sound_flags(),
         }
     }
 
@@ -144,6 +146,7 @@ impl GameState {
         let room_index = game.room_index();
         let stage_offset = game.stage_offset();
         let scenario = if game.is_claire() { 1 } else { 0 };
+        let sound_flags = game.sound_flags();
 
         if self.rng != rng {
             self.rng = rng;
@@ -178,6 +181,11 @@ impl GameState {
         if self.scenario != scenario {
             self.scenario = scenario;
             fields.push(GameField::Scenario(self.scenario));
+        }
+        
+        if self.sound_flags != sound_flags {
+            self.sound_flags = sound_flags;
+            fields.push(GameField::SoundFlags(self.sound_flags));       
         }
 
         fields

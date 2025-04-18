@@ -1,7 +1,20 @@
-use egui::{Color32, Pos2, Vec2};
-use epaint::{CubicBezierShape, PathStroke};
+use eframe::emath::Align;
+use egui::{Color32, Pos2, Shape, TextStyle, Ui, Vec2};
+use epaint::{CubicBezierShape, PathStroke, TextShape};
+use epaint::text::LayoutJob;
 
 const MAX_ARC_ANGLE: f32 = std::f32::consts::PI / 2.0;
+
+const TEXT_BOX_CORNER_RADIUS: f32 = 5.0;
+const TEXT_BOX_PADDING: f32 = 5.0;
+const TEXT_BOX_WRAP_WIDTH: f32 = 150.0;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum VAlign {
+    Top,
+    Center,
+    Bottom,
+}
 
 pub fn get_path_for_semicircle(center: Pos2, radius: f32, facing_angle: f32, half_arc_angle: f32, inverted: bool) -> Vec<Pos2> {
     let mut path = vec![center];
@@ -46,4 +59,36 @@ pub fn get_path_for_semicircle(center: Pos2, radius: f32, facing_angle: f32, hal
     }
 
     path
+}
+
+pub fn text_box(text: String, pos: Pos2, valign: VAlign, bg_color: Color32, text_color: Color32, ui: &Ui) -> (Shape, Shape) {
+    let font_id = TextStyle::Body.resolve(&*ui.style());
+
+    let text_shape = ui.fonts(|fonts| {
+        let mut job = LayoutJob::simple(
+            text,
+            font_id,
+            text_color,
+            TEXT_BOX_WRAP_WIDTH,
+        );
+        job.halign = Align::Center;
+
+        let galley = fonts.layout_job(job);
+        let offset = Vec2::new(0.0, match valign {
+            VAlign::Bottom => galley.rect.height(),
+            VAlign::Center => galley.rect.height() / 2.0,
+            VAlign::Top => 0.0,       
+        });
+
+        Shape::Text(TextShape::new(
+            pos - offset,
+            galley,
+            bg_color,
+        ))
+    });
+
+    let bg_rect = text_shape.visual_bounding_rect().expand(TEXT_BOX_PADDING);
+    let text_bg_shape = Shape::rect_filled(bg_rect, TEXT_BOX_CORNER_RADIUS, bg_color);
+
+    (text_bg_shape, text_shape)
 }

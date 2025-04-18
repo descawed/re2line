@@ -14,11 +14,57 @@ use crate::rng::ROLL_DESCRIPTIONS;
 
 pub const FRAME_DURATION: Duration = Duration::from_micros(1000000 / 30);
 
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct SoundEnvironment(u8);
+
+impl SoundEnvironment {
+    pub const fn new(value: u8) -> Self {
+        Self(value)
+    }
+    
+    const fn bit(self, bit: u8) -> bool {
+        (self.0 & bit) != 0
+    }
+    
+    pub const fn is_gunshot_audible(self) -> bool {
+        self.bit(0x01)
+    }
+    
+    pub const fn is_walking_footstep_audible(self) -> bool {
+        self.bit(0x02)
+    }
+    
+    pub const fn is_running_footstep_audible(self) -> bool {
+        self.bit(0x04)
+    }
+    
+    pub const fn is_knife_audible(self) -> bool {
+        self.bit(0x08)
+    }
+    
+    pub const fn is_aim_audible(self) -> bool {
+        self.bit(0x10)
+    }
+    
+    pub const fn is_silent(self) -> bool {
+        self.0 == 0
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PlayerSound {
+    pub age: usize,
+    pub pos: Vec2,
+    pub sounds: SoundEnvironment,
+}
+
 #[derive(Debug, Clone)]
 pub struct State {
     frame_index: usize,
     room_index: usize,
     room_id: RoomId,
+    sounds: SoundEnvironment,
     characters: [Option<Character>; NUM_CHARACTERS],
 }
 
@@ -30,17 +76,20 @@ impl State {
             frame_index: usize::MAX,
             room_index: usize::MAX,
             room_id: RoomId::new(0, 0, 0),
+            sounds: SoundEnvironment::new(0),
             characters: [const { None }; NUM_CHARACTERS],
         }
     }
 
     pub fn make_next_state(&self, record: &FrameRecord) -> Self {
         let mut room_id = self.room_id;
+        let mut sounds = self.sounds;
         for change in &record.game_changes {
             match change {
                 GameField::StageIndex(stage_index) => room_id.stage = *stage_index,
                 GameField::RoomIndex(room_index) => room_id.room = *room_index,
                 GameField::Scenario(scenario) => room_id.player = *scenario,
+                GameField::SoundFlags(flags) => sounds = SoundEnvironment::new(*flags),
                 _ => (),
             }
         }
@@ -103,6 +152,7 @@ impl State {
             frame_index,
             room_index,
             room_id,
+            sounds,
             characters,
         }
     }
@@ -122,6 +172,18 @@ impl State {
         }
 
         characters
+    }
+    
+    pub fn player_sounds(&self) -> Option<PlayerSound> {
+        let (Some(player), false) = (self.characters[0].as_ref(), self.sounds.is_silent()) else {
+            return None;
+        };
+        
+        Some(PlayerSound {
+            age: 0,
+            pos: player.center,
+            sounds: self.sounds,
+        })
     }
 }
 
@@ -283,5 +345,20 @@ impl Recording {
         }
         
         rng_descriptions
+    }
+    
+    pub fn get_player_sounds(&self, max_age: usize) -> Vec<PlayerSound> {
+        let mut sounds = Vec::new();
+        let start = (self.index - max_age.min(self.index)).max(self.range.start);
+        let end = self.index.min(self.frames.len() - 1);
+        for i in start..=end {
+            let state = &self.states[i - self.range.start];
+            if let Some(mut sound) = state.player_sounds() {
+                sound.age = self.index - i;
+                sounds.push(sound);
+            }
+        }
+        
+        sounds
     }
 }

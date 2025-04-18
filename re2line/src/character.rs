@@ -1,9 +1,9 @@
-use egui::{Align, Color32, Pos2, Shape, Stroke, TextStyle, Ui};
-use epaint::{CircleShape, ColorMode, PathShape, PathStroke, TextShape};
-use epaint::text::LayoutJob;
+use egui::{Color32, Pos2, Shape, Stroke, Ui};
+use epaint::{CircleShape, ColorMode, PathShape, PathStroke};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::collision::{DrawParams, EllipseCollider, RectCollider};
+use crate::draw::{VAlign, text_box};
 use crate::math::{Fixed12, UFixed12, Vec2};
 
 mod ai;
@@ -14,10 +14,7 @@ const INTERACTION_DISTANCE: UFixed12 = UFixed12(620);
 const ARROW_HEAD_HEIGHT: f32 = 6.0;
 const ARROW_HEAD_WIDTH: f32 = 6.0;
 const ARROW_SHAFT_WIDTH: f32 = 1.5;
-const LABEL_CORNER_RADIUS: f32 = 5.0;
 const LABEL_MARGIN: f32 = 10.0;
-const LABEL_PADDING: f32 = 5.0;
-const LABEL_WRAP_WIDTH: f32 = 150.0;
 const MOTION_PROJECTION_LENGTH: f32 = 0.25;
 const POINT_RADIUS: f32 = 3.0;
 
@@ -526,30 +523,15 @@ impl Character {
 
         let center_x = body_center.x;
         let top_y = body_rect.min.y;
-        let font_id = TextStyle::Body.resolve(&*ui.style());
-        // TODO: make colors configurable
-        let bg_color = Color32::from_rgb(0x30, 0x30, 0x30);
-
-        let text_shape = ui.fonts(|fonts| {
-            let mut job = LayoutJob::simple(
-                self.label(index),
-                font_id,
-                Color32::from_rgb(0xe0, 0xe0, 0xe0),
-                LABEL_WRAP_WIDTH,
-            );
-            job.halign = Align::Center;
-
-            let galley = fonts.layout_job(job);
-
-            Shape::Text(TextShape::new(
-                Pos2::new(center_x, top_y - galley.rect.height() - LABEL_MARGIN),
-                galley,
-                bg_color,
-            ))
-        });
-
-        let bg_rect = text_shape.visual_bounding_rect().expand(LABEL_PADDING);
-        let text_bg_shape = Shape::rect_filled(bg_rect, LABEL_CORNER_RADIUS, bg_color);
+        
+        let (text_bg_shape, text_shape) = text_box(
+            self.label(index),
+            Pos2::new(center_x, top_y - LABEL_MARGIN),
+            VAlign::Bottom,
+            Color32::from_rgb(0x30, 0x30, 0x30),
+            Color32::from_rgb(0xe0, 0xe0, 0xe0),
+            ui,
+        );
 
         shapes.extend([text_bg_shape, text_shape]);
 

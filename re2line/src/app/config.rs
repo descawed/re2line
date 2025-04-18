@@ -186,11 +186,17 @@ impl ObjectSettings {
      }
 }
 
+const fn default_true() -> bool {
+     true
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub(super) struct Config {
      pub rdt_folder: Option<PathBuf>,
      pub last_rdt: Option<RoomId>,
      pub zoom_scale: f32,
+     #[serde(default = "default_true")]
+     pub show_sounds: bool,
      pub object_settings: EnumMap<ObjectType, ObjectSettings>,
 }
 
@@ -234,6 +240,7 @@ impl Default for Config {
                rdt_folder: None,
                last_rdt: None,
                zoom_scale: 40.0,
+               show_sounds: true,
                object_settings: enum_map! {
                     ObjectType::Floor => ObjectSettings::fill(Color32::from_rgb(0xa4, 0x4d, 0x68)),
                     ObjectType::Collider => ObjectSettings::stroke(Color32::from_rgb(0x63, 0xb3, 0x4d)),

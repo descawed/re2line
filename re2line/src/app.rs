@@ -7,18 +7,20 @@ use std::time::Instant;
 
 use anyhow::{anyhow, bail, Result};
 use eframe::{Frame, Storage};
-use egui::{Context, Key, Ui, ViewportCommand};
+use egui::{Color32, Context, Key, Ui, ViewportCommand};
 use egui::widgets::color_picker::Alpha;
+use epaint::{Stroke, StrokeKind};
 use re2shared::game::NUM_CHARACTERS;
 use re2shared::record::FrameRecord;
 use rfd::FileDialog;
 
 use crate::aot::{Entity, SceType};
 use crate::character::{Character, CharacterId};
-use crate::collision::Collider;
-use crate::math::{Fixed12, Vec2};
+use crate::collision::{Collider, DrawParams};
+use crate::draw::{VAlign, text_box};
+use crate::math::{Fixed12, UFixed12, Vec2};
 use crate::rdt::Rdt;
-use crate::record::{Recording, State, FRAME_DURATION};
+use crate::record::{PlayerSound, Recording, State, FRAME_DURATION};
 
 mod config;
 use config::{Config, ObjectType};
@@ -28,6 +30,7 @@ pub const APP_NAME: &str = "re2line";
 
 const DETAIL_MAX_ROWS: usize = 4;
 const FAST_FORWARD: isize = 30;
+const MAX_SOUND_AGE: usize = 100;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SelectedObject {
@@ -436,6 +439,9 @@ impl App {
 
     fn settings_browser(&mut self, ui: &mut Ui) {
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
+            ui.checkbox(&mut self.config.show_sounds, "Show sounds");
+            ui.separator();
+            
             for (object_type, object_settings) in &mut self.config.object_settings {
                 ui.label(egui::RichText::new(object_type.name()).strong());
                 ui.checkbox(&mut object_settings.show, "Show");
@@ -593,6 +599,44 @@ impl App {
         let state = recording.current_state()?;
         let player = state.characters().get(0)?.as_ref()?;
         Some((player.center, player.interaction_point(), player.floor))
+    }
+    
+    fn get_sound_text_box(sound: &PlayerSound, draw_params: &DrawParams, ui: &Ui) -> egui::Shape {
+        let (x, y, _, _) = draw_params.transform(sound.pos.x, sound.pos.z, UFixed12(0), UFixed12(0));
+        let pos = egui::Pos2::new(x, y);
+        
+        let age = 1.0 - (sound.age as f32 / MAX_SOUND_AGE as f32);
+
+        let bg_color = draw_params.fill_color.gamma_multiply(age);
+        let text_color = draw_params.stroke.color.gamma_multiply(age);
+        
+        let mut sounds = Vec::new();
+        
+        if sound.sounds.is_gunshot_audible() {
+            sounds.push("🔫");
+        }
+        
+        if sound.sounds.is_walking_footstep_audible() {
+            sounds.push("👞");
+        }
+        
+        if sound.sounds.is_running_footstep_audible() {
+            sounds.push("👟");
+        }
+        
+        if sound.sounds.is_knife_audible() {
+            sounds.push("🔪");
+        }
+        
+        if sound.sounds.is_aim_audible() {
+            sounds.push("🎯");
+        }
+        
+        let sound_string = sounds.join("\n");
+        
+        let (bg, text) = text_box(sound_string, pos, VAlign::Center, bg_color, text_color, ui);
+        
+        egui::Shape::Vec(vec![bg, text])
     }
 }
 
@@ -792,6 +836,25 @@ impl eframe::App for App {
 
                     for character_icon in character_icons {
                         ui.painter().add(character_icon);
+                    }
+                }
+
+                if self.config.show_sounds {
+                    // TODO: make sound text box colors configurable
+                    let sound_draw_params = DrawParams {
+                        origin: view_center,
+                        scale: self.config.zoom_scale,
+                        fill_color: Color32::from_rgb(0x30, 0x30, 0x30),
+                        stroke: Stroke {
+                            color: Color32::from_rgb(0xe0, 0xe0, 0xe0),
+                            width: 1.0,
+                        },
+                        stroke_kind: StrokeKind::Middle,
+                    };
+
+                    for sound in recording.get_player_sounds(MAX_SOUND_AGE) {
+                        let sound_box = Self::get_sound_text_box(&sound, &sound_draw_params, ui);
+                        ui.painter().add(sound_box);
                     }
                 }
             }

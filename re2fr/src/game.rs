@@ -27,6 +27,7 @@ pub struct GameVersion {
     pub rng_roll_patch: usize,
     pub script_rng_patch: usize,
     pub script_rng_seed: usize,
+    pub sound_flags: usize,
     pub known_rng_rolls: [(usize, RollType); 60],
 }
 
@@ -51,6 +52,7 @@ const GAME_VERSIONS: [GameVersion; 1] = [
         rng_roll_patch: 0x004b2a91,
         script_rng_patch: 0x004e3bec,
         script_rng_seed: 0x00695e58,
+        sound_flags: 0x00989eee,
         known_rng_rolls: [
             (0x004e3be1, RollType::Script),
             (0x00451be7, RollType::ZombieStaggerThreshold),
@@ -141,6 +143,7 @@ pub struct Game {
     room_index: *const u16,
     stage_offset: *const u32,
     game_flags: *const u32,
+    sound_flags: *const u8,
 }
 
 impl Game {
@@ -171,6 +174,7 @@ impl Game {
             let room_index = version.room_index as *const u16;
             let stage_offset = version.stage_offset as *const u32;
             let game_flags = version.game_flags as *const u32;
+            let sound_flags = version.sound_flags as *const u8;
 
             return Ok(Self {
                 version,
@@ -186,6 +190,7 @@ impl Game {
                 room_index,
                 stage_offset,
                 game_flags,
+                sound_flags,           
             });
         }
 
@@ -241,6 +246,12 @@ impl Game {
     pub fn stage_offset(&self) -> u32 {
         unsafe {
             *self.stage_offset
+        }
+    }
+    
+    pub fn sound_flags(&self) -> u8 {
+        unsafe {
+            *self.sound_flags
         }
     }
 
