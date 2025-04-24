@@ -172,15 +172,19 @@ const fn animation(i: &mut usize) -> Animation {
     }
 }
 
-const fn get_bus_shots(bus_rng_index: usize) -> (usize, usize) {
-    let mut i = bus_rng_index + 4; // skip standing zombie speed and health rolls
-    
-    let stagger_threshold = (rng(i) & 0xf) + 0x10;
-    let standing_shots = if stagger_threshold <= ZOMBIE_ONE_SHOT_STAGGER_THRESHOLD as usize {
+const fn get_shots_to_stagger(rng_index: usize) -> usize {
+    let stagger_threshold = (rng(rng_index) & 0xf) + 0x10;
+    if stagger_threshold <= ZOMBIE_ONE_SHOT_STAGGER_THRESHOLD as usize {
         1usize
     } else {
         2usize
-    };
+    }
+}
+
+const fn get_bus_shots(bus_rng_index: usize) -> (usize, usize) {
+    let mut i = bus_rng_index + 4; // skip standing zombie speed and health rolls
+    
+    let standing_shots = get_shots_to_stagger(i);
 
     // advance past stagger roll and standing zombie appearance rolls
     i += 3;
@@ -354,6 +358,19 @@ pub fn find_runs() {
     }
 
     print_runs("Mod 3", &threes);
+}
+
+/// rng_index should be the RNG position upon entering Kendo's shop, before the 64 rolls in that
+/// room are applied.
+const fn simulate_gate_shot(rng_index: usize) -> usize {
+    // skip over Kendo rolls and bball court rolls prior to the gate zombie's stagger threshold
+    get_shots_to_stagger(rng_index + 64 + 62)
+}
+
+pub fn print_gate_shots() {
+    for i in 150usize..300usize {
+        println!("{}: {}", i, simulate_gate_shot(i));
+    }
 }
 
 /*fn simulate_bus_rng(start: usize) -> BusManipScenario {
