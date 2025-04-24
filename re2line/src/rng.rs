@@ -5,6 +5,8 @@ use re2shared::rng::RollType;
 
 pub const ZOMBIE_ONE_SHOT_STAGGER_THRESHOLD: u8 = 0x17;
 
+const ZOMBIE_SPEED_INDEXES: [u8; 8] = [0, 2, 0, 2, 0, 2, 2, 0];
+
 pub const fn roll(seed: u16) -> u16 {
     let high = seed.overflowing_mul(2).0 >> 8;
     let low = seed.overflowing_add(high).0 & 0xff;
@@ -120,6 +122,15 @@ fn zombie_knockdown87(seed: u16) -> String {
     bool_text(roll_double(seed, 7) != 0)
 }
 
+fn zombie_speed(seed: u16) -> String {
+    let index = roll_double(seed, 7) as usize;
+    String::from(if ZOMBIE_SPEED_INDEXES[index] == 0 {
+        "fast"
+    } else {
+        "slow"
+    })
+}
+
 fn licker_health(seed: u16) -> String {
     format!("index {}", (roll8(seed) & 0xf) * 2)
 }
@@ -201,6 +212,7 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::ZombieKnockdown93 => RollDescription::new("rolled to fall down (93.75%)", zombie_knockdown93),
         RollType::ZombieKnockdownSpeed => RollDescription::new("rolled for knockdown speed", zombie_knockdown_speed),
         RollType::ZombieKnockdown87 => RollDescription::new("rolled to fall down (87.5%)", zombie_knockdown87),
+        RollType::ZombieSpeed => RollDescription::new("rolled for speed", zombie_speed),
         RollType::LickerHealth => RollDescription::new("rolled for health", licker_health),
         RollType::LickerJump25 => RollDescription::new("rolled to jump (25%)", licker_jump25),
         RollType::LickerJump37 => RollDescription::new("rolled to jump (37.5%)", licker_jump37),

@@ -40,6 +40,7 @@ pub enum RollType {
     ZombieAppearance2 = 31, // only rolls once unlike the other one
     ZombieHealth2 = 32, // only rolls once unlike the other one
     LickerSlash50 = 33,
+    ZombieSpeed = 34, // double
     Partial = 0xFFFE, // a roll that's part of a larger series of rolls and not used on its own
     Invalid = 0xFFFF,
 }

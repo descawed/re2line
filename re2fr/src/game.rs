@@ -28,7 +28,7 @@ pub struct GameVersion {
     pub script_rng_patch: usize,
     pub script_rng_seed: usize,
     pub sound_flags: usize,
-    pub known_rng_rolls: [(usize, RollType); 60],
+    pub known_rng_rolls: [(usize, RollType); 62],
 }
 
 const GAME_VERSIONS: [GameVersion; 1] = [
@@ -65,6 +65,9 @@ const GAME_VERSIONS: [GameVersion; 1] = [
 
             (0x00451c45, RollType::Partial),
             (0x00451c4f, RollType::ZombieStaggerThresholdReroll),
+
+            (0x00451bad, RollType::Partial),
+            (0x00451bb7, RollType::ZombieSpeed),
 
             // these two health rolls pull from different arrays, but I'm not bothering to make them
             // separate types because the recording already tracks what the health ends up being
