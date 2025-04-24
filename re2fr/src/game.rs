@@ -28,7 +28,7 @@ pub struct GameVersion {
     pub script_rng_patch: usize,
     pub script_rng_seed: usize,
     pub sound_flags: usize,
-    pub known_rng_rolls: [(usize, RollType); 69],
+    pub known_rng_rolls: [(usize, RollType); 81],
 }
 
 const GAME_VERSIONS: [GameVersion; 1] = [
@@ -100,6 +100,19 @@ const GAME_VERSIONS: [GameVersion; 1] = [
             
             (0x004540d4, RollType::ZombieKnockdownSpeed),
             (0x00454a82, RollType::ZombieKnockdown87),
+            (0x00452722, RollType::ZombieAnimationOffset),
+            (0x00452c31, RollType::ZombieAnimationOffset),
+            (0x004532cf, RollType::ZombieAnimationOffset),
+            (0x00452d71, RollType::ZombieShortMoan),
+            (0x00452d7f, RollType::ZombieLongMoan),
+            (0x0045329a, RollType::ZombieMoanChoice),
+            (0x00452e69, RollType::ZombieArmRaiseTimer),
+            (0x004546bc, RollType::ZombieEatingAnimation),
+            (0x004547a7, RollType::ZombieEatingAnimation),
+            (0x004547ff, RollType::ZombieTryMoan),
+            (0x00454808, RollType::ZombieLongMoan50),
+            (0x00454816, RollType::ZombieShortMoan50),
+
             (0x00464c9a, RollType::LickerHealth),
             (0x00464c63, RollType::LickerHealth),
             (0x0046d041, RollType::LickerHealth),

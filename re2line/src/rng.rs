@@ -44,6 +44,10 @@ const ZOMBIE_HEALTHS2: [i16; 16] = [
      0x27,     0x1B,     0x27,     0x1B,
 ];
 
+const ZOMBIE_EAT_ANIMATIONS: [u8; 8] = [
+    0x12, 0x13, 0x14, 0x12, 0x13, 0x14, 0x12, 0x13,
+];
+
 const IVY_HEALTHS1: [i16; 16] = [
      0x61,     0x77,     0x61,     0x5A,
      0x61,     0x5A,     0x77,     0x61,
@@ -169,6 +173,31 @@ fn zombie_health_alt(seed: u16) -> String {
 
 fn zombie_health2(seed: u16) -> String {
     health(roll8(seed) & 0xf, &ZOMBIE_HEALTHS1)
+}
+
+fn zombie_animation_offset(seed: u16) -> String {
+    format!("{}", roll8(seed) & 0x1f)
+}
+
+fn zombie_moan(seed: u16) -> String {
+    bool_text(roll8(seed) & 0x1f == 0)
+}
+
+fn zombie_arm_raise_timer(seed: u16) -> String {
+    format!("{}", ((roll8(seed) as usize) >> 3) + 100)
+}
+
+fn zombie_moan_choice(seed: u16) -> String {
+    String::from(if roll8(seed) & 1 == 0 {
+        "short"
+    } else {
+        "long"
+    })
+}
+
+fn zombie_eating_animation(seed: u16) -> String {
+    let index = (roll8(seed) & 7) as usize;
+    format!("{} (index {})", ZOMBIE_EAT_ANIMATIONS[index], index)
 }
 
 fn ivy_health1(seed: u16) -> String {
@@ -305,6 +334,15 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::ZombieKnockdownSpeed => RollDescription::new("rolled for knockdown speed", zombie_knockdown_speed),
         RollType::ZombieKnockdown87 => RollDescription::new("rolled to fall down (87.5%)", zombie_knockdown87),
         RollType::ZombieSpeed => RollDescription::new("rolled for speed", zombie_speed),
+        RollType::ZombieAnimationOffset => RollDescription::new("rolled for animation offset", zombie_animation_offset),
+        RollType::ZombieShortMoan => RollDescription::new("rolled for short moan (3.125%)", zombie_moan),
+        RollType::ZombieLongMoan => RollDescription::new("rolled for long moan (3.125%)", zombie_moan),
+        RollType::ZombieMoanChoice => RollDescription::new("rolled for moan type (50/50)", zombie_moan_choice),
+        RollType::ZombieArmRaiseTimer => RollDescription::new("rolled for arm raise timer", zombie_arm_raise_timer),
+        RollType::ZombieEatingAnimation => RollDescription::new("rolled for eating animation", zombie_eating_animation),
+        RollType::ZombieTryMoan => RollDescription::new("rolled to try moan (50%)", not_bit_one),
+        RollType::ZombieLongMoan50 => RollDescription::new("rolled for long moan (50%)", bit_one),
+        RollType::ZombieShortMoan50 => RollDescription::new("rolled for short moan (50%)", bit_one),
         RollType::LickerHealth => RollDescription::new("rolled for health", licker_health),
         RollType::LickerJump25 => RollDescription::new("rolled to jump (25%)", licker_jump25),
         RollType::LickerJump37 => RollDescription::new("rolled to jump (37.5%)", licker_jump37),

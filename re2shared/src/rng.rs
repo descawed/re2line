@@ -49,6 +49,15 @@ pub enum RollType {
     IvyAmbushTentacle = 40,
     TentacleAnimationOffset = 41,
     TentacleAttachAngle = 42,
+    ZombieAnimationOffset = 43,
+    ZombieShortMoan = 44,
+    ZombieLongMoan = 45,
+    ZombieArmRaiseTimer = 46,
+    ZombieMoanChoice = 47,
+    ZombieEatingAnimation = 48,
+    ZombieTryMoan = 49,
+    ZombieLongMoan50 = 50,
+    ZombieShortMoan50 = 51,
     Partial = 0xFFFE, // a roll that's part of a larger series of rolls and not used on its own
     Invalid = 0xFFFF,
 }
