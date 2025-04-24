@@ -28,7 +28,7 @@ pub struct GameVersion {
     pub script_rng_patch: usize,
     pub script_rng_seed: usize,
     pub sound_flags: usize,
-    pub known_rng_rolls: [(usize, RollType); 81],
+    pub known_rng_rolls: [(usize, RollType); 90],
 }
 
 const GAME_VERSIONS: [GameVersion; 1] = [
@@ -79,6 +79,8 @@ const GAME_VERSIONS: [GameVersion; 1] = [
 
             (0x004551d5, RollType::ZombieHealth2),
 
+            (0x00455200, RollType::ZombieSpeed2),
+
             (0x004522b4, RollType::Partial),
             (0x004522be, RollType::Partial),
             (0x004522ce, RollType::ZombieAppearance),
@@ -103,6 +105,7 @@ const GAME_VERSIONS: [GameVersion; 1] = [
             (0x00452722, RollType::ZombieAnimationOffset),
             (0x00452c31, RollType::ZombieAnimationOffset),
             (0x004532cf, RollType::ZombieAnimationOffset),
+            (0x00453d92, RollType::ZombieAnimationOffset16),
             (0x00452d71, RollType::ZombieShortMoan),
             (0x00452d7f, RollType::ZombieLongMoan),
             (0x0045329a, RollType::ZombieMoanChoice),
@@ -112,6 +115,9 @@ const GAME_VERSIONS: [GameVersion; 1] = [
             (0x004547ff, RollType::ZombieTryMoan),
             (0x00454808, RollType::ZombieLongMoan50),
             (0x00454816, RollType::ZombieShortMoan50),
+
+            (0x00454776, RollType::ZombieEatBloodSpray),
+            (0x0045475c, RollType::ZombieEatBloodSpray),
 
             (0x00464c9a, RollType::LickerHealth),
             (0x00464c63, RollType::LickerHealth),
@@ -140,15 +146,21 @@ const GAME_VERSIONS: [GameVersion; 1] = [
             (0x0046dc12, RollType::LickerJump75Lick25),
             (0x0046dc33, RollType::LickerRecoil25),
             (0x0046dc48, RollType::LickerJump50LowHealth),
+            (0x00465034, RollType::LickerDrool),
 
             (0x00484d1f, RollType::IvyHealth1),
             (0x00484cfe, RollType::IvyHealth2),
-            (0x00484d3e, RollType::IvyHealthBonus),
+            (0x00484d3e, RollType::HealthBonus),
             (0x00484e99, RollType::IvyTentacleSet),
             (0x00484eac, RollType::IvyAmbushTentacle),
 
             (0x00488b4c, RollType::TentacleAnimationOffset),
             (0x00488bfb, RollType::TentacleAttachAngle),
+
+            (0x0046f0fd, RollType::SpiderHealth1),
+            (0x0046f0e9, RollType::SpiderHealth2),
+            (0x0046f10f, RollType::HealthBonus),
+            (0x0046f4f0, RollType::SpiderPoison3In32),
         ],
     },
 ];

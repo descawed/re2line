@@ -44,7 +44,7 @@ pub enum RollType {
     ZombieHealthAlt = 35, // double
     IvyHealth1 = 36,
     IvyHealth2 = 37,
-    IvyHealthBonus = 38,
+    HealthBonus = 38,
     IvyTentacleSet = 39,
     IvyAmbushTentacle = 40,
     TentacleAnimationOffset = 41,
@@ -58,6 +58,13 @@ pub enum RollType {
     ZombieTryMoan = 49,
     ZombieLongMoan50 = 50,
     ZombieShortMoan50 = 51,
+    ZombieEatBloodSpray = 52,
+    LickerDrool = 53,
+    SpiderHealth1 = 54,
+    SpiderHealth2 = 55,
+    SpiderPoison3In32 = 56,
+    ZombieAnimationOffset16 = 57,
+    ZombieSpeed2 = 58,
     Partial = 0xFFFE, // a roll that's part of a larger series of rolls and not used on its own
     Invalid = 0xFFFF,
 }

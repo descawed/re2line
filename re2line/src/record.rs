@@ -10,7 +10,7 @@ use re2shared::record::*;
 use crate::app::RoomId;
 use crate::character::*;
 use crate::math::*;
-use crate::rng::ROLL_DESCRIPTIONS;
+use crate::rng::{RNG_SEQUENCE, ROLL_DESCRIPTIONS};
 
 pub const FRAME_DURATION: Duration = Duration::from_micros(1000000 / 30);
 
@@ -64,6 +64,7 @@ pub struct RoomStats {
     pub num_frames: usize,
     pub total_time: Duration,
     pub num_rng_rolls: usize,
+    pub rng_position: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -73,6 +74,7 @@ pub struct State {
     room_id: RoomId,
     sounds: SoundEnvironment,
     characters: [Option<Character>; NUM_CHARACTERS],
+    rng_value: u16,
 }
 
 impl State {
@@ -85,18 +87,21 @@ impl State {
             room_id: RoomId::new(0, 0, 0),
             sounds: SoundEnvironment::new(0),
             characters: [const { None }; NUM_CHARACTERS],
+            rng_value: 0,
         }
     }
 
     pub fn make_next_state(&self, record: &FrameRecord) -> Self {
         let mut room_id = self.room_id;
         let mut sounds = self.sounds;
+        let mut rng_value = self.rng_value;
         for change in &record.game_changes {
             match change {
                 GameField::StageIndex(stage_index) => room_id.stage = *stage_index,
                 GameField::RoomIndex(room_index) => room_id.room = *room_index,
                 GameField::Scenario(scenario) => room_id.player = *scenario,
                 GameField::SoundFlags(flags) => sounds = SoundEnvironment::new(*flags),
+                GameField::Rng(rng) => rng_value = *rng,
                 _ => (),
             }
         }
@@ -161,6 +166,7 @@ impl State {
             room_id,
             sounds,
             characters,
+            rng_value,
         }
     }
 
@@ -382,6 +388,7 @@ impl Recording {
                         .count()
                 })
                 .sum(),
+            rng_position: RNG_SEQUENCE.iter().position(|r| *r == (self.states[0].rng_value & 0x7fff)).unwrap_or(0),
         }
     }
 }

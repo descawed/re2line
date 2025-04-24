@@ -336,6 +336,7 @@ impl App {
                 ui.label(format!("Time:\t{:02}:{:05.2}", minutes, seconds));
                 
                 ui.label(format!("RNG rolls:\t{}", stats.num_rng_rolls));
+                ui.label(format!("RNG position:\t{}", stats.rng_position));
 
                 ui.separator();
             }

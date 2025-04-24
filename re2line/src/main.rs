@@ -17,6 +17,11 @@ fn make_eframe_error(e: anyhow::Error) -> eframe::Error {
 }
 
 fn main() -> eframe::Result {
+    //rng::sim::simulate_bus_rng();
+    //rng::sim::find_runs();
+    //rng::sim::simulate_pre_bus_rng();
+    //return Ok(());
+    
     let args: Vec<String> = env::args().collect();
 
     let mut app = app::App::new().map_err(make_eframe_error)?;

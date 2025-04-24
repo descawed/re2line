@@ -3,19 +3,22 @@ use std::sync::LazyLock;
 use enum_map::{EnumMap, enum_map};
 use re2shared::rng::RollType;
 
+pub mod sim;
+
 pub const ZOMBIE_ONE_SHOT_STAGGER_THRESHOLD: u8 = 0x17;
 
 const ZOMBIE_SPEED_INDEXES: [u8; 8] = [0, 2, 0, 2, 0, 2, 2, 0];
+const ZOMBIE_SPEED_INDEXES2: [u8; 8] = [0, 2, 0, 2, 0, 2, 0, 2];
 
 const INITIAL_SEED: u16 = 0x6ca4; // technically 0xd2706ca4, but the high 16 bits are ignored
 
 pub const fn roll(seed: u16) -> u16 {
     let high = seed.overflowing_mul(2).0 >> 8;
     let low = seed.overflowing_add(high).0 & 0xff;
-    (high << 8) | low
+    ((high << 8) | low) & 0x7fff
 }
 
-const RNG_SEQUENCE: [u16; 24312] = {
+pub const RNG_SEQUENCE: [u16; 24312] = {
     let mut sequence = [0u16; 24312];
     sequence[0] = INITIAL_SEED;
 
@@ -60,6 +63,20 @@ const IVY_HEALTHS2: [i16; 16] = [
      0x63,     0x45,     0x4F,     0x3B,
      0x45,     0x3B,     0x3B,     0x45,
      0x3B,     0x3B,     0x3B,     0x45,
+];
+
+const SPIDER_HEALTHS1: [i16; 16] = [
+     0x63,     0x63,     0x63,     0x63,
+     0x77,     0x63,     0x63,     0x77,
+     0x63,     0x63,     0x63,     0x77,
+     0x63,     0x59,     0x63,     0x63,
+];
+
+const SPIDER_HEALTHS2: [i16; 16] = [
+     0x4F,     0x59,     0x63,     0x4F,
+     0x31,     0x59,     0x4F,     0x45,
+     0x59,     0x45,     0x59,     0x59,
+     0x63,     0x45,     0x31,     0x4F,
 ];
 
 const IVY_TENTACLE_SETS: [[u8; 4]; 4] = [
@@ -179,7 +196,11 @@ fn zombie_animation_offset(seed: u16) -> String {
     format!("{}", roll8(seed) & 0x1f)
 }
 
-fn zombie_moan(seed: u16) -> String {
+fn zombie_animation_offset16(seed: u16) -> String {
+    format!("{}", roll8(seed) & 0xf)
+}
+
+fn one_in_32(seed: u16) -> String {
     bool_text(roll8(seed) & 0x1f == 0)
 }
 
@@ -208,7 +229,7 @@ fn ivy_health2(seed: u16) -> String {
     health(roll8(seed) & 0xf, &IVY_HEALTHS2)
 }
 
-fn ivy_health_bonus(seed: u16) -> String {
+fn health_bonus(seed: u16) -> String {
     format!("{}", roll8(seed) & 3)
 }
 
@@ -230,6 +251,18 @@ fn tentacle_attach_angle(seed: u16) -> String {
     format!("{}", (roll8(seed) as u16) * 2)
 }
 
+fn spider_health1(seed: u16) -> String {
+    health(roll8(seed) & 0xf, &SPIDER_HEALTHS1)
+}
+
+fn spider_health2(seed: u16) -> String {
+    health(roll8(seed) & 0xf, &SPIDER_HEALTHS2)
+}
+
+fn spider_poison_3_in_32(seed: u16) -> String {
+    bool_text(((1u32 << (roll8(seed) & 0xf)) & 0x340) != 0)
+}
+
 fn zombie_knockdown93(seed: u16) -> String {
     bool_text(roll_double(seed, 0xf) != 2)
 }
@@ -249,6 +282,19 @@ fn zombie_speed(seed: u16) -> String {
     } else {
         "slow"
     })
+}
+
+fn zombie_speed2(seed: u16) -> String {
+    let index = (roll8(seed) & 7) as usize;
+    String::from(if ZOMBIE_SPEED_INDEXES2[index] == 0 {
+        "fast"
+    } else {
+        "slow"
+    })
+}
+
+fn zombie_blood_spray(seed: u16) -> String {
+    format!("{}", (roll8(seed) as u16) << 4)
 }
 
 fn licker_health(seed: u16) -> String {
@@ -334,15 +380,18 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::ZombieKnockdownSpeed => RollDescription::new("rolled for knockdown speed", zombie_knockdown_speed),
         RollType::ZombieKnockdown87 => RollDescription::new("rolled to fall down (87.5%)", zombie_knockdown87),
         RollType::ZombieSpeed => RollDescription::new("rolled for speed", zombie_speed),
+        RollType::ZombieSpeed2 => RollDescription::new("rolled for speed", zombie_speed2),
         RollType::ZombieAnimationOffset => RollDescription::new("rolled for animation offset", zombie_animation_offset),
-        RollType::ZombieShortMoan => RollDescription::new("rolled for short moan (3.125%)", zombie_moan),
-        RollType::ZombieLongMoan => RollDescription::new("rolled for long moan (3.125%)", zombie_moan),
+        RollType::ZombieAnimationOffset16 => RollDescription::new("rolled for animation offset", zombie_animation_offset16),
+        RollType::ZombieShortMoan => RollDescription::new("rolled for short moan (3.125%)", one_in_32),
+        RollType::ZombieLongMoan => RollDescription::new("rolled for long moan (3.125%)", one_in_32),
         RollType::ZombieMoanChoice => RollDescription::new("rolled for moan type (50/50)", zombie_moan_choice),
         RollType::ZombieArmRaiseTimer => RollDescription::new("rolled for arm raise timer", zombie_arm_raise_timer),
         RollType::ZombieEatingAnimation => RollDescription::new("rolled for eating animation", zombie_eating_animation),
         RollType::ZombieTryMoan => RollDescription::new("rolled to try moan (50%)", not_bit_one),
         RollType::ZombieLongMoan50 => RollDescription::new("rolled for long moan (50%)", bit_one),
         RollType::ZombieShortMoan50 => RollDescription::new("rolled for short moan (50%)", bit_one),
+        RollType::ZombieEatBloodSpray => RollDescription::new("rolled for blood spray", zombie_blood_spray),
         RollType::LickerHealth => RollDescription::new("rolled for health", licker_health),
         RollType::LickerJump25 => RollDescription::new("rolled to jump (25%)", licker_jump25),
         RollType::LickerJump37 => RollDescription::new("rolled to jump (37.5%)", licker_jump37),
@@ -356,13 +405,17 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::LickerJump75Lick25 => RollDescription::new("rolled to jump (75%) or lick (25%)", licker_jump_or_lick),
         RollType::LickerRecoil25 => RollDescription::new("rolled to recoil (25%)", and_three_zero),
         RollType::LickerJump50LowHealth => RollDescription::new("rolled to jump (50% + player must have <= 100 HP)", bit_one),
+        RollType::LickerDrool => RollDescription::new("rolled to drool (3.125%)", one_in_32),
         RollType::IvyHealth1 => RollDescription::new("rolled for health", ivy_health1),
         RollType::IvyHealth2 => RollDescription::new("rolled for health", ivy_health2),
-        RollType::IvyHealthBonus => RollDescription::new("rolled for health bonus", ivy_health_bonus),
+        RollType::HealthBonus => RollDescription::new("rolled for health bonus", health_bonus),
         RollType::IvyTentacleSet => RollDescription::new("rolled for tentacle set", ivy_tentacle_set),
         RollType::IvyAmbushTentacle => RollDescription::new("rolled to select ambush tentacle", ivy_ambush),
         RollType::TentacleAnimationOffset => RollDescription::new("rolled for animation offset", tentacle_animation_offset),
         RollType::TentacleAttachAngle => RollDescription::new("rolled for attachment angle", tentacle_attach_angle),
+        RollType::SpiderHealth1 => RollDescription::new("rolled for health", spider_health1),
+        RollType::SpiderHealth2 => RollDescription::new("rolled for health", spider_health2),
+        RollType::SpiderPoison3In32 => RollDescription::new("rolled to poison (9.375%)", spider_poison_3_in_32),
         RollType::Partial => RollDescription::simple("Partial roll in a larger series"),
         RollType::Invalid => RollDescription::simple("Invalid roll"),
     }
