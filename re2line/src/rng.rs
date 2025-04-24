@@ -193,6 +193,14 @@ fn ivy_ambush(seed: u16) -> String {
     format!("{}", roll8(seed) & 3)
 }
 
+fn tentacle_animation_offset(seed: u16) -> String {
+    format!("{}", roll8(seed) & 0xf)
+}
+
+fn tentacle_attach_angle(seed: u16) -> String {
+    format!("{}", (roll8(seed) as u16) * 2)
+}
+
 fn zombie_knockdown93(seed: u16) -> String {
     bool_text(roll_double(seed, 0xf) != 2)
 }
@@ -315,6 +323,8 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::IvyHealthBonus => RollDescription::new("rolled for health bonus", ivy_health_bonus),
         RollType::IvyTentacleSet => RollDescription::new("rolled for tentacle set", ivy_tentacle_set),
         RollType::IvyAmbushTentacle => RollDescription::new("rolled to select ambush tentacle", ivy_ambush),
+        RollType::TentacleAnimationOffset => RollDescription::new("rolled for animation offset", tentacle_animation_offset),
+        RollType::TentacleAttachAngle => RollDescription::new("rolled for attachment angle", tentacle_attach_angle),
         RollType::Partial => RollDescription::simple("Partial roll in a larger series"),
         RollType::Invalid => RollDescription::simple("Invalid roll"),
     }

@@ -47,6 +47,8 @@ pub enum RollType {
     IvyHealthBonus = 38,
     IvyTentacleSet = 39,
     IvyAmbushTentacle = 40,
+    TentacleAnimationOffset = 41,
+    TentacleAttachAngle = 42,
     Partial = 0xFFFE, // a roll that's part of a larger series of rolls and not used on its own
     Invalid = 0xFFFF,
 }

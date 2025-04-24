@@ -28,7 +28,7 @@ pub struct GameVersion {
     pub script_rng_patch: usize,
     pub script_rng_seed: usize,
     pub sound_flags: usize,
-    pub known_rng_rolls: [(usize, RollType); 67],
+    pub known_rng_rolls: [(usize, RollType); 69],
 }
 
 const GAME_VERSIONS: [GameVersion; 1] = [
@@ -133,6 +133,9 @@ const GAME_VERSIONS: [GameVersion; 1] = [
             (0x00484d3e, RollType::IvyHealthBonus),
             (0x00484e99, RollType::IvyTentacleSet),
             (0x00484eac, RollType::IvyAmbushTentacle),
+
+            (0x00488b4c, RollType::TentacleAnimationOffset),
+            (0x00488bfb, RollType::TentacleAttachAngle),
         ],
     },
 ];
