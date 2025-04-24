@@ -41,6 +41,12 @@ pub enum RollType {
     ZombieHealth2 = 32, // only rolls once unlike the other one
     LickerSlash50 = 33,
     ZombieSpeed = 34, // double
+    ZombieHealthAlt = 35, // double
+    IvyHealth1 = 36,
+    IvyHealth2 = 37,
+    IvyHealthBonus = 38,
+    IvyTentacleSet = 39,
+    IvyAmbushTentacle = 40,
     Partial = 0xFFFE, // a roll that's part of a larger series of rolls and not used on its own
     Invalid = 0xFFFF,
 }

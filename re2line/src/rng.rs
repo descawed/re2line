@@ -7,11 +7,63 @@ pub const ZOMBIE_ONE_SHOT_STAGGER_THRESHOLD: u8 = 0x17;
 
 const ZOMBIE_SPEED_INDEXES: [u8; 8] = [0, 2, 0, 2, 0, 2, 2, 0];
 
+const INITIAL_SEED: u16 = 0x6ca4; // technically 0xd2706ca4, but the high 16 bits are ignored
+
 pub const fn roll(seed: u16) -> u16 {
     let high = seed.overflowing_mul(2).0 >> 8;
     let low = seed.overflowing_add(high).0 & 0xff;
     (high << 8) | low
 }
+
+const RNG_SEQUENCE: [u16; 24312] = {
+    let mut sequence = [0u16; 24312];
+    sequence[0] = INITIAL_SEED;
+
+    let mut value = roll(INITIAL_SEED);
+    let mut i = 1;
+    while value != INITIAL_SEED {
+        sequence[i] = value;
+        i += 1;
+        value = roll(value);
+    }
+
+    sequence
+};
+
+const ZOMBIE_HEALTHS1: [i16; 16] = [
+    0x46,     0x54,     0x76,     0x41,
+    0x32,     0x55,     0x30,     0x41,
+    0x28,     0x49,     0x45,     0x38,
+    0x46,     0x37,     0x48,     0x37,
+];
+
+const ZOMBIE_HEALTHS2: [i16; 16] = [
+     0x27,     0x0D,     0x1B,     0x27,
+     0x36,     0x1B,     0x27,     0x55,
+     0x1B,     0x27,     0x1B,     0x1B,
+     0x27,     0x1B,     0x27,     0x1B,
+];
+
+const IVY_HEALTHS1: [i16; 16] = [
+     0x61,     0x77,     0x61,     0x5A,
+     0x61,     0x5A,     0x77,     0x61,
+     0x5A,     0x5A,     0x59,     0x77,
+     0x45,     0x5A,     0x59,     0x77,
+];
+
+const IVY_HEALTHS2: [i16; 16] = [
+     0x59,     0x45,     0x59,     0x4F,
+     0x63,     0x45,     0x4F,     0x3B,
+     0x45,     0x3B,     0x3B,     0x45,
+     0x3B,     0x3B,     0x3B,     0x45,
+];
+
+const IVY_TENTACLE_SETS: [[u8; 4]; 4] = [
+    [2, 3, 5, 6],
+    [0, 1, 4, 7],
+    [0, 3, 6, 7],
+    [1, 2, 6, 7],
+];
 
 pub const fn roll8(seed: u16) -> u8 {
     (roll(seed) & 0xff) as u8
@@ -102,12 +154,43 @@ fn zombie_appearance2(seed: u16) -> String {
     format!("{}", roll8(seed) % 3 + 1)
 }
 
+fn health<T: Into<usize>>(index: T, values: &[i16]) -> String {
+    let index = index.into();
+    format!("{} (index {})", values[index], index)
+}
+
 fn zombie_health(seed: u16) -> String {
-    format!("index {}", roll_double(seed, 0xf))
+    health(roll_double(seed, 0xf), &ZOMBIE_HEALTHS1)
+}
+
+fn zombie_health_alt(seed: u16) -> String {
+    health(roll_double(seed, 0xf), &ZOMBIE_HEALTHS2)
 }
 
 fn zombie_health2(seed: u16) -> String {
-    format!("index {}", roll8(seed) & 0xf)
+    health(roll8(seed) & 0xf, &ZOMBIE_HEALTHS1)
+}
+
+fn ivy_health1(seed: u16) -> String {
+    health(roll8(seed) & 0xf, &IVY_HEALTHS1)
+}
+
+fn ivy_health2(seed: u16) -> String {
+    health(roll8(seed) & 0xf, &IVY_HEALTHS2)
+}
+
+fn ivy_health_bonus(seed: u16) -> String {
+    format!("{}", roll8(seed) & 3)
+}
+
+fn ivy_tentacle_set(seed: u16) -> String {
+    let index = (roll8(seed) & 3) as usize;
+    let set = &IVY_TENTACLE_SETS[index];
+    format!("{:?} (index {})", set, index)
+}
+
+fn ivy_ambush(seed: u16) -> String {
+    format!("{}", roll8(seed) & 3)
 }
 
 fn zombie_knockdown93(seed: u16) -> String {
@@ -202,6 +285,7 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::AltZombieAppearance => RollDescription::new("rolled for random appearance (50%)", bit_one),
         RollType::AltZombieAppearance2 => RollDescription::new("rolled for random appearance (50%)", not_bit_one),
         RollType::ZombieHealth => RollDescription::new("rolled for health", zombie_health),
+        RollType::ZombieHealthAlt => RollDescription::new("rolled for health", zombie_health_alt),
         RollType::ZombieHealth2 => RollDescription::new("rolled for health", zombie_health2),
         RollType::ZombieLunge50 => RollDescription::new("rolled to lunge (50%)", not_bit_one),
         RollType::ZombieLunge50NotZero => RollDescription::new("rolled to lunge (50%)", bit_one),
@@ -226,7 +310,30 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::LickerJump75Lick25 => RollDescription::new("rolled to jump (75%) or lick (25%)", licker_jump_or_lick),
         RollType::LickerRecoil25 => RollDescription::new("rolled to recoil (25%)", and_three_zero),
         RollType::LickerJump50LowHealth => RollDescription::new("rolled to jump (50% + player must have <= 100 HP)", bit_one),
+        RollType::IvyHealth1 => RollDescription::new("rolled for health", ivy_health1),
+        RollType::IvyHealth2 => RollDescription::new("rolled for health", ivy_health2),
+        RollType::IvyHealthBonus => RollDescription::new("rolled for health bonus", ivy_health_bonus),
+        RollType::IvyTentacleSet => RollDescription::new("rolled for tentacle set", ivy_tentacle_set),
+        RollType::IvyAmbushTentacle => RollDescription::new("rolled to select ambush tentacle", ivy_ambush),
         RollType::Partial => RollDescription::simple("Partial roll in a larger series"),
         RollType::Invalid => RollDescription::simple("Invalid roll"),
     }
 });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sequence() {
+        let mut seed = INITIAL_SEED;
+        for _i in 0..100000 {
+            seed = roll(seed);
+            if seed == INITIAL_SEED {
+                // println!("RNG loops after {i} iterations");
+                return;
+            }
+        }
+        panic!("RNG did not loop");
+    }
+}

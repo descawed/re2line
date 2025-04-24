@@ -28,7 +28,7 @@ pub struct GameVersion {
     pub script_rng_patch: usize,
     pub script_rng_seed: usize,
     pub sound_flags: usize,
-    pub known_rng_rolls: [(usize, RollType); 62],
+    pub known_rng_rolls: [(usize, RollType); 67],
 }
 
 const GAME_VERSIONS: [GameVersion; 1] = [
@@ -75,7 +75,7 @@ const GAME_VERSIONS: [GameVersion; 1] = [
             (0x00451ade, RollType::ZombieHealth),
 
             (0x00451b07, RollType::Partial),
-            (0x00451b11, RollType::ZombieHealth),
+            (0x00451b11, RollType::ZombieHealthAlt),
 
             (0x004551d5, RollType::ZombieHealth2),
 
@@ -127,6 +127,12 @@ const GAME_VERSIONS: [GameVersion; 1] = [
             (0x0046dc12, RollType::LickerJump75Lick25),
             (0x0046dc33, RollType::LickerRecoil25),
             (0x0046dc48, RollType::LickerJump50LowHealth),
+
+            (0x00484d1f, RollType::IvyHealth1),
+            (0x00484cfe, RollType::IvyHealth2),
+            (0x00484d3e, RollType::IvyHealthBonus),
+            (0x00484e99, RollType::IvyTentacleSet),
+            (0x00484eac, RollType::IvyAmbushTentacle),
         ],
     },
 ];
