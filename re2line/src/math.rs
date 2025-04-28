@@ -519,7 +519,16 @@ impl Vec2 {
     pub const fn len(&self) -> Fixed32 {
         let x = self.x.0;
         let z = self.z.0;
-        Fixed32(sqrt(x * x + z * z) as i32)
+        
+        let (x_squared, x_overflow) = x.overflowing_mul(x);
+        let (z_squared, z_overflow) = z.overflowing_mul(z);
+        let (sum, sum_overflow) = x_squared.overflowing_add(z_squared);
+        
+        if x_overflow || z_overflow || sum_overflow {
+            return Fixed32(i32::MAX);
+        }
+        
+        Fixed32(sqrt(sum) as i32)
     }
 
     pub fn saturating_sub(&self, rhs: impl Into<Self>) -> Self {
