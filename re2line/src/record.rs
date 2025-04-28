@@ -132,14 +132,14 @@ impl State {
                     CharacterField::Transform(matrix) => {
                         character.set_pos(matrix.t.x as i16, matrix.t.z as i16);
                     },
-                    CharacterField::MotionAngle(angle) => character.angle = Fixed12(*angle),
+                    CharacterField::MotionAngle(angle) => character.angle = Fixed16(*angle),
                     CharacterField::Motion(_) => (), // seems like this might not be something useful?
                     CharacterField::Size(width, height) => {
                         character.set_size(*width, *height);
                     }
                     CharacterField::Floor(floor) => character.floor = *floor,
                     CharacterField::Velocity(velocity) => {
-                        character.velocity = Vec2::new(velocity.vx, velocity.vz);
+                        character.velocity = Vec2::new(Fixed16(velocity.vx), Fixed16(velocity.vz));
                     }
                     CharacterField::Health(health) => character.set_health(*health),
                     CharacterField::Removed => unreachable!(),

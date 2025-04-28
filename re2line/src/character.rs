@@ -4,12 +4,12 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::collision::{DrawParams, EllipseCollider, RectCollider};
 use crate::draw::{VAlign, text_box};
-use crate::math::{Fixed12, UFixed12, Vec2};
+use crate::math::{Fixed16, UFixed16, Fixed32, Vec2};
 
 mod ai;
 use ai::*;
 
-const INTERACTION_DISTANCE: UFixed12 = UFixed12(620);
+const INTERACTION_DISTANCE: UFixed16 = UFixed16(620);
 
 const ARROW_HEAD_HEIGHT: f32 = 6.0;
 const ARROW_HEAD_WIDTH: f32 = 6.0;
@@ -282,11 +282,11 @@ impl CharacterId {
 pub struct Character {
     pub id: CharacterId,
     pub center: Vec2,
-    pub width: UFixed12,
-    pub height: UFixed12,
+    pub width: UFixed16,
+    pub height: UFixed16,
     pub shape: EllipseCollider,
     pub outline_shape: RectCollider,
-    pub angle: Fixed12,
+    pub angle: Fixed16,
     current_health: i16,
     max_health: i16,
     pub state: [u8; 4],
@@ -296,19 +296,19 @@ pub struct Character {
 }
 
 impl Character {
-    pub const fn new(id: CharacterId, health: i16, x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, angle: Fixed12, velocity: Vec2) -> Self {
-        let game_x = Fixed12((x.0 as i32 - width.0 as i32) as i16);
-        let game_z = Fixed12((z.0 as i32 - height.0 as i32) as i16);
-        let game_width = UFixed12(width.0 << 1);
-        let game_height = UFixed12(height.0 << 1);
+    pub const fn new(id: CharacterId, health: i16, x: Fixed16, z: Fixed16, width: UFixed16, height: UFixed16, angle: Fixed16, velocity: Vec2) -> Self {
+        let game_x = Fixed16((x.0 as i32 - width.0 as i32) as i16);
+        let game_z = Fixed16((z.0 as i32 - height.0 as i32) as i16);
+        let game_width = UFixed16(width.0 << 1);
+        let game_height = UFixed16(height.0 << 1);
 
         Self {
             id,
-            center: Vec2 { x, z },
+            center: Vec2 { x: Fixed32(x.0 as i32), z: Fixed32(z.0 as i32) },
             width,
             height,
             shape: EllipseCollider::new(game_x, game_z, game_width, game_height),
-            outline_shape: RectCollider::new(game_x, game_z, game_width, game_height, 0.0),
+            outline_shape: RectCollider::new(game_x.to_32(), game_z.to_32(), game_width.to_32(), game_height.to_32(), 0.0),
             angle,
             current_health: health,
             max_health: health,
@@ -320,7 +320,7 @@ impl Character {
     }
 
     pub const fn empty(id: CharacterId) -> Self {
-        Self::new(id, 0, Fixed12(0), Fixed12(0), UFixed12(0), UFixed12(0), Fixed12(0), Vec2::zero())
+        Self::new(id, 0, Fixed16(0), Fixed16(0), UFixed16(0), UFixed16(0), Fixed16(0), Vec2::zero())
     }
 
     pub const fn name(&self) -> &'static str {
@@ -359,17 +359,17 @@ impl Character {
         Vec2::new(interaction_point.x, -interaction_point.y)
     }
 
-    pub fn set_pos(&mut self, x: impl Into<Fixed12>, z: impl Into<Fixed12>) {
+    pub fn set_pos(&mut self, x: impl Into<Fixed16>, z: impl Into<Fixed16>) {
         self.center = Vec2::new(x.into(), z.into());
-        self.shape.set_pos(self.center.x - self.width, self.center.z - self.height);
-        self.outline_shape.set_pos(self.center.x - self.width, self.center.z - self.height);
+        self.shape.set_pos(self.center.x - self.width.to_32(), self.center.z - self.height.to_32());
+        self.outline_shape.set_pos(Vec2::new(self.center.x - self.width.to_32(), self.center.z - self.height.to_32()));
     }
 
-    pub fn set_size(&mut self, width: impl Into<UFixed12>, height:  impl Into<UFixed12>) {
+    pub fn set_size(&mut self, width: impl Into<UFixed16>, height:  impl Into<UFixed16>) {
         self.width = width.into();
         self.height = height.into();
         self.shape.set_size(self.width << 1, self.height << 1);
-        self.outline_shape.set_size(self.width << 1, self.height << 1);
+        self.outline_shape.set_size(Vec2::new(self.width << 1, self.height << 1));
     }
 
     pub fn label(&self, index: usize) -> String {
@@ -382,7 +382,7 @@ impl Character {
         )
     }
 
-    fn is_crawling_zombie(&self) -> bool {
+    const fn is_crawling_zombie(&self) -> bool {
         self.id.is_zombie() && matches!(self.type_ & 0x3f, 1 | 3 | 5 | 7 | 9 | 11 | 13)
     }
 

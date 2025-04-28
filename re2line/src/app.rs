@@ -18,7 +18,7 @@ use crate::aot::{Entity, SceType};
 use crate::character::{Character, CharacterId};
 use crate::collision::{Collider, DrawParams};
 use crate::draw::{VAlign, text_box};
-use crate::math::{Fixed12, UFixed12, Vec2};
+use crate::math::{Fixed16, UFixed16, Vec2};
 use crate::rdt::Rdt;
 use crate::record::{PlayerSound, Recording, State, FRAME_DURATION};
 
@@ -80,7 +80,7 @@ impl Default for CharacterSettings {
 }
 
 pub struct App {
-    center: (Fixed12, Fixed12),
+    center: (Fixed16, Fixed16),
     colliders: Vec<Collider>,
     entities: Vec<Entity>,
     floors: Vec<Collider>,
@@ -100,7 +100,7 @@ pub struct App {
 impl App {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            center: (Fixed12(0), Fixed12(0)),
+            center: (Fixed16(0), Fixed16(0)),
             colliders: Vec::new(),
             entities: Vec::new(),
             floors: Vec::new(),
@@ -618,7 +618,7 @@ impl App {
     }
 
     fn get_sound_text_box(sound: &PlayerSound, draw_params: &DrawParams, ui: &Ui) -> egui::Shape {
-        let (x, y, _, _) = draw_params.transform(sound.pos.x, sound.pos.z, UFixed12(0), UFixed12(0));
+        let (x, y, _, _) = draw_params.transform(sound.pos.x, sound.pos.z, UFixed16(0), UFixed16(0));
         let pos = egui::Pos2::new(x, y);
 
         let age = 1.0 - (sound.age as f32 / MAX_SOUND_AGE as f32);

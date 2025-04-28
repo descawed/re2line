@@ -1,5 +1,5 @@
 use crate::collision::{Collider, DrawParams};
-use crate::math::{Fixed12, Vec2};
+use crate::math::{Fixed16, Vec2};
 
 const TRIGGER_ON_ENTER: u8 = 0x40;
 
@@ -77,10 +77,10 @@ impl From<u8> for SceType {
 #[derive(Debug)]
 pub enum EntityForm {
     Door {
-        next_pos_x: Fixed12,
-        next_pos_y: Fixed12,
-        next_pos_z: Fixed12,
-        next_cdir_y: Fixed12,
+        next_pos_x: Fixed16,
+        next_pos_y: Fixed16,
+        next_pos_z: Fixed16,
+        next_cdir_y: Fixed16,
         next_stage: u8,
         next_room: u8,
         next_n_floor: u8,
@@ -122,7 +122,7 @@ impl Entity {
     }
 
     pub fn could_trigger(&self, point: Vec2, floor: u8) -> bool {
-        self.sce.is_trigger() && self.floor == floor && self.collider.contains_point(point.x, point.z)
+        self.sce.is_trigger() && self.floor == floor && self.collider.contains_point(point)
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {

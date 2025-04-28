@@ -1,4 +1,4 @@
-use crate::math::{Fixed12, UFixed12};
+use crate::math::{Fixed16, UFixed16, Fixed32, Vec2};
 
 const HIGHLIGHT_MAX_INTENSITY: f32 = 0.5;
 const HIGHLIGHT: egui::Rgba = egui::Rgba::from_rgba_premultiplied(0.25, 0.25, 0.25, 0.0);
@@ -15,12 +15,15 @@ pub struct DrawParams {
 }
 
 impl DrawParams {
-    pub fn transform(&self, x: Fixed12, z: Fixed12, w: UFixed12, h: UFixed12) -> (f32, f32, f32, f32) {
-        let z_f32 = (z + h).to_f32();
+    pub fn transform<T, U, V, W>(&self, x: T, z: U, w: V, h: W) -> (f32, f32, f32, f32)
+    where T: Into<Fixed32>, U: Into<Fixed32>, V: Into<Fixed32>, W: Into<Fixed32>
+    {
+        let h = h.into();
+        let z_f32 = (z.into() + h).to_f32();
         (
-            x * self.scale - self.origin.x,
+            x.into() * self.scale - self.origin.x,
             -z_f32 * self.scale - self.origin.y,
-            w * self.scale,
+            w.into() * self.scale,
             h * self.scale,
         )
     }
@@ -71,20 +74,22 @@ impl DrawParams {
 
 #[derive(Debug, Clone)]
 pub struct RectCollider {
-    x: Fixed12,
-    z: Fixed12,
-    width: UFixed12,
-    height: UFixed12,
+    pos: Vec2,
+    size: Vec2,
     corner_radius: f32,
 }
 
 impl RectCollider {
-    pub const fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, corner_radius: f32) -> Self {
-        Self { x, z, width, height, corner_radius }
+    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, corner_radius: f32) -> Self {
+        Self {
+            pos: Vec2 { x, z },
+            size: Vec2 { x: width, z: height },
+            corner_radius,
+        }
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
-        let (x, y, width, height) = draw_params.transform(self.x, self.z, self.width, self.height);
+        let (x, y, width, height) = draw_params.transform(self.pos.x, self.pos.z, self.size.x, self.size.z);
         // TODO: verify in-game whether the corners are actually rounded or if they're sharply cut the way they appear
         //  in RE2RDTE
         let corner_radius = epaint::CornerRadiusF32::same(self.corner_radius * draw_params.scale);
@@ -101,31 +106,31 @@ impl RectCollider {
         ))
     }
 
-    pub fn contains_point(&self, x: Fixed12, z: Fixed12) -> bool {
-        x >= self.x && x < self.x + self.width && z >= self.z && z < self.z + self.height
+    pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
+        let point = point.into();
+        let far = self.pos + self.size;
+        point.x >= self.pos.x && point.x < far.x && point.z >= self.pos.z && point.z < far.z
     }
 
-    pub fn set_pos(&mut self, x: Fixed12, z: Fixed12) {
-        self.x = x;
-        self.z = z;
+    pub fn set_pos<T: Into<Vec2>>(&mut self, pos: T) {
+        self.pos = pos.into();
     }
 
-    pub fn set_size(&mut self, width: UFixed12, height: UFixed12) {
-        self.width = width;
-        self.height = height;
+    pub fn set_size<T: Into<Vec2>>(&mut self, size: T) {
+        self.size = size.into();
     }
 }
 
 #[derive(Debug)]
 pub struct DiamondCollider {
-    x: Fixed12,
-    z: Fixed12,
-    width: UFixed12,
-    height: UFixed12,
+    x: Fixed16,
+    z: Fixed16,
+    width: UFixed16,
+    height: UFixed16,
 }
 
 impl DiamondCollider {
-    pub const fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12) -> Self {
+    pub const fn new(x: Fixed16, z: Fixed16, width: UFixed16, height: UFixed16) -> Self {
         Self { x, z, width, height }
     }
 
@@ -154,14 +159,14 @@ impl DiamondCollider {
 
 #[derive(Debug, Clone)]
 pub struct EllipseCollider {
-    x: Fixed12,
-    z: Fixed12,
-    width: UFixed12,
-    height: UFixed12,
+    x: Fixed16,
+    z: Fixed16,
+    width: UFixed16,
+    height: UFixed16,
 }
 
 impl EllipseCollider {
-    pub const fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12) -> Self {
+    pub const fn new(x: Fixed16, z: Fixed16, width: UFixed16, height: UFixed16) -> Self {
         Self { x, z, width, height }
     }
 
@@ -181,20 +186,23 @@ impl EllipseCollider {
         })
     }
 
-    pub fn pos(&self) -> (Fixed12, Fixed12) {
+    pub fn pos(&self) -> (Fixed16, Fixed16) {
         (self.x, self.z)
     }
 
-    pub fn set_pos(&mut self, x: Fixed12, z: Fixed12) {
-        self.x = x;
-        self.z = z;
+    pub fn set_pos<T, U>(&mut self, x: T, z: U)
+    where T: Into<Fixed32>, U: Into<Fixed32>
+    {
+        // TODO: change coords to 32
+        self.x = Fixed16(x.into().0 as i16);
+        self.z = Fixed16(z.into().0 as i16);
     }
 
-    pub fn size(&self) -> (UFixed12, UFixed12) {
+    pub fn size(&self) -> (UFixed16, UFixed16) {
         (self.width, self.height)
     }
 
-    pub fn set_size(&mut self, width: UFixed12, height: UFixed12) {
+    pub fn set_size(&mut self, width: UFixed16, height: UFixed16) {
         self.width = width;
         self.height = height;
     }
@@ -202,15 +210,15 @@ impl EllipseCollider {
 
 #[derive(Debug)]
 pub struct TriangleCollider {
-    x: Fixed12,
-    z: Fixed12,
-    width: UFixed12,
-    height: UFixed12,
+    x: Fixed16,
+    z: Fixed16,
+    width: UFixed16,
+    height: UFixed16,
     offsets: [(f32, f32); 3],
 }
 
 impl TriangleCollider {
-    pub const fn new(x: Fixed12, z: Fixed12, width: UFixed12, height: UFixed12, offsets: [(f32, f32); 3]) -> Self {
+    pub const fn new(x: Fixed16, z: Fixed16, width: UFixed16, height: UFixed16, offsets: [(f32, f32); 3]) -> Self {
         Self { x, z, width, height, offsets }
     }
 
@@ -243,18 +251,18 @@ impl TriangleCollider {
 
 #[derive(Debug)]
 pub struct QuadCollider {
-    x1: Fixed12,
-    z1: Fixed12,
-    x2: Fixed12,
-    z2: Fixed12,
-    x3: Fixed12,
-    z3: Fixed12,
-    x4: Fixed12,
-    z4: Fixed12,
+    x1: Fixed16,
+    z1: Fixed16,
+    x2: Fixed16,
+    z2: Fixed16,
+    x3: Fixed16,
+    z3: Fixed16,
+    x4: Fixed16,
+    z4: Fixed16,
 }
 
 impl QuadCollider {
-    pub const fn new(x1: Fixed12, z1: Fixed12, x2: Fixed12, z2: Fixed12, x3: Fixed12, z3: Fixed12, x4: Fixed12, z4: Fixed12) -> Self {
+    pub const fn new(x1: Fixed16, z1: Fixed16, x2: Fixed16, z2: Fixed16, x3: Fixed16, z3: Fixed16, x4: Fixed16, z4: Fixed16) -> Self {
         Self { x1, z1, x2, z2, x3, z3, x4, z4 }
     }
 
@@ -329,8 +337,15 @@ impl Collider {
                     format!("Z4: {}", quad.z4),
                 ]));
             }
-            Self::Rect(RectCollider { x, z, width, height, .. })
-            | Self::Diamond(DiamondCollider { x, z, width, height })
+            Self::Rect(RectCollider { pos, size, .. }) => {
+                groups.push((label, vec![
+                    format!("X: {}", pos.x),
+                    format!("Z: {}", pos.z),
+                    format!("W: {}", size.x),
+                    format!("H: {}", size.z),
+                ]));
+            }
+            Self::Diamond(DiamondCollider { x, z, width, height })
             | Self::Ellipse(EllipseCollider { x, z, width, height })
             | Self::Triangle(TriangleCollider { x, z, width, height, .. })
             => {
@@ -360,12 +375,12 @@ impl Collider {
                 ]));
             }
             Self::Triangle(tri) => {
-                let x1 = tri.x + if tri.offsets[0].0 > 0.0 { tri.width } else { UFixed12(0) };
-                let z1 = tri.z + if tri.offsets[0].1 > 0.0 { tri.height } else { UFixed12(0) };
-                let x2 = tri.x + if tri.offsets[1].0 > 0.0 { tri.width } else { UFixed12(0) };
-                let z2 = tri.z + if tri.offsets[1].1 > 0.0 { tri.height } else { UFixed12(0) };
-                let x3 = tri.x + if tri.offsets[2].0 > 0.0 { tri.width } else { UFixed12(0) };
-                let z3 = tri.z + if tri.offsets[2].1 > 0.0 { tri.height } else { UFixed12(0) };
+                let x1 = tri.x + if tri.offsets[0].0 > 0.0 { tri.width } else { UFixed16(0) };
+                let z1 = tri.z + if tri.offsets[0].1 > 0.0 { tri.height } else { UFixed16(0) };
+                let x2 = tri.x + if tri.offsets[1].0 > 0.0 { tri.width } else { UFixed16(0) };
+                let z2 = tri.z + if tri.offsets[1].1 > 0.0 { tri.height } else { UFixed16(0) };
+                let x3 = tri.x + if tri.offsets[2].0 > 0.0 { tri.width } else { UFixed16(0) };
+                let z3 = tri.z + if tri.offsets[2].1 > 0.0 { tri.height } else { UFixed16(0) };
                 
                 groups.push((label, vec![
                     format!("X1: {}", x1),
@@ -392,10 +407,10 @@ impl Collider {
                 ]));
             }
             Self::Rect(rect) => {
-                let nx = rect.x;
-                let nz = rect.z;
-                let fx = rect.x + rect.width;
-                let fz = rect.z + rect.height;
+                let nx = rect.pos.x;
+                let nz = rect.pos.z;
+                let fx = rect.pos.x + rect.size.x;
+                let fz = rect.pos.z + rect.size.z;
                 
                 groups.push((label, vec![
                     format!("X2: {}", fx),
@@ -422,9 +437,9 @@ impl Collider {
         }
     }
 
-    pub fn contains_point(&self, x: Fixed12, z: Fixed12) -> bool {
+    pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
         match self {
-            Self::Rect(rect) => rect.contains_point(x, z),
+            Self::Rect(rect) => rect.contains_point(point),
             // TODO: implement remaining shapes
             _ => false,
         }

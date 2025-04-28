@@ -5,10 +5,10 @@ use binrw::{binrw, BinReaderExt};
 
 use crate::aot::Entity;
 use crate::collision;
-use crate::math::{Fixed12, UFixed12};
+use crate::math::{Fixed16, UFixed16};
 use crate::script::Instruction;
 
-const CORNER_RADIUS: f32 = Fixed12(2200).to_f32();
+const CORNER_RADIUS: f32 = Fixed16(2200).to_f32();
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum CollisionShape {
@@ -130,10 +130,10 @@ impl RdtHeader {
 #[binrw]
 #[derive(Debug)]
 struct Collider {
-    x: Fixed12,
-    z: Fixed12,
-    w: UFixed12,
-    h: UFixed12,
+    x: Fixed16,
+    z: Fixed16,
+    w: UFixed16,
+    h: UFixed16,
     packed: u32,
     floor: u32,
 }
@@ -148,8 +148,8 @@ impl Collider {
 #[binrw]
 #[derive(Debug)]
 struct Collision {
-    cell_x: Fixed12,
-    cell_z: Fixed12,
+    cell_x: Fixed16,
+    cell_z: Fixed16,
     count: u32,
     ceiling: i32,
     dummy: u32,
@@ -160,8 +160,8 @@ struct Collision {
 impl Default for Collision {
     fn default() -> Self {
         Self {
-            cell_x: Fixed12(0),
-            cell_z: Fixed12(0),
+            cell_x: Fixed16(0),
+            cell_z: Fixed16(0),
             count: 0,
             ceiling: 0,
             dummy: 0,
@@ -173,10 +173,10 @@ impl Default for Collision {
 #[binrw]
 #[derive(Debug)]
 struct Floor {
-    x: Fixed12,
-    z: Fixed12,
-    width: UFixed12,
-    height: UFixed12,
+    x: Fixed16,
+    z: Fixed16,
+    width: UFixed16,
+    height: UFixed16,
     unknown: u16,
     level: u16,
 }
@@ -305,7 +305,7 @@ impl Rdt {
         })
     }
 
-    pub fn get_center(&self) -> (Fixed12, Fixed12) {
+    pub fn get_center(&self) -> (Fixed16, Fixed16) {
         (self.collision.cell_x, self.collision.cell_z)
     }
 
@@ -313,7 +313,7 @@ impl Rdt {
         let mut floors = Vec::with_capacity(self.floors.len());
 
         for floor in &self.floors {
-            floors.push(collision::Collider::Rect(collision::RectCollider::new(floor.x, floor.z, floor.width, floor.height, 0.0)));
+            floors.push(collision::Collider::Rect(collision::RectCollider::new(floor.x.to_32(), floor.z.to_32(), floor.width.to_32(), floor.height.to_32(), 0.0)));
         }
 
         floors
@@ -324,7 +324,7 @@ impl Rdt {
 
         for collider in &self.collision.colliders {
             colliders.push(match collider.shape() {
-                CollisionShape::Rectangle => collision::Collider::Rect(collision::RectCollider::new(collider.x, collider.z, collider.w, collider.h, 0.0)),
+                CollisionShape::Rectangle => collision::Collider::Rect(collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), 0.0)),
                 CollisionShape::TriangleTopRight => collision::Collider::Triangle(collision::TriangleCollider::new(
                     collider.x, collider.z, collider.w, collider.h,
                     [(1.0, 1.0), (1.0, 0.0), (0.0, 0.0)],
@@ -343,7 +343,7 @@ impl Rdt {
                 )),
                 CollisionShape::Diamond => collision::Collider::Diamond(collision::DiamondCollider::new(collider.x, collider.z, collider.w, collider.h)),
                 CollisionShape::Circle => collision::Collider::Ellipse(collision::EllipseCollider::new(collider.x, collider.z, collider.w, collider.h)),
-                CollisionShape::RoundedRectangle => collision::Collider::Rect(collision::RectCollider::new(collider.x, collider.z, collider.w, collider.h, CORNER_RADIUS)),
+                CollisionShape::RoundedRectangle => collision::Collider::Rect(collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), CORNER_RADIUS)),
             });
         }
 
