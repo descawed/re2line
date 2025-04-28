@@ -282,6 +282,7 @@ impl CharacterId {
 pub struct Character {
     pub id: CharacterId,
     pub center: Vec2,
+    pub prev_center: Vec2,
     pub size: Vec2,
     pub shape: EllipseCollider,
     pub outline_shape: RectCollider,
@@ -300,10 +301,13 @@ impl Character {
         let game_z = Fixed32(z.0 as i32 - height.0 as i32);
         let game_width = UFixed16(width.0 << 1).to_32();
         let game_height = UFixed16(height.0 << 1).to_32();
+        
+        let center = Vec2 { x: Fixed32(x.0 as i32), z: Fixed32(z.0 as i32) };
 
         Self {
             id,
-            center: Vec2 { x: Fixed32(x.0 as i32), z: Fixed32(z.0 as i32) },
+            center,
+            prev_center: center,
             size: Vec2 { x: Fixed32(width.0 as i32), z: Fixed32(height.0 as i32) },
             shape: EllipseCollider::new(game_x, game_z, game_width, game_height),
             outline_shape: RectCollider::new(game_x, game_z, game_width, game_height, 0.0),
@@ -363,6 +367,10 @@ impl Character {
         self.shape.set_pos(pos);
         self.outline_shape.set_pos(pos);
     }
+    
+    pub fn set_prev_pos(&mut self, x: impl Into<Fixed32>, z: impl Into<Fixed32>) {
+        self.prev_center = Vec2::new(x, z);
+    }
 
     pub fn set_size(&mut self, width: impl Into<Fixed32>, height: impl Into<Fixed32>) {
         self.size.x = width.into();
@@ -416,6 +424,13 @@ impl Character {
             format!("Floor: {}", self.floor),
             format!("XR: {}", self.size.x),
             format!("ZR: {}", self.size.z),
+        ]));
+        
+        groups.push((String::from("Velocity"), vec![
+            format!("X: {}", self.velocity.x),
+            format!("Z: {}", self.velocity.z),
+            format!("Base: {}", self.velocity.len()),
+            format!("Effective: {}", (self.center - self.prev_center).len()),
         ]));
 
         groups.push((String::from("State"), vec![

@@ -108,7 +108,8 @@ impl State {
 
         let mut characters = self.characters.clone();
         for diff in &record.character_diffs {
-            let character = &mut characters[diff.index as usize];
+            let index = diff.index as usize;
+            let character = &mut characters[index];
             for change in &diff.changes {
                 if matches!(change, CharacterField::Removed) {
                     *character = None;
@@ -145,6 +146,10 @@ impl State {
                     CharacterField::Removed => unreachable!(),
                     CharacterField::Type(type_) => character.type_ = *type_,
                 }
+            }
+
+            if let (Some(new_character), Some(old_character)) = (character.as_mut(), self.characters[index].as_ref()) {
+                new_character.set_prev_pos(old_character.center.x, old_character.center.z);
             }
         }
 
