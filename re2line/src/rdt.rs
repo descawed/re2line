@@ -326,19 +326,19 @@ impl Rdt {
             colliders.push(match collider.shape() {
                 CollisionShape::Rectangle => collision::Collider::Rect(collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), 0.0)),
                 CollisionShape::TriangleTopRight => collision::Collider::Triangle(collision::TriangleCollider::new(
-                    collider.x, collider.z, collider.w, collider.h,
+                    collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(),
                     [(1.0, 1.0), (1.0, 0.0), (0.0, 0.0)],
                 )),
                 CollisionShape::TriangleTopLeft => collision::Collider::Triangle(collision::TriangleCollider::new(
-                    collider.x, collider.z, collider.w, collider.h,
+                    collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(),
                     [(0.0, 1.0), (0.0, 0.0), (1.0, 0.0)],
                 )),
                 CollisionShape::TriangleBottomRight => collision::Collider::Triangle(collision::TriangleCollider::new(
-                    collider.x, collider.z, collider.w, collider.h,
+                    collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(),
                     [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0)],
                 )),
                 CollisionShape::TriangleBottomLeft => collision::Collider::Triangle(collision::TriangleCollider::new(
-                    collider.x, collider.z, collider.w, collider.h,
+                    collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(),
                     [(0.0, 1.0), (0.0, 0.0), (1.0, 1.0)],
                 )),
                 CollisionShape::Diamond => collision::Collider::Diamond(collision::DiamondCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32())),

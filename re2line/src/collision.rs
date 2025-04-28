@@ -200,20 +200,18 @@ impl EllipseCollider {
 
 #[derive(Debug)]
 pub struct TriangleCollider {
-    x: Fixed16,
-    z: Fixed16,
-    width: UFixed16,
-    height: UFixed16,
+    pos: Vec2,
+    size: Vec2,
     offsets: [(f32, f32); 3],
 }
 
 impl TriangleCollider {
-    pub const fn new(x: Fixed16, z: Fixed16, width: UFixed16, height: UFixed16, offsets: [(f32, f32); 3]) -> Self {
-        Self { x, z, width, height, offsets }
+    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, offsets: [(f32, f32); 3]) -> Self {
+        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height }, offsets }
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
-        let (x, y, width, height) = draw_params.transform(self.x, self.z, self.width, self.height);
+        let (x, y, width, height) = draw_params.transform(self.pos.x, self.pos.z, self.size.x, self.size.z);
 
         let x1 = x + self.offsets[0].0 * width;
         let y1 = y + self.offsets[0].1 * height;
@@ -330,21 +328,13 @@ impl Collider {
             Self::Rect(RectCollider { pos, size, .. })
             | Self::Diamond(DiamondCollider { pos, size, .. })
             | Self::Ellipse(EllipseCollider { pos, size, .. })
+            | Self::Triangle(TriangleCollider { pos, size, .. })
             => {
                 groups.push((label, vec![
                     format!("X: {}", pos.x),
                     format!("Z: {}", pos.z),
                     format!("W: {}", size.x),
                     format!("H: {}", size.z),
-                ]));
-            }
-            Self::Triangle(TriangleCollider { x, z, width, height, .. })
-            => {
-                groups.push((label, vec![
-                    format!("X: {}", x),
-                    format!("Z: {}", z),
-                    format!("W: {}", width),
-                    format!("H: {}", height),
                 ]));
             }
         }
@@ -366,12 +356,12 @@ impl Collider {
                 ]));
             }
             Self::Triangle(tri) => {
-                let x1 = tri.x + if tri.offsets[0].0 > 0.0 { tri.width } else { UFixed16(0) };
-                let z1 = tri.z + if tri.offsets[0].1 > 0.0 { tri.height } else { UFixed16(0) };
-                let x2 = tri.x + if tri.offsets[1].0 > 0.0 { tri.width } else { UFixed16(0) };
-                let z2 = tri.z + if tri.offsets[1].1 > 0.0 { tri.height } else { UFixed16(0) };
-                let x3 = tri.x + if tri.offsets[2].0 > 0.0 { tri.width } else { UFixed16(0) };
-                let z3 = tri.z + if tri.offsets[2].1 > 0.0 { tri.height } else { UFixed16(0) };
+                let x1 = tri.pos.x + if tri.offsets[0].0 > 0.0 { tri.size.x } else { Fixed32(0) };
+                let z1 = tri.pos.z + if tri.offsets[0].1 > 0.0 { tri.size.z } else { Fixed32(0) };
+                let x2 = tri.pos.x + if tri.offsets[1].0 > 0.0 { tri.size.x } else { Fixed32(0) };
+                let z2 = tri.pos.z + if tri.offsets[1].1 > 0.0 { tri.size.z } else { Fixed32(0) };
+                let x3 = tri.pos.x + if tri.offsets[2].0 > 0.0 { tri.size.x } else { Fixed32(0) };
+                let z3 = tri.pos.z + if tri.offsets[2].1 > 0.0 { tri.size.z } else { Fixed32(0) };
                 
                 groups.push((label, vec![
                     format!("X1: {}", x1),
