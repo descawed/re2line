@@ -156,19 +156,17 @@ impl DiamondCollider {
 
 #[derive(Debug, Clone)]
 pub struct EllipseCollider {
-    x: Fixed16,
-    z: Fixed16,
-    width: UFixed16,
-    height: UFixed16,
+    pos: Vec2,
+    size: Vec2,
 }
 
 impl EllipseCollider {
-    pub const fn new(x: Fixed16, z: Fixed16, width: UFixed16, height: UFixed16) -> Self {
-        Self { x, z, width, height }
+    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32) -> Self {
+        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height } }
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
-        let (x, y, width, height) = draw_params.transform(self.x, self.z, self.width, self.height);
+        let (x, y, width, height) = draw_params.transform(self.pos.x, self.pos.z, self.size.x, self.size.z);
 
         let radius_x = width / 2.0;
         let radius_y = height / 2.0;
@@ -183,25 +181,20 @@ impl EllipseCollider {
         })
     }
 
-    pub fn pos(&self) -> (Fixed16, Fixed16) {
-        (self.x, self.z)
+    pub fn pos(&self) -> Vec2 {
+        self.pos
     }
 
-    pub fn set_pos<T, U>(&mut self, x: T, z: U)
-    where T: Into<Fixed32>, U: Into<Fixed32>
-    {
-        // TODO: change coords to 32
-        self.x = Fixed16(x.into().0 as i16);
-        self.z = Fixed16(z.into().0 as i16);
+    pub fn set_pos<T: Into<Vec2>>(&mut self, pos: T) {
+        self.pos = pos.into();
     }
 
-    pub fn size(&self) -> (UFixed16, UFixed16) {
-        (self.width, self.height)
+    pub fn set_size<T: Into<Vec2>>(&mut self, size: T) {
+        self.size = size.into();
     }
 
-    pub fn set_size(&mut self, width: UFixed16, height: UFixed16) {
-        self.width = width;
-        self.height = height;
+    pub fn size(&self) -> Vec2 {
+        self.size
     }
 }
 
@@ -335,7 +328,9 @@ impl Collider {
                 ]));
             }
             Self::Rect(RectCollider { pos, size, .. })
-            | Self::Diamond(DiamondCollider { pos, size, .. }) => {
+            | Self::Diamond(DiamondCollider { pos, size, .. })
+            | Self::Ellipse(EllipseCollider { pos, size, .. })
+            => {
                 groups.push((label, vec![
                     format!("X: {}", pos.x),
                     format!("Z: {}", pos.z),
@@ -343,8 +338,7 @@ impl Collider {
                     format!("H: {}", size.z),
                 ]));
             }
-            Self::Ellipse(EllipseCollider { x, z, width, height })
-            | Self::Triangle(TriangleCollider { x, z, width, height, .. })
+            Self::Triangle(TriangleCollider { x, z, width, height, .. })
             => {
                 groups.push((label, vec![
                     format!("X: {}", x),
@@ -359,10 +353,10 @@ impl Collider {
         let label = String::from("Calculated");
         match self {
             Self::Ellipse(ellipse) => {
-                let x_radius = ellipse.width >> 1;
-                let z_radius = ellipse.height >> 1;
-                let center_x = ellipse.x + x_radius;
-                let center_z = ellipse.z + z_radius;
+                let x_radius = ellipse.size.x >> 1;
+                let z_radius = ellipse.size.z >> 1;
+                let center_x = ellipse.pos.x + x_radius;
+                let center_z = ellipse.pos.z + z_radius;
                 
                 groups.push((label, vec![
                     format!("CX: {}", center_x),

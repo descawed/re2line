@@ -297,10 +297,10 @@ pub struct Character {
 
 impl Character {
     pub const fn new(id: CharacterId, health: i16, x: Fixed16, z: Fixed16, width: UFixed16, height: UFixed16, angle: Fixed16, velocity: Vec2) -> Self {
-        let game_x = Fixed16((x.0 as i32 - width.0 as i32) as i16);
-        let game_z = Fixed16((z.0 as i32 - height.0 as i32) as i16);
-        let game_width = UFixed16(width.0 << 1);
-        let game_height = UFixed16(height.0 << 1);
+        let game_x = Fixed16((x.0 as i32 - width.0 as i32) as i16).to_32();
+        let game_z = Fixed16((z.0 as i32 - height.0 as i32) as i16).to_32();
+        let game_width = UFixed16(width.0 << 1).to_32();
+        let game_height = UFixed16(height.0 << 1).to_32();
 
         Self {
             id,
@@ -308,7 +308,7 @@ impl Character {
             width,
             height,
             shape: EllipseCollider::new(game_x, game_z, game_width, game_height),
-            outline_shape: RectCollider::new(game_x.to_32(), game_z.to_32(), game_width.to_32(), game_height.to_32(), 0.0),
+            outline_shape: RectCollider::new(game_x, game_z, game_width, game_height, 0.0),
             angle,
             current_health: health,
             max_health: health,
@@ -361,15 +361,17 @@ impl Character {
 
     pub fn set_pos(&mut self, x: impl Into<Fixed16>, z: impl Into<Fixed16>) {
         self.center = Vec2::new(x.into(), z.into());
-        self.shape.set_pos(self.center.x - self.width.to_32(), self.center.z - self.height.to_32());
-        self.outline_shape.set_pos(Vec2::new(self.center.x - self.width.to_32(), self.center.z - self.height.to_32()));
+        let pos = Vec2::new(self.center.x - self.width.to_32(), self.center.z - self.height.to_32());
+        self.shape.set_pos(pos);
+        self.outline_shape.set_pos(pos);
     }
 
     pub fn set_size(&mut self, width: impl Into<UFixed16>, height:  impl Into<UFixed16>) {
         self.width = width.into();
         self.height = height.into();
-        self.shape.set_size(self.width << 1, self.height << 1);
-        self.outline_shape.set_size(Vec2::new(self.width << 1, self.height << 1));
+        let size = Vec2::new(self.width << 1, self.height << 1);
+        self.shape.set_size(size);
+        self.outline_shape.set_size(size);
     }
 
     pub fn label(&self, index: usize) -> String {

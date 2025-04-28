@@ -342,7 +342,7 @@ impl Rdt {
                     [(0.0, 1.0), (0.0, 0.0), (1.0, 1.0)],
                 )),
                 CollisionShape::Diamond => collision::Collider::Diamond(collision::DiamondCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32())),
-                CollisionShape::Circle => collision::Collider::Ellipse(collision::EllipseCollider::new(collider.x, collider.z, collider.w, collider.h)),
+                CollisionShape::Circle => collision::Collider::Ellipse(collision::EllipseCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32())),
                 CollisionShape::RoundedRectangle => collision::Collider::Rect(collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), CORNER_RADIUS)),
             });
         }
