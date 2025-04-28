@@ -239,30 +239,31 @@ impl TriangleCollider {
 
 #[derive(Debug)]
 pub struct QuadCollider {
-    x1: Fixed16,
-    z1: Fixed16,
-    x2: Fixed16,
-    z2: Fixed16,
-    x3: Fixed16,
-    z3: Fixed16,
-    x4: Fixed16,
-    z4: Fixed16,
+    p1: Vec2,
+    p2: Vec2,
+    p3: Vec2,
+    p4: Vec2,
 }
 
 impl QuadCollider {
-    pub const fn new(x1: Fixed16, z1: Fixed16, x2: Fixed16, z2: Fixed16, x3: Fixed16, z3: Fixed16, x4: Fixed16, z4: Fixed16) -> Self {
-        Self { x1, z1, x2, z2, x3, z3, x4, z4 }
+    pub const fn new(x1: Fixed32, z1: Fixed32, x2: Fixed32, z2: Fixed32, x3: Fixed32, z3: Fixed32, x4: Fixed32, z4: Fixed32) -> Self {
+        Self {
+            p1: Vec2 { x: x1, z: z1 },
+            p2: Vec2 { x: x2, z: z2 },
+            p3: Vec2 { x: x3, z: z3 },
+            p4: Vec2 { x: x4, z: z4 },
+        }
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
-        let x1 = self.x1 * draw_params.scale - draw_params.origin.x;
-        let y1 = -self.z1 * draw_params.scale - draw_params.origin.y;
-        let x2 = self.x2 * draw_params.scale - draw_params.origin.x;
-        let y2 = -self.z2 * draw_params.scale - draw_params.origin.y;
-        let x3 = self.x3 * draw_params.scale - draw_params.origin.x;
-        let y3 = -self.z3 * draw_params.scale - draw_params.origin.y;
-        let x4 = self.x4 * draw_params.scale - draw_params.origin.x;
-        let y4 = -self.z4 * draw_params.scale - draw_params.origin.y;
+        let x1 = self.p1.x * draw_params.scale - draw_params.origin.x;
+        let y1 = -self.p1.z * draw_params.scale - draw_params.origin.y;
+        let x2 = self.p2.x * draw_params.scale - draw_params.origin.x;
+        let y2 = -self.p2.z * draw_params.scale - draw_params.origin.y;
+        let x3 = self.p3.x * draw_params.scale - draw_params.origin.x;
+        let y3 = -self.p3.z * draw_params.scale - draw_params.origin.y;
+        let x4 = self.p4.x * draw_params.scale - draw_params.origin.x;
+        let y4 = -self.p4.z * draw_params.scale - draw_params.origin.y;
 
         egui::Shape::Path(epaint::PathShape {
             points: vec![
@@ -315,14 +316,14 @@ impl Collider {
         match self {
             Self::Quad(quad) => {
                 groups.push((label, vec![
-                    format!("X1: {}", quad.x1),
-                    format!("Z1: {}", quad.z1),
-                    format!("X2: {}", quad.x2),
-                    format!("Z2: {}", quad.z2),
-                    format!("X3: {}", quad.x3),
-                    format!("Z3: {}", quad.z3),
-                    format!("X4: {}", quad.x4),
-                    format!("Z4: {}", quad.z4),
+                    format!("X1: {}", quad.p1.x),
+                    format!("Z1: {}", quad.p1.z),
+                    format!("X2: {}", quad.p2.x),
+                    format!("Z2: {}", quad.p2.z),
+                    format!("X3: {}", quad.p3.x),
+                    format!("Z3: {}", quad.p3.z),
+                    format!("X4: {}", quad.p4.x),
+                    format!("Z4: {}", quad.p4.z),
                 ]));
             }
             Self::Rect(RectCollider { pos, size, .. })
@@ -375,7 +376,7 @@ impl Collider {
             Self::Diamond(diamond) => {
                 let radius_x = diamond.size.x >> 1;
                 let radius_z = diamond.size.z >> 1;
-                
+
                 let x = diamond.pos.x;
                 let z = diamond.pos.z;
                 let width = diamond.size.x;
@@ -388,7 +389,7 @@ impl Collider {
                     format!("X3: {}", x + radius_x),
                     format!("Z3: {}", z + height),
                     format!("X4: {}", x),
-                    format!("Z4: {}", z + radius_z),   
+                    format!("Z4: {}", z + radius_z),
                 ]));
             }
             Self::Rect(rect) => {
