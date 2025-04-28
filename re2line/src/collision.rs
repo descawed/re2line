@@ -90,8 +90,6 @@ impl RectCollider {
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
         let (x, y, width, height) = draw_params.transform(self.pos.x, self.pos.z, self.size.x, self.size.z);
-        // TODO: verify in-game whether the corners are actually rounded or if they're sharply cut the way they appear
-        //  in RE2RDTE
         let corner_radius = epaint::CornerRadiusF32::same(self.corner_radius * draw_params.scale);
 
         egui::Shape::Rect(epaint::RectShape::new(
@@ -107,6 +105,7 @@ impl RectCollider {
     }
 
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
+        // TODO: implement capsule logic
         let point = point.into();
         let far = self.pos + self.size;
         point.x >= self.pos.x && point.x < far.x && point.z >= self.pos.z && point.z < far.z
@@ -123,19 +122,17 @@ impl RectCollider {
 
 #[derive(Debug)]
 pub struct DiamondCollider {
-    x: Fixed16,
-    z: Fixed16,
-    width: UFixed16,
-    height: UFixed16,
+    pos: Vec2,
+    size: Vec2,
 }
 
 impl DiamondCollider {
-    pub const fn new(x: Fixed16, z: Fixed16, width: UFixed16, height: UFixed16) -> Self {
-        Self { x, z, width, height }
+    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32) -> Self {
+        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height } }
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
-        let (x, y, width, height) = draw_params.transform(self.x, self.z, self.width, self.height);
+        let (x, y, width, height) = draw_params.transform(self.pos.x, self.pos.z, self.size.x, self.size.z);
         let x_radius = width / 2.0;
         let y_radius = height / 2.0;
 
@@ -337,7 +334,8 @@ impl Collider {
                     format!("Z4: {}", quad.z4),
                 ]));
             }
-            Self::Rect(RectCollider { pos, size, .. }) => {
+            Self::Rect(RectCollider { pos, size, .. })
+            | Self::Diamond(DiamondCollider { pos, size, .. }) => {
                 groups.push((label, vec![
                     format!("X: {}", pos.x),
                     format!("Z: {}", pos.z),
@@ -345,8 +343,7 @@ impl Collider {
                     format!("H: {}", size.z),
                 ]));
             }
-            Self::Diamond(DiamondCollider { x, z, width, height })
-            | Self::Ellipse(EllipseCollider { x, z, width, height })
+            Self::Ellipse(EllipseCollider { x, z, width, height })
             | Self::Triangle(TriangleCollider { x, z, width, height, .. })
             => {
                 groups.push((label, vec![
@@ -392,18 +389,22 @@ impl Collider {
                 ]));
             }
             Self::Diamond(diamond) => {
-                let radius_x = diamond.width >> 1;
-                let radius_z = diamond.height >> 1;
+                let radius_x = diamond.size.x >> 1;
+                let radius_z = diamond.size.z >> 1;
                 
+                let x = diamond.pos.x;
+                let z = diamond.pos.z;
+                let width = diamond.size.x;
+                let height = diamond.size.z;
                 groups.push((label, vec![
-                    format!("X1: {}", diamond.x + radius_x),
-                    format!("Z1: {}", diamond.z),
-                    format!("X2: {}", diamond.x + diamond.width),
-                    format!("Z2: {}", diamond.z + radius_z),
-                    format!("X3: {}", diamond.x + radius_x),
-                    format!("Z3: {}", diamond.z + diamond.height),
-                    format!("X4: {}", diamond.x),
-                    format!("Z4: {}", diamond.z + radius_z),   
+                    format!("X1: {}", x + radius_x),
+                    format!("Z1: {}", z),
+                    format!("X2: {}", x + width),
+                    format!("Z2: {}", z + radius_z),
+                    format!("X3: {}", x + radius_x),
+                    format!("Z3: {}", z + height),
+                    format!("X4: {}", x),
+                    format!("Z4: {}", z + radius_z),   
                 ]));
             }
             Self::Rect(rect) => {
