@@ -282,11 +282,10 @@ impl CharacterId {
 pub struct Character {
     pub id: CharacterId,
     pub center: Vec2,
-    pub width: UFixed16,
-    pub height: UFixed16,
+    pub size: Vec2,
     pub shape: EllipseCollider,
     pub outline_shape: RectCollider,
-    pub angle: Fixed16,
+    pub angle: Fixed32,
     current_health: i16,
     max_health: i16,
     pub state: [u8; 4],
@@ -297,19 +296,18 @@ pub struct Character {
 
 impl Character {
     pub const fn new(id: CharacterId, health: i16, x: Fixed16, z: Fixed16, width: UFixed16, height: UFixed16, angle: Fixed16, velocity: Vec2) -> Self {
-        let game_x = Fixed16((x.0 as i32 - width.0 as i32) as i16).to_32();
-        let game_z = Fixed16((z.0 as i32 - height.0 as i32) as i16).to_32();
+        let game_x = Fixed32(x.0 as i32 - width.0 as i32);
+        let game_z = Fixed32(z.0 as i32 - height.0 as i32);
         let game_width = UFixed16(width.0 << 1).to_32();
         let game_height = UFixed16(height.0 << 1).to_32();
 
         Self {
             id,
             center: Vec2 { x: Fixed32(x.0 as i32), z: Fixed32(z.0 as i32) },
-            width,
-            height,
+            size: Vec2 { x: Fixed32(width.0 as i32), z: Fixed32(height.0 as i32) },
             shape: EllipseCollider::new(game_x, game_z, game_width, game_height),
             outline_shape: RectCollider::new(game_x, game_z, game_width, game_height, 0.0),
-            angle,
+            angle: angle.to_32(),
             current_health: health,
             max_health: health,
             state: [0; 4],
@@ -359,17 +357,17 @@ impl Character {
         Vec2::new(interaction_point.x, -interaction_point.y)
     }
 
-    pub fn set_pos(&mut self, x: impl Into<Fixed16>, z: impl Into<Fixed16>) {
-        self.center = Vec2::new(x.into(), z.into());
-        let pos = Vec2::new(self.center.x - self.width.to_32(), self.center.z - self.height.to_32());
+    pub fn set_pos(&mut self, x: impl Into<Fixed32>, z: impl Into<Fixed32>) {
+        self.center = Vec2::new(x, z);
+        let pos = self.center - self.size;
         self.shape.set_pos(pos);
         self.outline_shape.set_pos(pos);
     }
 
-    pub fn set_size(&mut self, width: impl Into<UFixed16>, height:  impl Into<UFixed16>) {
-        self.width = width.into();
-        self.height = height.into();
-        let size = Vec2::new(self.width << 1, self.height << 1);
+    pub fn set_size(&mut self, width: impl Into<Fixed32>, height: impl Into<Fixed32>) {
+        self.size.x = width.into();
+        self.size.z = height.into();
+        let size = Vec2::new(self.size.x << 1, self.size.z << 1);
         self.shape.set_size(size);
         self.outline_shape.set_size(size);
     }
@@ -416,8 +414,8 @@ impl Character {
             format!("Z: {}", self.center.z),
             format!("Angle: {:.1}°", self.angle.to_degrees() % 360.0),
             format!("Floor: {}", self.floor),
-            format!("XR: {}", self.width),
-            format!("ZR: {}", self.height),
+            format!("XR: {}", self.size.x),
+            format!("ZR: {}", self.size.z),
         ]));
 
         groups.push((String::from("State"), vec![

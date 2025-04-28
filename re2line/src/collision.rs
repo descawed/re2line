@@ -1,4 +1,4 @@
-use crate::math::{Fixed16, UFixed16, Fixed32, Vec2};
+use crate::math::{Fixed32, Vec2};
 
 const HIGHLIGHT_MAX_INTENSITY: f32 = 0.5;
 const HIGHLIGHT: egui::Rgba = egui::Rgba::from_rgba_premultiplied(0.25, 0.25, 0.25, 0.0);
