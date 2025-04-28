@@ -196,6 +196,13 @@ impl EllipseCollider {
     pub fn size(&self) -> Vec2 {
         self.size
     }
+
+    pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
+        // FIXME: this logic makes it seem like this is truly a circle and not an ellipse? z radius is ignored?
+        let radius = self.size.x >> 1;
+        let rel_point = point.into() - self.pos - Vec2::new(radius, radius);
+        rel_point.len() < radius
+    }
 }
 
 #[derive(Debug)]
@@ -280,6 +287,36 @@ impl QuadCollider {
                 kind: draw_params.stroke_kind,
             },
         })
+    }
+
+    pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
+        let point = point.into();
+
+        let px_minus_x1 = point.x - self.p1.x;
+        let pz_minus_z1 = point.z - self.p1.z;
+
+        let x2_minus_x1 = self.p2.x - self.p1.x;
+        let z2_minus_z1 = self.p2.z - self.p1.z;
+
+        let x4_minus_x1 = self.p4.x - self.p1.x;
+        let z4_minus_z1 = self.p4.z - self.p1.z;
+
+        if (x2_minus_x1.0 * pz_minus_z1.0) <= (z2_minus_z1.0 * px_minus_x1.0) && (z4_minus_z1.0 * px_minus_x1.0) <= (x4_minus_x1.0 * pz_minus_z1.0) {
+            let px_minus_x3 = point.x - self.p3.x;
+            let pz_minus_z3 = point.z - self.p3.z;
+
+            let x2_minus_x3 = self.p2.x - self.p3.x;
+            let z2_minus_z3 = self.p2.z - self.p3.z;
+
+            let x4_minus_x3 = self.p4.x - self.p3.x;
+            let z4_minus_z3 = self.p4.z - self.p3.z;
+
+            if (z2_minus_z3.0 * px_minus_x3.0) <= (x2_minus_x3.0 * pz_minus_z3.0) && (x4_minus_x3.0 * pz_minus_z3.0) <= (z4_minus_z3.0 * px_minus_x3.0) {
+                return true;
+            }
+        }
+
+        false
     }
 }
 
@@ -426,6 +463,8 @@ impl Collider {
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
         match self {
             Self::Rect(rect) => rect.contains_point(point),
+            Self::Ellipse(ellipse) => ellipse.contains_point(point),
+            Self::Quad(quad) => quad.contains_point(point),
             // TODO: implement remaining shapes
             _ => false,
         }
