@@ -327,19 +327,19 @@ impl Rdt {
                 CollisionShape::Rectangle => collision::Collider::Rect(collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), 0.0)),
                 CollisionShape::TriangleTopRight => collision::Collider::Triangle(collision::TriangleCollider::new(
                     collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(),
-                    [(1.0, 1.0), (1.0, 0.0), (0.0, 0.0)],
+                    collision::TriangleType::TopRight,
                 )),
                 CollisionShape::TriangleTopLeft => collision::Collider::Triangle(collision::TriangleCollider::new(
                     collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(),
-                    [(0.0, 1.0), (0.0, 0.0), (1.0, 0.0)],
+                    collision::TriangleType::TopLeft,
                 )),
                 CollisionShape::TriangleBottomRight => collision::Collider::Triangle(collision::TriangleCollider::new(
                     collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(),
-                    [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0)],
+                    collision::TriangleType::BottomRight,
                 )),
                 CollisionShape::TriangleBottomLeft => collision::Collider::Triangle(collision::TriangleCollider::new(
                     collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(),
-                    [(0.0, 1.0), (0.0, 0.0), (1.0, 1.0)],
+                    collision::TriangleType::BottomLeft,
                 )),
                 CollisionShape::Diamond => collision::Collider::Diamond(collision::DiamondCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32())),
                 CollisionShape::Circle => collision::Collider::Ellipse(collision::EllipseCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32())),

@@ -72,6 +72,10 @@ impl DrawParams {
     }
 }
 
+const fn rect_contains_point(pos: Vec2, size: Vec2, point: Vec2) -> bool {
+    point.x.0 >= pos.x.0 && point.x.0 < pos.x.0 + size.x.0 && point.z.0 >= pos.z.0 && point.z.0 < pos.z.0 + size.z.0
+}
+
 #[derive(Debug, Clone)]
 pub struct RectCollider {
     pos: Vec2,
@@ -106,9 +110,7 @@ impl RectCollider {
 
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
         // TODO: implement capsule logic
-        let point = point.into();
-        let far = self.pos + self.size;
-        point.x >= self.pos.x && point.x < far.x && point.z >= self.pos.z && point.z < far.z
+        rect_contains_point(self.pos, self.size, point.into())
     }
 
     pub fn set_pos<T: Into<Vec2>>(&mut self, pos: T) {
@@ -413,27 +415,51 @@ impl EllipseCollider {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum TriangleType {
+    BottomLeft,
+    BottomRight,
+    TopLeft,
+    TopRight,
+}
+
+impl TriangleType {
+    pub const fn offsets(&self) -> [(f32, f32); 3] {
+        match self {
+            Self::BottomLeft => [(0.0, 1.0), (0.0, 0.0), (1.0, 1.0)],
+            Self::BottomRight => [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0)],
+            Self::TopLeft => [(0.0, 1.0), (0.0, 0.0), (1.0, 0.0)],
+            Self::TopRight => [(1.0, 1.0), (1.0, 0.0), (0.0, 0.0)],
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct TriangleCollider {
     pos: Vec2,
     size: Vec2,
-    offsets: [(f32, f32); 3],
+    type_: TriangleType,
 }
 
 impl TriangleCollider {
-    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, offsets: [(f32, f32); 3]) -> Self {
-        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height }, offsets }
+    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, type_: TriangleType) -> Self {
+        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height }, type_ }
+    }
+
+    pub const fn offsets(&self) -> [(f32, f32); 3] {
+        self.type_.offsets()
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
         let (x, y, width, height) = draw_params.transform(self.pos.x, self.pos.z, self.size.x, self.size.z);
+        let offsets = self.offsets();
 
-        let x1 = x + self.offsets[0].0 * width;
-        let y1 = y + self.offsets[0].1 * height;
-        let x2 = x + self.offsets[1].0 * width;
-        let y2 = y + self.offsets[1].1 * height;
-        let x3 = x + self.offsets[2].0 * width;
-        let y3 = y + self.offsets[2].1 * height;
+        let x1 = x + offsets[0].0 * width;
+        let y1 = y + offsets[0].1 * height;
+        let x2 = x + offsets[1].0 * width;
+        let y2 = y + offsets[1].1 * height;
+        let x3 = x + offsets[2].0 * width;
+        let y3 = y + offsets[2].1 * height;
 
         egui::Shape::Path(epaint::PathShape {
             points: vec![
@@ -449,6 +475,165 @@ impl TriangleCollider {
                 kind: draw_params.stroke_kind,
             },
         })
+    }
+
+    const fn contains_point_top_left(&self, point: Vec2) -> bool {
+        let x1 = self.pos.x.0;
+        let z1 = self.pos.z.0;
+
+        let x2 = self.pos.x.0 + self.size.x.0;
+        let z2 = self.pos.z.0 + self.size.z.0;
+
+        let px = point.x.0;
+        let pz = point.z.0;
+
+        let width = x2 - x1;
+        let height = z2 - z1;
+
+        let x_dist = px - x1;
+        let z_dist = pz - z1;
+
+        let scaled_dist = (height * x_dist) / width;
+        if z_dist <= scaled_dist {
+            return false;
+        }
+
+        let x1_div = x1 / 0x12;
+        let z1_div = z1 / 0x12;
+        let z2_div = z2 / 0x12;
+        let x2_div = x2 / 0x12;
+        let height_div = z2_div - z1_div;
+        let width_div = x2_div - x1_div;
+
+        if (((px / 0x12) * height_div - (pz / 0x12) * width_div) - z2_div * x1_div) + x2_div * z1_div < 0 {
+            if x_dist < self.size.x.0 && z_dist < self.size.z.0 {
+                return rect_contains_point(self.pos, self.size, point);
+            }
+        }
+
+        true
+    }
+
+    const fn contains_point_top_right(&self, point: Vec2) -> bool {
+        let x1 = self.pos.x.0;
+        let z1 = self.pos.z.0;
+
+        let x2 = self.pos.x.0 + self.size.x.0;
+        let z2 = self.pos.z.0 + self.size.z.0;
+
+        let px = point.x.0;
+        let pz = point.z.0;
+
+        let width = self.size.x.0;
+        let height = self.size.z.0;
+
+        let x_dist = px - x1;
+        let z_dist = pz - z1 - height;
+
+        let scaled_dist = (height * x_dist) / width;
+        if scaled_dist <= -z_dist {
+            return false;
+        }
+
+        let x1_div = x1 / 0x12;
+        let z1_div = z1 / 0x12;
+        let z2_div = z2 / 0x12;
+        let x2_div = x2 / 0x12;
+
+        let z1_minus_z2_div = z1_div - z2_div;
+        let x2_minus_x1_div = x2_div - x1_div;
+
+        if (((px / 0x12) * z1_minus_z2_div - (pz / 0x12) * x2_minus_x1_div) - z1_div * x1_div) + x2_div * z2_div < 0 {
+            if x_dist < self.size.x.0 && (pz - z1) < self.size.z.0 {
+                return rect_contains_point(self.pos, self.size, point);
+            }
+        }
+
+        true
+    }
+
+    const fn contains_point_bottom_right(&self, point: Vec2) -> bool {
+        let x1 = self.pos.x.0;
+        let z1 = self.pos.z.0;
+
+        let x2 = self.pos.x.0 + self.size.x.0;
+        let z2 = self.pos.z.0 + self.size.z.0;
+
+        let px = point.x.0;
+        let pz = point.z.0;
+
+        let width = x2 - x1;
+        let height = z2 - z1;
+
+        let x_dist = px - x1;
+        let z_dist = pz - z1;
+
+        let scaled_dist = (height * x_dist) / width;
+        if scaled_dist <= z_dist {
+            return false;
+        }
+
+        let x1_div = x1 / 0x12;
+        let z1_div = z1 / 0x12;
+        let z2_div = z2 / 0x12;
+        let x2_div = x2 / 0x12;
+        let height_div = z2_div - z1_div;
+        let width_div = x2_div - x1_div;
+
+        if (((px / 0x12) * height_div - (pz / 0x12) * width_div) - z2_div * x1_div) + x2_div * z1_div >= 1 {
+            if x_dist < self.size.x.0 && z_dist < self.size.z.0 {
+                return rect_contains_point(self.pos, self.size, point);
+            }
+        }
+
+        true
+    }
+
+    const fn contains_point_bottom_left(&self, point: Vec2) -> bool {
+        let x1 = self.pos.x.0;
+        let z1 = self.pos.z.0;
+
+        let x2 = self.pos.x.0 + self.size.x.0;
+        let z2 = self.pos.z.0 + self.size.z.0;
+
+        let px = point.x.0;
+        let pz = point.z.0;
+
+        let width = x2 - x1;
+        let height = z1 - z2;
+
+        let x_dist = px - x1;
+        let z_dist = pz - z1;
+
+        let scaled_dist = (height * x_dist) / width;
+        if scaled_dist <= (pz - z2) {
+            return false;
+        }
+
+        let x1_div = x1 / 0x12;
+        let z2_div = z2 / 0x12;
+        let x2_div = x2 / 0x12;
+        let height_div = z1 / 0x12 - z2_div;
+        let width_div = x2_div - x1_div;
+
+        if (((px / 0x12) * height_div - (pz / 0x12) * width_div) - (z1 / 0x12) * x1_div) + x2_div * z2_div >= 1 {
+            if x_dist < self.size.x.0 && z_dist < self.size.z.0 {
+                return rect_contains_point(self.pos, self.size, point);
+            }
+        }
+
+        true
+    }
+
+    pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
+        let point = point.into();
+        
+        match self.type_ {
+            TriangleType::BottomLeft => self.contains_point_bottom_left(point),
+            TriangleType::BottomRight => self.contains_point_bottom_right(point),
+            TriangleType::TopLeft => self.contains_point_top_left(point),
+            TriangleType::TopRight => self.contains_point_top_right(point),
+        }
     }
 }
 
@@ -602,12 +787,14 @@ impl Collider {
                 ]));
             }
             Self::Triangle(tri) => {
-                let x1 = tri.pos.x + if tri.offsets[0].0 > 0.0 { tri.size.x } else { Fixed32(0) };
-                let z1 = tri.pos.z + if tri.offsets[0].1 > 0.0 { tri.size.z } else { Fixed32(0) };
-                let x2 = tri.pos.x + if tri.offsets[1].0 > 0.0 { tri.size.x } else { Fixed32(0) };
-                let z2 = tri.pos.z + if tri.offsets[1].1 > 0.0 { tri.size.z } else { Fixed32(0) };
-                let x3 = tri.pos.x + if tri.offsets[2].0 > 0.0 { tri.size.x } else { Fixed32(0) };
-                let z3 = tri.pos.z + if tri.offsets[2].1 > 0.0 { tri.size.z } else { Fixed32(0) };
+                let offsets = tri.offsets();
+
+                let x1 = tri.pos.x + if offsets[0].0 > 0.0 { tri.size.x } else { Fixed32(0) };
+                let z1 = tri.pos.z + if offsets[0].1 > 0.0 { tri.size.z } else { Fixed32(0) };
+                let x2 = tri.pos.x + if offsets[1].0 > 0.0 { tri.size.x } else { Fixed32(0) };
+                let z2 = tri.pos.z + if offsets[1].1 > 0.0 { tri.size.z } else { Fixed32(0) };
+                let x3 = tri.pos.x + if offsets[2].0 > 0.0 { tri.size.x } else { Fixed32(0) };
+                let z3 = tri.pos.z + if offsets[2].1 > 0.0 { tri.size.z } else { Fixed32(0) };
                 
                 groups.push((label, vec![
                     format!("X1: {}", x1),
@@ -673,9 +860,8 @@ impl Collider {
             Self::Rect(rect) => rect.contains_point(point),
             Self::Ellipse(ellipse) => ellipse.contains_point(point),
             Self::Diamond(diamond) => diamond.contains_point(point),
+            Self::Triangle(triangle) => triangle.contains_point(point),
             Self::Quad(quad) => quad.contains_point(point),
-            // TODO: implement remaining shapes
-            _ => false,
         }
     }
 }
