@@ -9,8 +9,6 @@ use crate::collision::CapsuleType;
 use crate::math::{Fixed16, UFixed16};
 use crate::script::Instruction;
 
-const CORNER_RADIUS: f32 = Fixed16(2200).to_f32();
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum CollisionShape {
     Rectangle,
