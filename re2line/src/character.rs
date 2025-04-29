@@ -2,7 +2,7 @@ use egui::{Color32, Pos2, Shape, Stroke, Ui};
 use epaint::{CircleShape, ColorMode, PathShape, PathStroke};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-use crate::collision::{DrawParams, EllipseCollider, RectCollider};
+use crate::collision::{CapsuleType, DrawParams, EllipseCollider, RectCollider};
 use crate::draw::{VAlign, text_box};
 use crate::math::{Fixed16, UFixed16, Fixed32, Vec2};
 
@@ -310,7 +310,7 @@ impl Character {
             prev_center: center,
             size: Vec2 { x: Fixed32(width.0 as i32), z: Fixed32(height.0 as i32) },
             shape: EllipseCollider::new(game_x, game_z, game_width, game_height),
-            outline_shape: RectCollider::new(game_x, game_z, game_width, game_height, 0.0),
+            outline_shape: RectCollider::new(game_x, game_z, game_width, game_height, CapsuleType::None),
             angle: angle.to_32(),
             current_health: health,
             max_health: health,

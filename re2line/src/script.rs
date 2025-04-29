@@ -1,7 +1,7 @@
 use binrw::binrw;
 
 use crate::aot::{Entity, EntityForm};
-use crate::collision::{Collider, QuadCollider, RectCollider};
+use crate::collision::{CapsuleType, Collider, QuadCollider, RectCollider};
 use crate::math::{Fixed16, UFixed16};
 
 #[binrw]
@@ -590,7 +590,7 @@ impl Instruction {
         Some(match self {
             Self::AotSet { aot, sce, sat, n_floor, x, z, w, h, .. } => Entity::new(
                 EntityForm::Other,
-                Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), 0.0)),
+                Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), CapsuleType::None)),
                 *n_floor,
                 *aot as u8,
                 *sce,
@@ -607,7 +607,7 @@ impl Instruction {
                         next_room: *next_room,
                         next_n_floor: *next_nfloor,
                     },
-                    Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), 0.0)),
+                    Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), CapsuleType::None)),
                     *n_floor,
                     *aot,
                     *sce,
@@ -661,7 +661,7 @@ impl Instruction {
                     md1: *md1,
                     action: *action,
                 },
-                Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), 0.0)),
+                Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), CapsuleType::None)),
                 *n_floor,
                 *aot,
                 *sce,

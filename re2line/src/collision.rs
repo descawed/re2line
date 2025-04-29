@@ -76,25 +76,47 @@ const fn rect_contains_point(pos: Vec2, size: Vec2, point: Vec2) -> bool {
     point.x.0 >= pos.x.0 && point.x.0 < pos.x.0 + size.x.0 && point.z.0 >= pos.z.0 && point.z.0 < pos.z.0 + size.z.0
 }
 
+fn circle_contains_point(pos: Vec2, radius: Fixed32, point: Vec2) -> bool {
+    let rel_point = point - pos - Vec2::new(radius, radius);
+    rel_point.len() < radius
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum CapsuleType {
+    None,
+    Horizontal,
+    Vertical,
+}
+
+impl CapsuleType {
+    pub const fn corner_radius(&self, width: f32, height: f32) -> epaint::CornerRadiusF32 {
+        match self {
+            Self::None => epaint::CornerRadiusF32::same(0.0),
+            Self::Horizontal => epaint::CornerRadiusF32::same(width / 2.0),
+            Self::Vertical => epaint::CornerRadiusF32::same(height / 2.0),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RectCollider {
     pos: Vec2,
     size: Vec2,
-    corner_radius: f32,
+    capsule_type: CapsuleType,
 }
 
 impl RectCollider {
-    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, corner_radius: f32) -> Self {
+    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, capsule_type: CapsuleType) -> Self {
         Self {
             pos: Vec2 { x, z },
             size: Vec2 { x: width, z: height },
-            corner_radius,
+            capsule_type,
         }
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
         let (x, y, width, height) = draw_params.transform(self.pos.x, self.pos.z, self.size.x, self.size.z);
-        let corner_radius = epaint::CornerRadiusF32::same(self.corner_radius * draw_params.scale);
+        let corner_radius = self.capsule_type.corner_radius(width, height);
 
         egui::Shape::Rect(epaint::RectShape::new(
             egui::Rect {
@@ -109,8 +131,39 @@ impl RectCollider {
     }
 
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
-        // TODO: implement capsule logic
-        rect_contains_point(self.pos, self.size, point.into())
+        let point = point.into();
+
+        match self.capsule_type {
+            CapsuleType::Horizontal => {
+                let z_radius = self.size.z >> 1;
+                let side = (((point.x - (self.pos.x - z_radius) + self.size.x).0 as u32 & 0xbfffffff)
+                    | ((point.x - (self.pos.x + z_radius)) >> 1).0 as u32) >> 0x1e;
+                match side {
+                    0 => {
+                        let pos = Vec2::new((self.pos.x - self.size.z) + self.size.x, self.pos.z);
+                        return circle_contains_point(pos, z_radius, point);
+                    }
+                    3 => return circle_contains_point(self.pos, z_radius, point),
+                    _ => (),
+                }
+            }
+            CapsuleType::Vertical => {
+                let x_radius = self.size.x >> 1;
+                let side = (((point.z - (self.pos.z - x_radius) + self.size.z).0 as u32 & 0xbfffffff)
+                    | ((point.z - (self.pos.z + x_radius)) >> 1).0 as u32) >> 0x1e;
+                match side {
+                    0 => {
+                        let pos = Vec2::new(self.pos.x, self.pos.z + (self.size.z - self.size.x));
+                        return circle_contains_point(pos, x_radius, point);
+                    }
+                    3 => return circle_contains_point(self.pos, x_radius, point),
+                    _ => (),
+                }
+            }
+            _ => (),
+        }
+
+        rect_contains_point(self.pos, self.size, point)
     }
 
     pub fn set_pos<T: Into<Vec2>>(&mut self, pos: T) {
@@ -409,9 +462,7 @@ impl EllipseCollider {
 
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
         // FIXME: this logic makes it seem like this is truly a circle and not an ellipse? z radius is ignored?
-        let radius = self.size.x >> 1;
-        let rel_point = point.into() - self.pos - Vec2::new(radius, radius);
-        rel_point.len() < radius
+        circle_contains_point(self.pos, self.size.x >> 1, point.into())
     }
 }
 
@@ -627,7 +678,7 @@ impl TriangleCollider {
 
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
         let point = point.into();
-        
+
         match self.type_ {
             TriangleType::BottomLeft => self.contains_point_bottom_left(point),
             TriangleType::BottomRight => self.contains_point_bottom_right(point),
@@ -729,10 +780,10 @@ impl Collider {
         // type
         groups.push((String::from("Type"), vec![String::from(match self {
             Self::Rect(rect) => {
-                if rect.corner_radius > 0.0 {
-                    "Rectangle (rounded)"
-                } else {
-                    "Rectangle"
+                match rect.capsule_type {
+                    CapsuleType::None => "Rectangle",
+                    CapsuleType::Horizontal => "Capsule (horizontal)",
+                    CapsuleType::Vertical => "Capsule (vertical)",
                 }
             }
             Self::Diamond(_) => "Diamond",
