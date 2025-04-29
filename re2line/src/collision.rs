@@ -152,6 +152,214 @@ impl DiamondCollider {
             },
         })
     }
+
+    pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
+        let point = point.into();
+
+        let center_x = (self.size.x >> 1) + self.pos.x;
+        let center_z = (self.size.z >> 1) + self.pos.z;
+
+        let quadrant = (((point.z - center_z) >> 0x1e).0 & 2) | ((point.x - center_x) >> 0x1f).0;
+        match quadrant {
+            0 => self.is_point_in_quadrant0(point),
+            1 => self.is_point_in_quadrant1(point),
+            2 => self.is_point_in_quadrant2(point),
+            3 => self.is_point_in_quadrant3(point),
+            _ => unreachable!(),
+        }
+    }
+
+    const fn is_point_in_quadrant0(&self, point: Vec2) -> bool {
+        let center_x = (self.size.x.0 >> 1) + self.pos.x.0;
+        let center_z = (self.size.z.0 >> 1) + self.pos.z.0;
+
+        let far_x = self.pos.x.0 + self.size.x.0;
+        let far_z = self.pos.z.0 + self.size.z.0;
+
+        let px = point.x.0;
+        let pz = point.z.0;
+
+        let x_diff1 = far_x - center_x;
+        let x_diff2 = px - center_x;
+
+        let z_diff1 = center_z - far_z;
+        let z_diff2 = pz - far_z;
+
+        let term1 = (x_diff2 * z_diff1) / x_diff1;
+
+        if term1 <= z_diff2 {
+            return false;
+        }
+
+        let z_diff3 = far_z - center_z;
+
+        let term2 = z_diff2 - term1;
+        let term3 = (x_diff1 * term2) / z_diff3;
+
+        let term4 = term2 * term2 + term3 * term3;
+
+        let term5 = (term3 * term2 * term2) / term4;
+        let term6 = (term3 * term3 * term2) / term4;
+
+        let term5_sign = term5 >> 0x1f;
+        let term6_sign = term6 >> 0x1f;
+
+        if (term5 ^ term5_sign) - term5_sign < 0x191 && (term6 ^ term6_sign) - term6_sign < 0x191 {
+            let new_x = px - term5;
+            let new_z = pz - term6;
+
+            if (new_x / 0x12 - center_x / 0x12) * (center_z / 0x12 - far_z / 0x12) - (new_z / 0x12 - far_z / 0x12) * (far_x / 0x12 - center_x / 0x12) < 1 {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    const fn is_point_in_quadrant1(&self, point: Vec2) -> bool {
+        let x = self.pos.x.0;
+
+        let center_x = (self.size.x.0 >> 1) + self.pos.x.0;
+        let center_z = (self.size.z.0 >> 1) + self.pos.z.0;
+
+        let far_z = self.pos.z.0 + self.size.z.0;
+
+        let px = point.x.0;
+        let pz = point.z.0;
+
+        let x_diff1 = center_x - x;
+        let x_diff2 = px - x;
+
+        let z_diff1 = far_z - center_z;
+        let z_diff2 = pz - center_z;
+
+        let term1 = (x_diff2 * z_diff1) / x_diff1;
+
+        if term1 <= z_diff2 {
+            return false;
+        }
+
+        let term2 = z_diff2 - term1;
+        let term3 = (x_diff1 * term2) / z_diff1;
+
+        let term4 = term2 * term2 + term3 * term3;
+
+        let term5 = (term3 * term2 * term2) / term4;
+        let term6 = (term3 * term3 * term2) / term4;
+
+        let term5_sign = term5 >> 0x1f;
+        let term6_sign = term6 >> 0x1f;
+
+        if (term5 ^ term5_sign) - term5_sign < 0x191 && (term6 ^ term6_sign) - term6_sign < 0x191 {
+            let new_x = px + term5;
+            let new_z = pz - term6;
+
+            let x_div = x / 0x12;
+
+            if (new_x / 0x12 - x_div) * (far_z / 0x12 - center_z / 0x12) - (new_z / 0x12 - center_z / 0x12) * (center_x / 0x12 - x_div) < 1 {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    const fn is_point_in_quadrant2(&self, point: Vec2) -> bool {
+        let z = self.pos.z.0;
+
+        let center_x = (self.size.x.0 >> 1) + self.pos.x.0;
+        let center_z = (self.size.z.0 >> 1) + self.pos.z.0;
+
+        let far_x = self.pos.x.0 + self.size.x.0;
+
+        let px = point.x.0;
+        let pz = point.z.0;
+
+        let x_diff1 = far_x - center_x;
+        let x_diff2 = px - center_x;
+
+        let z_diff1 = center_z - z;
+        let z_diff2 = pz - z;
+
+        let term1 = (x_diff2 * z_diff1) / x_diff1;
+
+        if z_diff2 <= term1 {
+            return false;
+        }
+
+        let term2 = z_diff2 - term1;
+        let term3 = (x_diff1 * term2) / z_diff1;
+
+        let term4 = term2 * term2 + term3 * term3;
+
+        let term5 = (term3 * term2 * term2) / term4;
+        let term6 = (term3 * term3 * term2) / term4;
+
+        let term5_sign = term5 >> 0x1f;
+        let term6_sign = term6 >> 0x1f;
+
+        if (term5 ^ term5_sign) - term5_sign < 0x191 && (term6 ^ term6_sign) - term6_sign < 0x191 {
+            let new_x = px + term5;
+            let new_z = pz - term6;
+
+            let z_div = z / 0x12;
+
+            if -1 < (new_x / 0x12 - center_x / 0x12) * (center_z / 0x12 - z_div) - (new_z / 0x12 - z_div) * (far_x / 0x12 - center_x / 0x12) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    const fn is_point_in_quadrant3(&self, point: Vec2) -> bool {
+        let x = self.pos.x.0;
+        let z = self.pos.z.0;
+
+        let center_x = (self.size.x.0 >> 1) + self.pos.x.0;
+        let center_z = (self.size.z.0 >> 1) + self.pos.z.0;
+
+        let px = point.x.0;
+        let pz = point.z.0;
+
+        let x_diff1 = center_x - x;
+        let x_diff2 = px - x;
+
+        let z_diff1 = z - center_z;
+        let z_diff2 = pz - center_z;
+
+        let term1 = (x_diff2 * z_diff1) / x_diff1;
+
+        if z_diff2 <= term1 {
+            return false;
+        }
+
+        let z_diff3 = center_z - z;
+
+        let term2 = z_diff2 - term1;
+        let term3 = (x_diff1 * term2) / z_diff3;
+
+        let term4 = term2 * term2 + term3 * term3;
+
+        let term5 = (term3 * term2 * term2) / term4;
+        let term6 = (term3 * term3 * term2) / term4;
+
+        let term5_sign = term5 >> 0x1f;
+        let term6_sign = term6 >> 0x1f;
+
+        if (term5 ^ term5_sign) - term5_sign < 0x191 && (term6 ^ term6_sign) - term6_sign < 0x191 {
+            let new_x = px - term5;
+            let new_z = pz - term6;
+
+            let x_div = x / 0x12;
+
+            if -1 < (new_x / 0x12 - x_div) * (z / 0x12 - center_z / 0x12) - (new_z / 0x12 - center_z / 0x12) * (center_x / 0x12 - x_div) {
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -464,6 +672,7 @@ impl Collider {
         match self {
             Self::Rect(rect) => rect.contains_point(point),
             Self::Ellipse(ellipse) => ellipse.contains_point(point),
+            Self::Diamond(diamond) => diamond.contains_point(point),
             Self::Quad(quad) => quad.contains_point(point),
             // TODO: implement remaining shapes
             _ => false,

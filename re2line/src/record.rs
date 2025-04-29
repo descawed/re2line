@@ -132,6 +132,7 @@ impl State {
                     },
                     CharacterField::Transform(matrix) => {
                         character.set_pos(matrix.t.x, matrix.t.z);
+                        character.set_prev_pos(matrix.t.x, matrix.t.z);
                     },
                     CharacterField::MotionAngle(angle) => character.angle = Fixed32(*angle as i32),
                     CharacterField::Motion(_) => (), // seems like this might not be something useful?
