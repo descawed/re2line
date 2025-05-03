@@ -129,6 +129,10 @@ impl Entity {
         self.collider.gui_shape(draw_params)
     }
     
+    pub fn contains_point(&self, point: Vec2) -> bool {
+        self.collider.contains_point(point)
+    }
+    
     pub fn describe(&self) -> Vec<(String, Vec<String>)> {
         let mut groups = self.collider.describe();
         

@@ -18,7 +18,7 @@ use crate::aot::{Entity, SceType};
 use crate::character::{Character, CharacterId};
 use crate::collision::{Collider, DrawParams};
 use crate::draw::{VAlign, text_box};
-use crate::math::{Fixed16, UFixed16, Vec2};
+use crate::math::{Fixed16, Fixed32, UFixed16, Vec2};
 use crate::rdt::Rdt;
 use crate::record::{PlayerSound, Recording, State, FRAME_DURATION};
 
@@ -131,43 +131,104 @@ impl App {
         self.last_play_tick = Instant::now();
     }
 
-    fn calculate_origin(&mut self, ctx: &Context, handle_input: bool) -> egui::Pos2 {
+    fn click_select(&mut self, pos: Vec2) {
+        if let Some(recording) = &self.active_recording {
+            if let Some(state) = recording.current_state() {
+                for (i, character) in state.characters().iter().enumerate() {
+                    let Some(character) = character.as_ref() else {
+                        continue;
+                    };
+                    
+                    if character.contains_point(pos) {
+                        self.selected_object = SelectedObject::Character(i);
+                        return;
+                    }
+                }
+            }
+        }
+
+        for (i, entity) in self.entities.iter().enumerate() {
+            let object_type: ObjectType = entity.sce().into();
+            if !self.config.should_show(object_type) {
+                continue;
+            }
+
+            if entity.contains_point(pos) {
+                self.selected_object = SelectedObject::Entity(i);
+                return;
+            }
+        }
+        
+        if self.config.should_show(ObjectType::Collider) {
+            for (i, collider) in self.colliders.iter().enumerate() {
+                if collider.contains_point(pos) {
+                    self.selected_object = SelectedObject::Collider(i);
+                    return;
+                }
+            }
+        }
+
+        if self.config.should_show(ObjectType::Floor) {
+            for (i, floor) in self.floors.iter().enumerate() {
+                if floor.contains_point(pos) {
+                    self.selected_object = SelectedObject::Floor(i);
+                    return;
+                }
+            }
+        }
+        
+        self.selected_object = SelectedObject::None;
+    }
+
+    fn handle_input(&mut self, ctx: &Context) {
         let egui_wants_kb_input = ctx.wants_keyboard_input();
-        let viewport = ctx.input(|i| {
-            if handle_input {
-                if i.pointer.primary_down() && !i.pointer.primary_pressed() {
-                    self.pan -= i.pointer.delta();
+        ctx.input(|i| {
+            if i.pointer.middle_down() && !i.pointer.button_pressed(egui::PointerButton::Middle) {
+                self.pan -= i.pointer.delta();
+            }
+            
+            if i.pointer.primary_pressed() {
+                // select object that was clicked on
+                if let Some(click_pos) = i.pointer.interact_pos() {
+                    // TODO: finish coordinate conversion
+                    let viewport = i.screen_rect();
+                    let viewport_center = viewport.center().to_vec2();
+                    let view_relative = (click_pos + self.pan - viewport_center) / self.scale();
+                    let game_pos = Vec2::new(Fixed32::from_f32(view_relative.x) + self.center.0.to_32(), -(Fixed32::from_f32(view_relative.y) + self.center.1.to_32()));
+                    self.click_select(game_pos);
+                }
+            }
+
+            self.config.zoom_scale += i.smooth_scroll_delta.y * 0.05;
+
+            if !egui_wants_kb_input {
+                if i.key_pressed(Key::Space) {
+                    self.toggle_play_recording();
                 }
 
-                self.config.zoom_scale += i.smooth_scroll_delta.y * 0.05;
-
-                if !egui_wants_kb_input {
-                    if i.key_pressed(Key::Space) {
-                        self.toggle_play_recording();
-                    }
-
-                    if self.active_recording.is_some() {
-                        if self.is_recording_playing {
-                            // skip forward or back in chunks
-                            if i.key_pressed(Key::ArrowRight) {
-                                self.move_recording_frame(FAST_FORWARD);
-                            } else if i.key_pressed(Key::ArrowLeft) {
-                                self.move_recording_frame(-FAST_FORWARD);
-                            }
-                        } else {
-                            // frame-by-frame
-                            if i.key_pressed(Key::ArrowRight) {
-                                self.next_recording_frame();
-                            } else if i.key_pressed(Key::ArrowLeft) {
-                                self.prev_recording_frame();
-                            }
+                if self.active_recording.is_some() {
+                    if self.is_recording_playing {
+                        // skip forward or back in chunks
+                        if i.key_pressed(Key::ArrowRight) {
+                            self.move_recording_frame(FAST_FORWARD);
+                        } else if i.key_pressed(Key::ArrowLeft) {
+                            self.move_recording_frame(-FAST_FORWARD);
+                        }
+                    } else {
+                        // frame-by-frame
+                        if i.key_pressed(Key::ArrowRight) {
+                            self.next_recording_frame();
+                        } else if i.key_pressed(Key::ArrowLeft) {
+                            self.prev_recording_frame();
                         }
                     }
                 }
             }
-
-            i.screen_rect()
         });
+    }
+
+    fn calculate_origin(&mut self, ctx: &Context) -> egui::Pos2 {
+        let viewport = ctx.input(egui::InputState::screen_rect);
 
         let window_center = viewport.center();
         egui::Pos2::new(
@@ -746,7 +807,11 @@ impl eframe::App for App {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            let view_center = self.calculate_origin(ctx, ui.ui_contains_pointer());
+            if ui.ui_contains_pointer() {
+                self.handle_input(ctx);
+            }
+            
+            let view_center = self.calculate_origin(ctx);
             let (player_pos, player_interaction_pos, player_floor) = match self.player_positions() {
                 Some((player_pos, player_interaction_pos, player_floor)) => (Some(player_pos), Some(player_interaction_pos), Some(player_floor)),
                 None => (None, None, None),

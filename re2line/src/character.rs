@@ -379,6 +379,10 @@ impl Character {
         self.shape.set_size(size);
         self.outline_shape.set_size(size);
     }
+    
+    pub fn contains_point(&self, point: Vec2) -> bool {
+        self.shape.contains_point(point)
+    }
 
     pub fn label(&self, index: usize) -> String {
         format!(

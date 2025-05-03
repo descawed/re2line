@@ -679,6 +679,7 @@ impl TriangleCollider {
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
         let point = point.into();
 
+        // FIXME: these methods don't work correctly
         match self.type_ {
             TriangleType::BottomLeft => self.contains_point_bottom_left(point),
             TriangleType::BottomRight => self.contains_point_bottom_right(point),
