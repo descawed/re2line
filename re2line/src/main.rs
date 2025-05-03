@@ -21,6 +21,7 @@ fn main() -> eframe::Result {
     //rng::sim::find_runs();
     //rng::sim::simulate_pre_bus_rng();
     //rng::sim::print_gate_shots();
+    //rng::sim::simulate_bus_manip(500, 566);
     //return Ok(());
     
     let args: Vec<String> = env::args().collect();
