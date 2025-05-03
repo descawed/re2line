@@ -6,6 +6,19 @@ use super::*;
 const MIN_FRAMES: usize = 105;
 const MAX_FRAMES: usize = 180;
 const MAX_HANDGUN_DAMAGE: usize = 16;
+const ZOMBIE6_STATE_CHANGE: usize = 76 - 8; // 8 init frames
+const ZOMBIE4_STATE_CHANGE: usize = ZOMBIE6_STATE_CHANGE + 20;
+const ZOMBIE5_STATE_CHANGE: usize = ZOMBIE4_STATE_CHANGE + 50;
+const ZOMBIE3_STATE_CHANGE: usize = ZOMBIE5_STATE_CHANGE + 20;
+const ZOMBIE_INIT_FRAMES: usize = 1;
+const ZOMBIE_RISE_FRAMES: usize = 55;
+
+#[derive(Debug, Clone)]
+struct BusScenario {
+    pub frame_index: usize,
+    pub rng_index: usize,
+    pub shots: (usize, usize),
+}
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -26,41 +39,37 @@ enum Animation {
 impl Animation {
     const fn num_frames(self) -> usize {
         match self {
-            Animation::SharpEnd => 67,
-            Animation::HeadsDown => 88,
-            Animation::Rapid => 38,
+            Animation::SharpEnd => 65,
+            Animation::HeadsDown => 86,
+            Animation::Rapid => 36,
         }
     }
 
     const fn is_spray_frame(self, i: usize) -> bool {
         match self {
-            Animation::SharpEnd => matches!(i, 20 | 45),
-            Animation::HeadsDown => matches!(i, 21 | 45 | 70),
-            Animation::Rapid => matches!(i, 12 | 22),
+            Animation::SharpEnd => matches!(i, 18 | 43),
+            Animation::HeadsDown => matches!(i, 19 | 43 | 68),
+            Animation::Rapid => matches!(i, 10 | 20),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct BusManipScenario {
-    pub zombie3_appearance: Appearance,
-    pub zombie4_appearance: Appearance,
-    pub zombie5_appearance: Appearance,
-    pub zombie6_appearance: Appearance,
-    pub zombie3_animation: Animation,
-    pub zombie4_animation: Animation,
-    pub zombie5_animation: Animation,
-    pub zombie6_animation: Animation,
-    pub zombie6_moan: bool,
-    pub zombie4_moan: bool,
+enum ZombieState {
+    Init,
+    Eating,
+    Rising,
+    Mobile,
 }
 
 #[derive(Debug, Clone)]
 struct Zombie {
     pub appearance: Appearance,
     pub animation: Animation,
+    pub eating_frames: usize,
     pub anim_frames_remaining: usize,
-    pub eating_frames_remaining: usize,
+    pub state_frames_remaining: usize,
+    pub state: ZombieState,
 }
 
 impl Zombie {
@@ -68,16 +77,70 @@ impl Zombie {
         Self {
             appearance,
             animation,
+            eating_frames,
             anim_frames_remaining: animation.num_frames(),
-            eating_frames_remaining: eating_frames,
+            state_frames_remaining: ZOMBIE_INIT_FRAMES,
+            state: ZombieState::Init,
         }
     }
 
-    fn tick(&mut self) {
+    fn tick_animation(&mut self, rng_index: &mut usize) {
         self.anim_frames_remaining -= 1;
         if self.anim_frames_remaining == 0 {
+            self.animation = animation(rng_index);
             self.anim_frames_remaining = self.animation.num_frames();
-            self.animation = animation(&mut 0);
+        }
+        
+        let anim_frame_index = self.animation.num_frames() - self.anim_frames_remaining;
+        if self.animation.is_spray_frame(anim_frame_index) {
+            *rng_index += 1;
+        }
+    }
+    
+    fn try_moan(&mut self, rng_index: &mut usize) {
+        if !bit(*rng_index, 1) {
+            *rng_index += 1;
+            if !bit(*rng_index, 1) {
+                *rng_index += 1;
+            }
+        }
+        
+        *rng_index += 1;
+    }
+
+    fn tick(&mut self, rng_index: &mut usize) {
+        // FIXME: do we need to evaluate the first frame of the next state on the same tick?
+        //  this works for now but might not if we take long enough for a zombie to get into the mobile state
+        match self.state {
+            ZombieState::Init => {
+                if self.state_frames_remaining > 0 {
+                    self.state_frames_remaining -= 1;
+                } else {
+                    self.state = ZombieState::Eating;
+                    self.state_frames_remaining = self.eating_frames;
+                }
+            }
+            ZombieState::Eating => {
+                if self.state_frames_remaining > 0 {
+                    self.state_frames_remaining -= 1;
+                    self.tick_animation(rng_index);
+                } else {
+                    self.state = ZombieState::Rising;
+                    self.state_frames_remaining = ZOMBIE_RISE_FRAMES;
+                    self.try_moan(rng_index);
+                }
+            }
+            ZombieState::Rising => {
+                if self.state_frames_remaining > 0 {
+                    self.state_frames_remaining -= 1;
+                } else {
+                    self.state = ZombieState::Mobile;
+                    // TODO: don't know what to do here yet
+                    self.state_frames_remaining = usize::MAX;
+                    *rng_index += 5;
+                }
+            }
+            ZombieState::Mobile => (),
         }
     }
 }
@@ -87,6 +150,7 @@ struct GameEnvironment {
     pub zombies: [Zombie; 4],
     pub frames_elapsed: usize,
     pub rng_index: usize,
+    pub bus_shots: Vec<BusScenario>,
 }
 
 impl GameEnvironment {
@@ -116,29 +180,43 @@ impl GameEnvironment {
 
         Self {
             zombies: [
-                Zombie::new(zombie3_appearance, zombie3_animation, 0),
-                Zombie::new(zombie4_appearance, zombie4_animation, 0),
-                Zombie::new(zombie5_appearance, zombie5_animation, 0),
-                Zombie::new(zombie6_appearance, zombie6_animation, 0),
+                Zombie::new(zombie3_appearance, zombie3_animation, ZOMBIE3_STATE_CHANGE),
+                Zombie::new(zombie4_appearance, zombie4_animation, ZOMBIE4_STATE_CHANGE),
+                Zombie::new(zombie5_appearance, zombie5_animation, ZOMBIE5_STATE_CHANGE),
+                Zombie::new(zombie6_appearance, zombie6_animation, ZOMBIE6_STATE_CHANGE),
             ],
-            frames_elapsed: 0,
+            frames_elapsed: 6, // 6 frames elapse over the course of choosing appearances and animations
             rng_index: i,
+            bus_shots: Vec::new(),
         }
-    }
-
-    const fn animation(&mut self) -> Animation {
-        animation(&mut self.rng_index)
     }
 
     fn tick(&mut self) {
-        self.frames_elapsed += 1;
+        let start_index = self.rng_index;
         for zombie in &mut self.zombies {
-            zombie.anim_frames_remaining -= 1;
-            if zombie.anim_frames_remaining == 0 {
-                zombie.anim_frames_remaining = zombie.animation.num_frames();
-                zombie.animation = animation(&mut 0);
-            }
+            let mut rng_index = self.rng_index;
+            zombie.tick(&mut rng_index);
+            self.rng_index = rng_index;
         }
+        
+        /*if self.rng_index != start_index {
+            println!("Frame {}: {} rolls", self.frames_elapsed + 2675, self.rng_index - start_index);
+        }*/
+        
+        if self.frames_elapsed >= MIN_FRAMES && self.rng_index != start_index {
+            let bus_shots = get_bus_shots(self.rng_index);
+            self.bus_shots.push(BusScenario {
+                frame_index: self.frames_elapsed,
+                rng_index: self.rng_index,
+                shots: bus_shots,
+            });
+        }
+
+        self.frames_elapsed += 1;
+    }
+    
+    fn is_active(&self) -> bool {
+        self.frames_elapsed < MAX_FRAMES
     }
 }
 
@@ -241,7 +319,7 @@ const fn get_crowd_composition(crowd_rng_index: usize) -> ZombieCrowd {
 pub fn simulate_pre_bus_rng() {
     let mut crowds = HashMap::new();
     
-    for i in 400usize..550usize {
+    for i in 500usize..560usize {
         let crowd = get_crowd_composition(i);
         println!("{}: {:?}", i, crowd);
         *crowds.entry(crowd).or_insert(0usize) += 1;
@@ -373,21 +451,13 @@ pub fn print_gate_shots() {
     }
 }
 
-/*fn simulate_bus_rng(start: usize) -> BusManipScenario {
-    let env = GameEnvironment::new(start);
-    // player is now mobile. we expect the player to take at least 3.5 seconds (105 frames) to reach
-    // the bus.
-
-    BusManipScenario {
-        zombie3_appearance,
-        zombie4_appearance,
-        zombie5_appearance,
-        zombie6_appearance,
-        zombie3_animation,
-        zombie4_animation,
-        zombie5_animation,
-        zombie6_animation,
-        zombie6_moan: false,
-        zombie4_moan: false,
+pub fn simulate_bus_manip(start: usize) {
+    let mut env = GameEnvironment::new(start);
+    while env.is_active() {
+        env.tick();
     }
-}*/
+    
+    for shots in &env.bus_shots {
+        println!("{:?}", shots);
+    }
+}
