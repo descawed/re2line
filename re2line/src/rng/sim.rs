@@ -4,8 +4,10 @@ use std::ops::Range;
 use super::*;
 
 const MIN_FRAMES: usize = 105;
-const MAX_FRAMES: usize = 180;
 const MAX_HANDGUN_DAMAGE: usize = 16;
+const HANDGUN_QUICK_SHOT_FRAMES: usize = 11; // assumes optimal quick shooting
+const MAX_BUS_SHOTS_SAVED: usize = 7 - 2;
+const MAX_FRAMES: usize = MIN_FRAMES + MAX_BUS_SHOTS_SAVED * HANDGUN_QUICK_SHOT_FRAMES;
 const ZOMBIE6_STATE_CHANGE: usize = 76 - 8; // 8 init frames
 const ZOMBIE4_STATE_CHANGE: usize = ZOMBIE6_STATE_CHANGE + 20;
 const ZOMBIE5_STATE_CHANGE: usize = ZOMBIE4_STATE_CHANGE + 50;
@@ -18,6 +20,12 @@ struct BusScenario {
     pub frame_index: usize,
     pub rng_index: usize,
     pub shots: (usize, usize),
+}
+
+impl BusScenario {
+    const fn num_shots(&self) -> usize {
+        self.shots.0 + self.shots.1
+    }
 }
 
 #[repr(u8)]
@@ -34,6 +42,24 @@ enum Animation {
     SharpEnd = 18,
     HeadsDown = 19,
     Rapid = 20,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+struct ZombieCrowd(Appearance, Appearance, Appearance, Appearance, Animation, Animation, Animation, Animation);
+
+#[derive(Debug, Clone)]
+struct BusManipResult {
+    pub crowd_composition: ZombieCrowd,
+    pub expected_shots: (usize, usize),
+    pub manip_start_frame: usize,
+    pub manip_end_frame: usize,
+    pub manipulated_shots: (usize, usize),
+}
+
+impl BusManipResult {
+    const fn frames_saved(&self) -> usize {
+        ((self.expected_shots.0 + self.expected_shots.1) - (self.manipulated_shots.0 + self.manipulated_shots.1)) * HANDGUN_QUICK_SHOT_FRAMES
+    }
 }
 
 impl Animation {
@@ -147,6 +173,7 @@ impl Zombie {
 
 #[derive(Debug)]
 struct GameEnvironment {
+    pub initial_crowd: ZombieCrowd,
     pub zombies: [Zombie; 4],
     pub frames_elapsed: usize,
     pub rng_index: usize,
@@ -179,6 +206,10 @@ impl GameEnvironment {
         let zombie6_animation = animation(&mut i);
 
         Self {
+            initial_crowd: ZombieCrowd(
+                zombie3_appearance, zombie4_appearance, zombie5_appearance, zombie6_appearance,
+                zombie3_animation, zombie4_animation, zombie5_animation, zombie6_animation,
+            ),
             zombies: [
                 Zombie::new(zombie3_appearance, zombie3_animation, ZOMBIE3_STATE_CHANGE),
                 Zombie::new(zombie4_appearance, zombie4_animation, ZOMBIE4_STATE_CHANGE),
@@ -203,7 +234,8 @@ impl GameEnvironment {
             println!("Frame {}: {} rolls", self.frames_elapsed + 2675, self.rng_index - start_index);
         }*/
         
-        if self.frames_elapsed >= MIN_FRAMES && self.rng_index != start_index {
+        // always print the RNG for the first frame in the range even if the index hasn't changed
+        if self.frames_elapsed >= MIN_FRAMES && (self.rng_index != start_index || self.frames_elapsed == MIN_FRAMES) {
             let bus_shots = get_bus_shots(self.rng_index);
             self.bus_shots.push(BusScenario {
                 frame_index: self.frames_elapsed,
@@ -217,6 +249,59 @@ impl GameEnvironment {
     
     fn is_active(&self) -> bool {
         self.frames_elapsed < MAX_FRAMES
+    }
+    
+    fn to_manip_result(mut self) -> BusManipResult {
+        let expected = self.bus_shots.remove(0);
+        let mut manipulated_shots = expected.shots.clone();
+        let mut result_num_shots = expected.num_shots();
+        let mut frames_saved = 0usize;
+        let mut start_frame = expected.frame_index;
+        let mut end_frame = MAX_FRAMES;
+        let mut found_range_end = false;
+        for shots in self.bus_shots {
+            let num_shots = shots.num_shots();
+            if num_shots > result_num_shots {
+                // after setting the current ideal number of shots, the next time the RNG changes to
+                // a higher number of shots, use that as the end of the ideal range
+                if !found_range_end {
+                    end_frame = shots.frame_index - 1;
+                    found_range_end = true;
+                }
+                continue;
+            }
+            
+            if num_shots < result_num_shots {
+                let wait_frames = shots.frame_index - expected.frame_index;
+                let shot_frames_saved = (expected.num_shots() - num_shots) * HANDGUN_QUICK_SHOT_FRAMES;
+                if shot_frames_saved > wait_frames {
+                    let total_frames_saved = shot_frames_saved - wait_frames;
+                    if total_frames_saved > frames_saved {
+                        frames_saved = total_frames_saved;
+                        start_frame = shots.frame_index;
+                        result_num_shots = num_shots;
+                        manipulated_shots = shots.shots;
+                        found_range_end = false;
+                    }
+                }
+            }
+        }
+
+        let mut result = BusManipResult {
+            crowd_composition: self.initial_crowd,
+            expected_shots: expected.shots,
+            manip_start_frame: start_frame,
+            manip_end_frame: end_frame,
+            manipulated_shots,
+        };
+        
+        // cap the end frame at the last frame where we would still be saving time
+        let max_end_frame = result.manip_start_frame + result.frames_saved();
+        if result.manip_end_frame > max_end_frame {
+            result.manip_end_frame = max_end_frame;
+        }
+        
+        result
     }
 }
 
@@ -282,9 +367,6 @@ pub fn simulate_bus_rng() {
         println!("{}: {:?}", i, get_bus_shots(i));
     }
 }
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-struct ZombieCrowd(Appearance, Appearance, Appearance, Appearance, Animation, Animation, Animation, Animation);
 
 const fn get_crowd_composition(crowd_rng_index: usize) -> ZombieCrowd {
     let mut i = crowd_rng_index;
@@ -451,13 +533,18 @@ pub fn print_gate_shots() {
     }
 }
 
-pub fn simulate_bus_manip(start: usize) {
+fn simulate_one_bus_manip(start: usize) -> BusManipResult {
     let mut env = GameEnvironment::new(start);
     while env.is_active() {
         env.tick();
     }
     
-    for shots in &env.bus_shots {
-        println!("{:?}", shots);
+    env.to_manip_result()
+}
+
+pub fn simulate_bus_manip(start: usize, end: usize) {
+    for i in start..end {
+        let result = simulate_one_bus_manip(i);
+        println!("{}: {:?}; frames saved: {}", i, result, result.frames_saved());
     }
 }
