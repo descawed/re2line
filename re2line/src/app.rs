@@ -190,7 +190,6 @@ impl App {
             if i.pointer.primary_pressed() {
                 // select object that was clicked on
                 if let Some(click_pos) = i.pointer.interact_pos() {
-                    // TODO: finish coordinate conversion
                     let viewport = i.screen_rect();
                     let viewport_center = viewport.center().to_vec2();
                     let view_relative = (click_pos + self.pan - viewport_center) / self.scale();
