@@ -214,7 +214,8 @@ impl DiamondCollider {
         let center_x = (self.size.x >> 1) + self.pos.x;
         let center_z = (self.size.z >> 1) + self.pos.z;
 
-        let quadrant = (((point.z - center_z) >> 0x1e).0 & 2) | ((point.x - center_x) >> 0x1f).0;
+        let quadrant = (((point.z - center_z) >> 0x1e).0 & 2) | (((point.x - center_x) >> 0x1f).0 & 1);
+        // FIXME: these don't work correctly
         match quadrant {
             0 => self.is_point_in_quadrant0(point),
             1 => self.is_point_in_quadrant1(point),
