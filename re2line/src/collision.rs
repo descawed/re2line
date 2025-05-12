@@ -136,7 +136,7 @@ impl RectCollider {
         match self.capsule_type {
             CapsuleType::Horizontal => {
                 let z_radius = self.size.z >> 1;
-                let side = (((point.x - (self.pos.x - z_radius) + self.size.x).0 as u32 & 0xbfffffff)
+                let side = (((point.x - (self.pos.x - z_radius + self.size.x)).0 as u32 & 0xbfffffff)
                     | ((point.x - (self.pos.x + z_radius)) >> 1).0 as u32) >> 0x1e;
                 match side {
                     0 => {
@@ -149,7 +149,7 @@ impl RectCollider {
             }
             CapsuleType::Vertical => {
                 let x_radius = self.size.x >> 1;
-                let side = (((point.z - (self.pos.z - x_radius) + self.size.z).0 as u32 & 0xbfffffff)
+                let side = (((point.z - (self.pos.z - x_radius + self.size.z)).0 as u32 & 0xbfffffff)
                     | ((point.z - (self.pos.z + x_radius)) >> 1).0 as u32) >> 0x1e;
                 match side {
                     0 => {
