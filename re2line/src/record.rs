@@ -14,6 +14,14 @@ use crate::rng::{RNG_SEQUENCE, ROLL_DESCRIPTIONS};
 
 pub const FRAME_DURATION: Duration = Duration::from_micros(1000000 / 30);
 
+const KEY_FORWARD: u32 = 0x01;
+const KEY_RIGHT: u32 = 0x02;
+const KEY_BACK: u32 = 0x04;
+const KEY_LEFT: u32 = 0x08;
+const KEY_ACTION: u32 = 0x80;
+const KEY_AIM: u32 = 0x100;
+const KEY_RUN_CANCEL: u32 = 0x200;
+
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct SoundEnvironment(u8);
@@ -68,6 +76,17 @@ pub struct RoomStats {
 }
 
 #[derive(Debug, Clone)]
+pub struct InputState {
+    pub is_forward_pressed: bool,
+    pub is_backward_pressed: bool,
+    pub is_left_pressed: bool,
+    pub is_right_pressed: bool,
+    pub is_action_pressed: bool,
+    pub is_run_cancel_pressed: bool,
+    pub is_aim_pressed: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct State {
     frame_index: usize,
     room_index: usize,
@@ -75,6 +94,7 @@ pub struct State {
     sounds: SoundEnvironment,
     characters: [Option<Character>; NUM_CHARACTERS],
     rng_value: u16,
+    input_flags: u32,
 }
 
 impl State {
@@ -88,6 +108,7 @@ impl State {
             sounds: SoundEnvironment::new(0),
             characters: [const { None }; NUM_CHARACTERS],
             rng_value: 0,
+            input_flags: 0,
         }
     }
 
@@ -95,6 +116,7 @@ impl State {
         let mut room_id = self.room_id;
         let mut sounds = self.sounds;
         let mut rng_value = self.rng_value;
+        let mut input_flags = self.input_flags;
         for change in &record.game_changes {
             match change {
                 GameField::StageIndex(stage_index) => room_id.stage = *stage_index,
@@ -102,6 +124,7 @@ impl State {
                 GameField::Scenario(scenario) => room_id.player = *scenario,
                 GameField::SoundFlags(flags) => sounds = SoundEnvironment::new(*flags),
                 GameField::Rng(rng) => rng_value = *rng,
+                GameField::KeysDown(flags) => input_flags = *flags,
                 _ => (),
             }
         }
@@ -173,6 +196,7 @@ impl State {
             sounds,
             characters,
             rng_value,
+            input_flags,
         }
     }
 
@@ -203,6 +227,18 @@ impl State {
             pos: player.center,
             sounds: self.sounds,
         })
+    }
+    
+    pub const fn input_state(&self) -> InputState {
+        InputState {
+            is_forward_pressed: self.input_flags & KEY_FORWARD != 0,
+            is_backward_pressed: self.input_flags & KEY_BACK != 0,
+            is_left_pressed: self.input_flags & KEY_LEFT != 0,
+            is_right_pressed: self.input_flags & KEY_RIGHT != 0,
+            is_action_pressed: self.input_flags & KEY_ACTION != 0,
+            is_run_cancel_pressed: self.input_flags & KEY_RUN_CANCEL != 0,
+            is_aim_pressed: self.input_flags & KEY_AIM != 0,
+        }
     }
 }
 

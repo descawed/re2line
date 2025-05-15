@@ -32,6 +32,13 @@ const DETAIL_MAX_ROWS: usize = 4;
 const FAST_FORWARD: isize = 30;
 const MAX_SOUND_AGE: usize = 100;
 
+const INPUT_MARGIN: f32 = 2.0;
+const INPUT_SIZE: f32 = 30.0;
+const INPUT_OFFSET: f32 = INPUT_SIZE + INPUT_MARGIN;
+
+const TEXT_BOX_DARK: Color32 = Color32::from_rgb(0x30, 0x30, 0x30);
+const TEXT_BOX_LIGHT: Color32 = Color32::from_rgb(0xe0, 0xe0, 0xe0);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SelectedObject {
     None,
@@ -714,6 +721,16 @@ impl App {
 
         egui::Shape::Vec(vec![bg, text])
     }
+
+    fn draw_key(&mut self, ui: &mut Ui, text: &str, pos: egui::Pos2, is_pressed: bool) {
+        let (bg_color, text_color) = if is_pressed {
+            (TEXT_BOX_LIGHT, TEXT_BOX_DARK)
+        } else {
+            (TEXT_BOX_DARK, TEXT_BOX_LIGHT)
+        };
+        let shape = text_box(text, pos, VAlign::Center, bg_color, text_color, ui);
+        ui.painter().add(egui::Shape::Vec(vec![shape.0, shape.1]));
+    }
 }
 
 impl eframe::App for App {
@@ -924,9 +941,9 @@ impl eframe::App for App {
                     let sound_draw_params = DrawParams {
                         origin: view_center,
                         scale: self.config.zoom_scale,
-                        fill_color: Color32::from_rgb(0x30, 0x30, 0x30),
+                        fill_color: TEXT_BOX_DARK,
                         stroke: Stroke {
-                            color: Color32::from_rgb(0xe0, 0xe0, 0xe0),
+                            color: TEXT_BOX_LIGHT,
                             width: 1.0,
                         },
                         stroke_kind: StrokeKind::Middle,
@@ -961,6 +978,36 @@ impl eframe::App for App {
                     let object_type: ObjectType = character.type_().into();
                     let char_draw_params = self.config.get_draw_params(object_type, view_center);
                     ui.painter().add(character.gui_shape(&char_draw_params, ui, i, settings.show_tooltip));
+                }
+            }
+
+            // show player inputs in top right
+            if let Some(recording) = &self.active_recording {
+                if let Some(state) = recording.current_state() {
+                    let input_state = state.input_state();
+                    let viewport = ctx.input(egui::InputState::screen_rect);
+                    let input_origin = viewport.right_top();
+
+                    let forward_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 2.0, INPUT_SIZE + INPUT_MARGIN * 2.0);
+                    self.draw_key(ui, "Fwd", forward_pos, input_state.is_forward_pressed);
+
+                    let right_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET, INPUT_SIZE * 2.0 + INPUT_MARGIN * 3.0);
+                    self.draw_key(ui, "Rgt", right_pos, input_state.is_right_pressed);
+
+                    let back_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 2.0, INPUT_SIZE * 2.0 + INPUT_MARGIN * 3.0);
+                    self.draw_key(ui, "Bck", back_pos, input_state.is_backward_pressed);
+
+                    let left_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 3.0, INPUT_SIZE * 2.0 + INPUT_MARGIN * 3.0);
+                    self.draw_key(ui, "Lft", left_pos, input_state.is_left_pressed);
+                    
+                    let action_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 3.0, INPUT_SIZE * 3.0 + INPUT_MARGIN * 4.0);
+                    self.draw_key(ui, "Act", action_pos, input_state.is_action_pressed);
+                    
+                    let run_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 2.0, INPUT_SIZE * 3.0 + INPUT_MARGIN * 4.0);
+                    self.draw_key(ui, "Run", run_pos, input_state.is_run_cancel_pressed);
+                    
+                    let aim_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET, INPUT_SIZE * 3.0 + INPUT_MARGIN * 4.0);
+                    self.draw_key(ui, "Aim", aim_pos, input_state.is_aim_pressed);
                 }
             }
         });

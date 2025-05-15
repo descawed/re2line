@@ -61,7 +61,8 @@ pub fn get_path_for_semicircle(center: Pos2, radius: f32, facing_angle: f32, hal
     path
 }
 
-pub fn text_box(text: String, pos: Pos2, valign: VAlign, bg_color: Color32, text_color: Color32, ui: &Ui) -> (Shape, Shape) {
+pub fn text_box<T: Into<String>>(text: T, pos: Pos2, valign: VAlign, bg_color: Color32, text_color: Color32, ui: &Ui) -> (Shape, Shape) {
+    let text = text.into();
     let font_id = TextStyle::Body.resolve(&*ui.style());
 
     let text_shape = ui.fonts(|fonts| {
