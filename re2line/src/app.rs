@@ -722,7 +722,7 @@ impl App {
         egui::Shape::Vec(vec![bg, text])
     }
 
-    fn draw_key(&mut self, ui: &mut Ui, text: &str, pos: egui::Pos2, is_pressed: bool) {
+    fn draw_key(ui: &mut Ui, text: &str, pos: egui::Pos2, is_pressed: bool) {
         let (bg_color, text_color) = if is_pressed {
             (TEXT_BOX_LIGHT, TEXT_BOX_DARK)
         } else {
@@ -989,25 +989,25 @@ impl eframe::App for App {
                     let input_origin = viewport.right_top();
 
                     let forward_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 2.0, INPUT_SIZE + INPUT_MARGIN * 2.0);
-                    self.draw_key(ui, "Fwd", forward_pos, input_state.is_forward_pressed);
+                    Self::draw_key(ui, "Fwd", forward_pos, input_state.is_forward_pressed);
 
                     let right_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET, INPUT_SIZE * 2.0 + INPUT_MARGIN * 3.0);
-                    self.draw_key(ui, "Rgt", right_pos, input_state.is_right_pressed);
+                    Self::draw_key(ui, "Rgt", right_pos, input_state.is_right_pressed);
 
                     let back_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 2.0, INPUT_SIZE * 2.0 + INPUT_MARGIN * 3.0);
-                    self.draw_key(ui, "Bck", back_pos, input_state.is_backward_pressed);
+                    Self::draw_key(ui, "Bck", back_pos, input_state.is_backward_pressed);
 
                     let left_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 3.0, INPUT_SIZE * 2.0 + INPUT_MARGIN * 3.0);
-                    self.draw_key(ui, "Lft", left_pos, input_state.is_left_pressed);
+                    Self::draw_key(ui, "Lft", left_pos, input_state.is_left_pressed);
                     
                     let action_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 3.0, INPUT_SIZE * 3.0 + INPUT_MARGIN * 4.0);
-                    self.draw_key(ui, "Act", action_pos, input_state.is_action_pressed);
+                    Self::draw_key(ui, "Act", action_pos, input_state.is_action_pressed);
                     
                     let run_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 2.0, INPUT_SIZE * 3.0 + INPUT_MARGIN * 4.0);
-                    self.draw_key(ui, "Run", run_pos, input_state.is_run_cancel_pressed);
+                    Self::draw_key(ui, "Run", run_pos, input_state.is_run_cancel_pressed);
                     
                     let aim_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET, INPUT_SIZE * 3.0 + INPUT_MARGIN * 4.0);
-                    self.draw_key(ui, "Aim", aim_pos, input_state.is_aim_pressed);
+                    Self::draw_key(ui, "Aim", aim_pos, input_state.is_aim_pressed);
                 }
             }
         });
