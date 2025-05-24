@@ -381,6 +381,29 @@ impl Fixed32 {
     pub const fn cos(&self) -> Self {
         Self(self.0 + 0x400).sin()
     }
+    
+    pub fn atan(&self) -> Self {
+        // note: this is NOT perfectly accurate to the game because the game uses the x87 fpatan
+        // instruction, which is not available on x64. however, the difference should be
+        // extremely small, and emulating the fpatan instruction would be a lot of work.
+        let atan = (self.0 as f64 / 4096.0).atan();
+        // the game multiplies by the reciprocal of 3.14, so we'll use that value rather than
+        // the PI constant
+        let angle = (atan * 2048.0) / 3.14;
+        Self(angle as i32)
+    }
+    
+    pub const fn is_zero(&self) -> bool {
+        self.0 == 0
+    }
+    
+    pub const fn is_positive(&self) -> bool {
+        self.0 > 0
+    }
+    
+    pub const fn is_negative(&self) -> bool {
+        self.0 < 0
+    }
 }
 
 impl std::convert::From<f32> for Fixed32 {
@@ -547,11 +570,23 @@ impl Vec2 {
 
         let out_x = m02 * z + m00 * x;
         let out_z = m22 * z + m20 * x;
-        
+
         Self {
             x: Fixed32(out_x >> 12),
             z: Fixed32(out_z >> 12),
         }
+    }
+
+    pub fn angle_between(&self, other: &Self) -> Fixed32 {
+        let diff = *other - *self;
+
+        Fixed32(if !diff.x.is_zero() {
+            let ratio = diff.z / diff.x;
+            let angle = ratio.atan();
+            -(angle.0 + if diff.x.is_negative() { 0x800 } else { 0 }) & 0xfff
+        } else {
+            0x400 + if diff.z.is_positive() { 0x800 } else { 0 }
+        })
     }
 
     pub fn saturating_sub(&self, rhs: impl Into<Self>) -> Self {
@@ -672,5 +707,13 @@ mod tests {
         assert_eq!(Fixed32(0x400).sin(), Fixed32(0x1000));
         assert_eq!(Fixed32(0x13db).sin(), Fixed32(0xff9));
         assert_eq!(Fixed32(0xfdb).sin(), Fixed32(-232));
+    }
+    
+    #[test]
+    fn test_angle_between_points() {
+        let zombie_pos = Vec2::new(-26346, -25364);
+        let player_pos = Vec2::new(-25194, -24143);
+        let angle = zombie_pos.angle_between(&player_pos);
+        assert_eq!(angle, Fixed32(3565));
     }
 }

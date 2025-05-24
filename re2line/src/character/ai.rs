@@ -1,4 +1,4 @@
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::PI;
 
 use egui::{Color32, Shape, Stroke};
 use epaint::{CircleShape, ColorMode, PathShape, PathStroke};
@@ -116,24 +116,17 @@ impl AiCone {
     ///
     /// Note that AiCone does not keep track of its center, so the given point should be relative
     /// to the center of the cone.
-    pub fn is_point_in_cone(&self, point: Vec2, facing_angle: f32) -> bool {
+    pub fn is_point_in_cone(&self, point: Vec2, facing_angle: Fixed32) -> bool {
         if point.len() > self.radius.to_32() {
             return false;
         }
 
-        let offset = self.offset_angle.to_radians();
-        let x = point.x.to_f32();
-        let z = point.z.to_f32();
-        let angle = TAU - z.atan2(x);
-        let angle = angle - (facing_angle + offset);
-        let normalized = (angle + PI).rem_euclid(TAU) - PI;
-
-        let is_inside = normalized.abs() <= self.half_angle.to_radians().abs();
-        if self.inverted {
-            !is_inside
-        } else {
-            is_inside
-        }
+        let threshold = self.half_angle.to_32();
+        let angle_to_point = Vec2::zero().angle_between(&point);
+        let angle = (angle_to_point - facing_angle + threshold).0 & 0xfff;
+        // the & 0xffff here should be redundant since we just did & 0xfff, but this is what the
+        // game does, so we'll do it too.
+        ((angle & 0xffff) < threshold.0 * 2) ^ self.inverted
     }
 }
 

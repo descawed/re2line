@@ -467,16 +467,15 @@ impl Character {
             draw_params.origin = body_center;
             draw_params.fill_color = ai_cone.behavior_type.default_color();
 
-            let facing_angle = self.angle.to_radians();
             if let Some(player_pos) = player_pos {
-                if ai_cone.is_point_in_cone(player_pos.saturating_sub(self.center), facing_angle) {
+                if ai_cone.is_point_in_cone(player_pos.saturating_sub(self.center), self.angle) {
                     // add an outline to the shape when the player is inside
                     draw_params.stroke.width = 3.0;
                     draw_params.stroke.color = Color32::from_rgb(0x42, 0x03, 0x03);
                 }
             }
 
-            shapes.push(ai_cone.gui_shape(facing_angle, draw_params));
+            shapes.push(ai_cone.gui_shape(self.angle.to_radians(), draw_params));
         }
 
         Shape::Vec(shapes)
