@@ -98,11 +98,22 @@ impl CapsuleType {
     }
 }
 
+// these special types have additional 3D properties that we don't currently model, so we treat
+// them as simple rects, but we do want to at least keep track of the fact that they aren't basic
+// rects
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum SpecialRectType {
+    None,
+    Ramp,
+    HalfPipe,
+}
+
 #[derive(Debug, Clone)]
 pub struct RectCollider {
     pos: Vec2,
     size: Vec2,
     capsule_type: CapsuleType,
+    special_rect_type: SpecialRectType,
 }
 
 impl RectCollider {
@@ -111,7 +122,13 @@ impl RectCollider {
             pos: Vec2 { x, z },
             size: Vec2 { x: width, z: height },
             capsule_type,
+            special_rect_type: SpecialRectType::None,
         }
+    }
+    
+    pub const fn with_special_rect_type(mut self, special_rect_type: SpecialRectType) -> Self {
+        self.special_rect_type = special_rect_type;
+        self
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
@@ -785,7 +802,11 @@ impl Collider {
         groups.push((String::from("Type"), vec![String::from(match self {
             Self::Rect(rect) => {
                 match rect.capsule_type {
-                    CapsuleType::None => "Rectangle",
+                    CapsuleType::None => match rect.special_rect_type {
+                        SpecialRectType::None => "Rectangle",
+                        SpecialRectType::Ramp => "Ramp",
+                        SpecialRectType::HalfPipe => "Half pipe",
+                    },
                     CapsuleType::Horizontal => "Capsule (horizontal)",
                     CapsuleType::Vertical => "Capsule (vertical)",
                 }

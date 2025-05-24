@@ -5,7 +5,6 @@ use binrw::{binrw, BinReaderExt};
 
 use crate::aot::Entity;
 use crate::collision;
-use crate::collision::CapsuleType;
 use crate::math::{Fixed16, UFixed16};
 use crate::script::Instruction;
 
@@ -20,6 +19,8 @@ enum CollisionShape {
     Circle,
     HorizontalCapsule,
     VerticalCapsule,
+    Ramp,
+    HalfPipe,
 }
 
 impl TryFrom<u32> for CollisionShape {
@@ -27,8 +28,7 @@ impl TryFrom<u32> for CollisionShape {
 
     fn try_from(value: u32) -> std::result::Result<Self, Self::Error> {
         match value {
-            // FIXME: 11 and 13 are not rectangles
-            0 | 9 | 10 | 11 | 12 | 13 | 14 | 15 => Ok(Self::Rectangle),
+            0 | 9 | 10 | 12 | 14 | 15 => Ok(Self::Rectangle),
             1 => Ok(Self::TriangleTopRight),
             2 => Ok(Self::TriangleTopLeft),
             3 => Ok(Self::TriangleBottomRight),
@@ -37,6 +37,8 @@ impl TryFrom<u32> for CollisionShape {
             6 => Ok(Self::Circle),
             7 => Ok(Self::HorizontalCapsule),
             8 => Ok(Self::VerticalCapsule),
+            11 => Ok(Self::Ramp),
+            13 => Ok(Self::HalfPipe),
             _ => Err(anyhow!("Unknown collision shape type {}", value)),
         }
     }
@@ -313,7 +315,7 @@ impl Rdt {
         let mut floors = Vec::with_capacity(self.floors.len());
 
         for floor in &self.floors {
-            floors.push(collision::Collider::Rect(collision::RectCollider::new(floor.x.to_32(), floor.z.to_32(), floor.width.to_32(), floor.height.to_32(), CapsuleType::None)));
+            floors.push(collision::Collider::Rect(collision::RectCollider::new(floor.x.to_32(), floor.z.to_32(), floor.width.to_32(), floor.height.to_32(), collision::CapsuleType::None)));
         }
 
         floors
@@ -345,6 +347,12 @@ impl Rdt {
                 CollisionShape::Circle => collision::Collider::Ellipse(collision::EllipseCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32())),
                 CollisionShape::HorizontalCapsule => collision::Collider::Rect(collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), collision::CapsuleType::Horizontal)),
                 CollisionShape::VerticalCapsule => collision::Collider::Rect(collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), collision::CapsuleType::Vertical)),
+                CollisionShape::Ramp => collision::Collider::Rect(
+                    collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), collision::CapsuleType::None).with_special_rect_type(collision::SpecialRectType::Ramp),
+                ),
+                CollisionShape::HalfPipe => collision::Collider::Rect(
+                    collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), collision::CapsuleType::None).with_special_rect_type(collision::SpecialRectType::HalfPipe),
+                ),
             });
         }
 
