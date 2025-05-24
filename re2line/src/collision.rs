@@ -215,7 +215,6 @@ impl DiamondCollider {
         let center_z = (self.size.z >> 1) + self.pos.z;
 
         let quadrant = (((point.z - center_z) >> 0x1e).0 & 2) | (((point.x - center_x) >> 0x1f).0 & 1);
-        // FIXME: these don't work correctly
         match quadrant {
             0 => self.is_point_in_quadrant0(point),
             1 => self.is_point_in_quadrant1(point),
@@ -243,7 +242,8 @@ impl DiamondCollider {
 
         let term1 = (x_diff2 * z_diff1) / x_diff1;
 
-        if term1 <= z_diff2 {
+        term1 > z_diff2
+        /*if term1 <= z_diff2 {
             return false;
         }
 
@@ -269,7 +269,7 @@ impl DiamondCollider {
             }
         }
 
-        false
+        false*/
     }
 
     const fn is_point_in_quadrant1(&self, point: Vec2) -> bool {
@@ -291,7 +291,8 @@ impl DiamondCollider {
 
         let term1 = (x_diff2 * z_diff1) / x_diff1;
 
-        if term1 <= z_diff2 {
+        term1 > z_diff2
+        /*if term1 <= z_diff2 {
             return false;
         }
 
@@ -317,7 +318,7 @@ impl DiamondCollider {
             }
         }
 
-        false
+        false*/
     }
 
     const fn is_point_in_quadrant2(&self, point: Vec2) -> bool {
@@ -338,8 +339,9 @@ impl DiamondCollider {
         let z_diff2 = pz - z;
 
         let term1 = (x_diff2 * z_diff1) / x_diff1;
-
-        if z_diff2 <= term1 {
+        
+        z_diff2 > term1
+        /*if z_diff2 <= term1 {
             return false;
         }
 
@@ -365,7 +367,7 @@ impl DiamondCollider {
             }
         }
 
-        false
+        false*/
     }
 
     const fn is_point_in_quadrant3(&self, point: Vec2) -> bool {
@@ -386,7 +388,8 @@ impl DiamondCollider {
 
         let term1 = (x_diff2 * z_diff1) / x_diff1;
 
-        if z_diff2 <= term1 {
+        z_diff2 > term1
+        /*if z_diff2 <= term1 {
             return false;
         }
 
@@ -414,7 +417,7 @@ impl DiamondCollider {
             }
         }
 
-        false
+        false*/
     }
 }
 
