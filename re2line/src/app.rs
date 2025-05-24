@@ -102,6 +102,7 @@ pub struct App {
     is_recording_playing: bool,
     last_play_tick: Instant,
     character_settings: HashMap<(RoomId, CharacterId, usize), CharacterSettings>,
+    pointer_game_pos: Option<Vec2>,
 }
 
 impl App {
@@ -122,6 +123,7 @@ impl App {
             is_recording_playing: false,
             last_play_tick: Instant::now(),
             character_settings: HashMap::new(),
+            pointer_game_pos: None,
         })
     }
 
@@ -186,6 +188,21 @@ impl App {
         
         self.selected_object = SelectedObject::None;
     }
+    
+    fn screen_pos_to_game_pos(&self, pos: egui::Pos2, viewport: egui::Rect) -> Vec2 {
+        let viewport_center = viewport.center().to_vec2();
+        let view_relative = (pos + self.pan - viewport_center) / self.scale();
+        Vec2::new(Fixed32::from_f32(view_relative.x) + self.center.0.to_32(), -(Fixed32::from_f32(view_relative.y) + self.center.1.to_32()))
+    }
+    
+    fn set_pointer_game_pos(&mut self, pos: Option<egui::Pos2>, viewport: egui::Rect) {
+        let Some(pos) = pos else {
+            self.pointer_game_pos = None;
+            return;
+        };
+        
+        self.pointer_game_pos = Some(self.screen_pos_to_game_pos(pos, viewport));
+    }
 
     fn handle_input(&mut self, ctx: &Context) {
         let egui_wants_kb_input = ctx.wants_keyboard_input();
@@ -194,13 +211,16 @@ impl App {
                 self.pan -= i.pointer.delta();
             }
             
+            let viewport = i.screen_rect();
+            self.set_pointer_game_pos(i.pointer.latest_pos(), viewport);
+            
             if i.pointer.primary_pressed() {
                 // select object that was clicked on
-                if let Some(click_pos) = i.pointer.interact_pos() {
-                    let viewport = i.screen_rect();
-                    let viewport_center = viewport.center().to_vec2();
-                    let view_relative = (click_pos + self.pan - viewport_center) / self.scale();
-                    let game_pos = Vec2::new(Fixed32::from_f32(view_relative.x) + self.center.0.to_32(), -(Fixed32::from_f32(view_relative.y) + self.center.1.to_32()));
+                if self.pointer_game_pos.is_none() {
+                    // if we didn't find the pointer pos from latest_pos(), try again with interact_pos()
+                    self.set_pointer_game_pos(i.pointer.interact_pos(), viewport);
+                }
+                if let Some(game_pos) = self.pointer_game_pos {
                     self.click_select(game_pos);
                 }
             }
