@@ -9,7 +9,7 @@ use crate::math::{Fixed16, UFixed16, Fixed32, Vec2};
 mod ai;
 use ai::*;
 
-const INTERACTION_DISTANCE: UFixed16 = UFixed16(620);
+const INTERACTION_DISTANCE: Fixed32 = Fixed32(620);
 
 const ARROW_HEAD_HEIGHT: f32 = 6.0;
 const ARROW_HEAD_WIDTH: f32 = 6.0;
@@ -349,16 +349,14 @@ impl Character {
     }
 
     pub fn gui_interaction_point(&self, draw_params: &DrawParams) -> Pos2 {
-        let interaction_vec = egui::Vec2::angled(self.angle.to_radians()) * INTERACTION_DISTANCE.to_f32() * draw_params.scale;
-        let center_point = Pos2::new(self.center.x.to_f32() * draw_params.scale, -self.center.z.to_f32() * draw_params.scale);
-        (center_point - draw_params.origin.to_vec2()) + interaction_vec
+        let interaction_point = self.interaction_point();
+        let (x, y, _, _) = draw_params.transform(interaction_point.x, interaction_point.z, 0, 0);
+        Pos2::new(x, y)
     }
 
     pub fn interaction_point(&self) -> Vec2 {
-        let interaction_vec = egui::Vec2::angled(self.angle.to_radians()) * INTERACTION_DISTANCE.to_f32();
-        let center_point = Pos2::new(self.center.x.to_f32(), -self.center.z.to_f32());
-        let interaction_point = center_point + interaction_vec;
-        Vec2::new(interaction_point.x, -interaction_point.y)
+        let interaction_vec = Vec2::new(INTERACTION_DISTANCE, 0).rotate_y(self.angle);
+        self.center + interaction_vec
     }
 
     pub fn set_pos(&mut self, x: impl Into<Fixed32>, z: impl Into<Fixed32>) {

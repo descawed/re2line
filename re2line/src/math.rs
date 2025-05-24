@@ -531,6 +531,29 @@ impl Vec2 {
         Fixed32(sqrt(sum) as i32)
     }
 
+    pub const fn rotate_y(&self, angle: Fixed32) -> Self {
+        // this is the same matrix math used by the game but with extra steps that aren't relevant
+        // to a rotation about the y-axis stripped out
+        let x = self.x.0;
+        let z = self.z.0;
+
+        let cos_angle = angle.cos().0;
+        let sin_angle = angle.sin().0;
+
+        let m00 = cos_angle;
+        let m02 = sin_angle;
+        let m20 = -sin_angle;
+        let m22 = cos_angle;
+
+        let out_x = m02 * z + m00 * x;
+        let out_z = m22 * z + m20 * x;
+        
+        Self {
+            x: Fixed32(out_x >> 12),
+            z: Fixed32(out_z >> 12),
+        }
+    }
+
     pub fn saturating_sub(&self, rhs: impl Into<Self>) -> Self {
         let rhs = rhs.into();
         Self {
