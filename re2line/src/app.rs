@@ -839,6 +839,12 @@ impl eframe::App for App {
                 }
 
                 self.object_details(ui);
+                
+                ui.separator();
+                
+                if let Some(pos) = self.pointer_game_pos {
+                    ui.label(format!("X: {}, Z: {}", pos.x, pos.z));
+                }
             });
         });
 
