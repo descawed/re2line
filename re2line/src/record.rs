@@ -433,4 +433,24 @@ impl Recording {
             rng_position: RNG_SEQUENCE.iter().position(|r| *r == (self.states[0].rng_value & 0x7fff)).unwrap_or(0),
         }
     }
+    
+    pub fn get_path_for_character(&self, index: usize) -> Option<CharacterPath> {
+        let character = self.current_state()?.characters().get(index)?.as_ref()?;
+        let current_index = self.index - self.range.start;
+        let mut start_index = current_index;
+        while start_index > 0 && self.states[start_index - 1].characters()[index].as_ref().map(|c| c.id) == Some(character.id) {
+            start_index -= 1;
+        }
+        
+        let mut points = Vec::with_capacity(current_index - start_index + 1);
+        for i in start_index..=current_index {
+            let Some(state_char) = self.states[i].characters()[index].as_ref() else {
+                continue;
+            };
+            
+            points.push(state_char.center);
+        }
+        
+        Some(CharacterPath::new(points, character.id, index))
+    }
 }

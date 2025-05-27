@@ -132,6 +132,7 @@ impl BrowserTab {
 struct CharacterSettings {
     pub show_tooltip: bool,
     pub show_ai: bool,
+    pub show_path: bool,
 }
 
 impl Default for CharacterSettings {
@@ -139,6 +140,7 @@ impl Default for CharacterSettings {
         Self {
             show_tooltip: true,
             show_ai: true,
+            show_path: false,
         }
     }
 }
@@ -375,6 +377,7 @@ impl App {
         self.floors.set_objects(rdt.get_floors());
         self.pan = egui::Vec2::ZERO;
         self.selected_object = SelectedObject::None;
+        self.hover_object = SelectedObject::None;
         self.config.last_rdt = Some(id);
         self.need_title_update = true;
     }
@@ -756,6 +759,7 @@ impl App {
                             ui.label(egui::RichText::new("Display").strong());
                             ui.checkbox(&mut settings.show_tooltip, "Show tooltip");
                             ui.checkbox(&mut settings.show_ai, "Show AI");
+                            ui.checkbox(&mut settings.show_path, "Show path");
                         });
                     }
                 }
@@ -1038,6 +1042,19 @@ impl eframe::App for App {
                             ui.draw_game_object(ai_zone, &ai_draw_params, state);
                         }
                     }
+                }
+            }
+            
+            // also draw paths before characters so the paths are under the characters
+            for (_, character) in self.characters.visible_objects(&self.config) {
+                if !self.get_character_settings(character.index()).map(|s| s.show_path).unwrap_or(false) {
+                    continue;
+                }
+                
+                if let Some(path) = self.active_recording.as_ref().and_then(|r| r.get_path_for_character(character.index())) {
+                    let mut path_draw_params = self.config.get_draw_params(path.object_type(), view_center);
+                    path_draw_params.stroke.width = character.size.x * self.config.zoom_scale * 2.0;
+                    ui.draw_game_object(&path, &path_draw_params, state);
                 }
             }
 

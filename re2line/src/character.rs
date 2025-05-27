@@ -18,6 +18,9 @@ const ARROW_SHAFT_WIDTH: f32 = 1.5;
 const MOTION_PROJECTION_LENGTH: f32 = 0.25;
 const POINT_RADIUS: f32 = 3.0;
 
+const SLOW_COLOR: Color32 = Color32::from_rgba_premultiplied(255, 0, 0, 255);
+const FAST_COLOR: Color32 = Color32::from_rgba_premultiplied(0, 255, 0, 255);
+
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum CharacterType {
     Player,
@@ -539,6 +542,81 @@ impl GameObject for Character {
             shapes.push(interaction_point);
         }
 
+        Shape::Vec(shapes)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CharacterPath {
+    pub points: Vec<Vec2>,
+    pub character_id: CharacterId,
+    pub character_index: usize,
+}
+
+impl CharacterPath {
+    pub fn new(points: Vec<Vec2>, character_id: CharacterId, character_index: usize) -> Self {
+        Self { points, character_id, character_index }
+    }
+    
+    pub fn len(&self) -> Fixed32 {
+        self.points.iter().fold(Fixed32(0), |acc, p| acc + p.len())
+    }
+    
+    pub fn max_speed(&self) -> Fixed32 {
+        self.points.windows(2).fold(Fixed32(0), |acc, p| acc.max((p[1] - p[0]).len()))
+    }
+}
+
+impl GameObject for CharacterPath {
+    fn object_type(&self) -> ObjectType {
+        ObjectType::CharacterPath
+    }
+    
+    fn contains_point(&self, _point: Vec2) -> bool {
+        false
+    }
+    
+    fn name(&self) -> String {
+        format!("{} path", self.character_id.name())
+    }
+
+    fn description(&self) -> String {
+        format!("Frames: {} | Length: {}", self.points.len(), self.len())
+    }
+
+    fn details(&self) -> Vec<(String, Vec<String>)> {
+        let mut groups = Vec::new();
+
+        groups.push((String::from("Path"), vec![
+            format!("Frames: {}", self.points.len()),
+            format!("Length: {}", self.len()),
+        ]));
+        
+        groups
+    }
+
+    fn gui_shape(&self, params: &DrawParams, _state: &State) -> Shape {
+        let max_speed = self.max_speed().to_f32();
+        let mut shapes = Vec::new();
+        
+        for segment in self.points.windows(2) {
+            let start = segment[0];
+            let end = segment[1];
+            let speed = (end - start).len().to_f32();
+            if speed <= 0.0 {
+                // TODO: draw a circle or something here
+                continue;
+            }
+            
+            let t = speed / max_speed;
+            let color = SLOW_COLOR.lerp_to_gamma(FAST_COLOR, t).gamma_multiply_u8(params.color().a());
+            let gui_start = params.transform_point(start);
+            let gui_end = params.transform_point(end);
+            let mut stroke = params.stroke.clone();
+            stroke.color = color;
+            shapes.push(Shape::line_segment([gui_start, gui_end], stroke));
+        }
+        
         Shape::Vec(shapes)
     }
 }

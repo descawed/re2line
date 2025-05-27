@@ -30,7 +30,7 @@ pub enum ObjectType {
     Status,
     Hikidashi,
     Windows,
-    // end AOTs
+    // characters
     Object,
     Enemy,
     Player,
@@ -41,6 +41,8 @@ pub enum ObjectType {
     AiAttackZone,
     AiAggroZone,
     AiTacticZone,
+    // GUI objects
+    CharacterPath,
 }
 
 impl ObjectType {
@@ -72,6 +74,7 @@ impl ObjectType {
             Self::AiAttackZone => "AI Attack Zone",
             Self::AiAggroZone => "AI Aggro Zone",
             Self::AiTacticZone => "AI Tactic Zone",
+            Self::CharacterPath => "Character Path",       
         }
     }
     
@@ -96,6 +99,10 @@ impl ObjectType {
     
     pub const fn is_floor(&self) -> bool {
         matches!(self, Self::Floor)
+    }
+    
+    pub const fn is_gui_object(&self) -> bool {
+        matches!(self, Self::CharacterPath)   
     }
 }
 
@@ -172,12 +179,17 @@ impl DrawParams {
             h * self.scale,
         )
     }
+    
+    pub fn transform_point(&self, point: Vec2) -> Pos2 {
+        let (x, y, _, _) = self.transform(point.x, point.z, 0, 0);
+        Pos2::new(x, y)
+    }
 
-    const fn is_stroke(&self) -> bool {
+    pub const fn is_stroke(&self) -> bool {
         self.stroke.width > 0.0 && self.stroke.color.a() > 0
     }
 
-    const fn color(&self) -> Color32 {
+    pub const fn color(&self) -> Color32 {
         if self.is_stroke() {
             self.stroke.color
         } else {
