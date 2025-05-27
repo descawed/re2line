@@ -65,12 +65,13 @@ pub enum RollType {
     SpiderPoison3In32 = 56,
     ZombieAnimationOffset16 = 57,
     ZombieSpeed2 = 58,
+    HandgunCrit = 59,
     Partial = 0xFFFE, // a roll that's part of a larger series of rolls and not used on its own
     Invalid = 0xFFFF,
 }
 
 impl RollType {
     pub const fn is_character_roll(&self) -> bool {
-        !matches!(self, Self::Script | Self::Partial | Self::Invalid)
+        !matches!(self, Self::Script | Self::Partial | Self::Invalid | Self::HandgunCrit)
     }
 }

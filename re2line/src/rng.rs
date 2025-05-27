@@ -321,6 +321,10 @@ fn licker_jump_or_lick(seed: u16) -> String {
     })
 }
 
+fn handgun_crit(seed: u16) -> String {
+    bool_text(roll_double(seed, 0xf) == 0)
+}
+
 #[derive(Debug)]
 pub struct RollDescription {
     description: &'static str,
@@ -416,6 +420,7 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::SpiderHealth1 => RollDescription::new("rolled for health", spider_health1),
         RollType::SpiderHealth2 => RollDescription::new("rolled for health", spider_health2),
         RollType::SpiderPoison3In32 => RollDescription::new("rolled to poison (9.375%)", spider_poison_3_in_32),
+        RollType::HandgunCrit => RollDescription::new("Handgun rolled to crit (6.25%)", handgun_crit),
         RollType::Partial => RollDescription::simple("Partial roll in a larger series"),
         RollType::Invalid => RollDescription::simple("Invalid roll"),
     }
