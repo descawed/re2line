@@ -2,13 +2,11 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Result};
-use enum_map::{enum_map, Enum, EnumMap};
+use enum_map::{enum_map, EnumMap};
 use egui::Color32;
 use serde::{Deserialize, Serialize};
 
-use crate::aot::SceType;
-use crate::character::CharacterType;
-use crate::collision::DrawParams;
+use super::game::{DrawParams, ObjectType};
 
 const STROKE_WIDTH: f32 = 1.0;
 const STAGE_CHARACTERS: &str = "123456789ABCDEFG";
@@ -47,96 +45,6 @@ impl FromStr for RoomId {
           let player = s.get(3..4).ok_or_else(|| anyhow!("Invalid player ID in room ID {}", s))?.parse::<u8>()?;
           
           Ok(Self { stage, room, player })
-     }
-}
-
-#[derive(Debug, Enum, PartialEq, Eq, Hash, Clone, Copy, Deserialize, Serialize)]
-pub(super) enum ObjectType {
-     Floor,
-     Collider,
-     // AOTs
-     Auto,
-     Door,
-     Item,
-     Normal,
-     Message,
-     Event,
-     FlagChg,
-     Water,
-     Move,
-     Save,
-     ItemBox,
-     Damage,
-     Status,
-     Hikidashi,
-     Windows,
-     // end AOTs
-     Object,
-     Enemy,
-     Player,
-     Ally,
-     Neutral,
-}
-
-impl ObjectType {
-     pub const fn name(&self) -> &'static str {
-          match self {
-               Self::Floor => "Floor",
-               Self::Collider => "Collider",
-               Self::Auto => "Auto AOT",
-               Self::Door => "Door",
-               Self::Item => "Item",
-               Self::Normal => "Normal AOT",
-               Self::Message => "Message",
-               Self::Event => "Event",
-               Self::FlagChg => "Flag Change",
-               Self::Water => "Water",
-               Self::Move => "Move AOT",
-               Self::Save => "Typewriter",
-               Self::ItemBox => "Item Box",
-               Self::Damage => "Damage AOT",
-               Self::Status => "Status AOT",
-               Self::Hikidashi => "Hikidashi AOT",
-               Self::Windows => "Windows",
-               Self::Object => "Object",
-               Self::Enemy => "Enemy",
-               Self::Player => "Player",
-               Self::Ally => "NPC Ally",
-               Self::Neutral => "NPC",
-          }
-     }
-}
-
-impl From<SceType> for ObjectType {
-     fn from(value: SceType) -> Self {
-          match value {
-               SceType::Auto | SceType::Unknown => Self::Auto,
-               SceType::Door => Self::Door,
-               SceType::Item => Self::Item,
-               SceType::Normal => Self::Normal,
-               SceType::Message => Self::Message,
-               SceType::Event => Self::Event,
-               SceType::FlagChg => Self::Event,
-               SceType::Water => Self::Water,
-               SceType::Move => Self::Move,
-               SceType::Save => Self::Save,
-               SceType::ItemBox => Self::ItemBox,
-               SceType::Damage => Self::Damage,
-               SceType::Status => Self::Status,
-               SceType::Hikidashi => Self::Hikidashi,
-               SceType::Windows => Self::Windows,
-          }
-     }
-}
-
-impl From<CharacterType> for ObjectType {
-     fn from(value: CharacterType) -> Self {
-          match value {
-               CharacterType::Player => Self::Player,
-               CharacterType::Ally => Self::Ally,
-               CharacterType::Neutral => Self::Neutral,
-               CharacterType::Enemy => Self::Enemy,
-          }
      }
 }
 
@@ -264,6 +172,10 @@ impl Default for Config {
                     ObjectType::Player => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0x57, 0xe9, 0x64, 0xd0)),
                     ObjectType::Ally => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0x57, 0xe9, 0xd3, 0xd0)),
                     ObjectType::Neutral => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0x57, 0xcc, 0x57, 0xd0)),
+                    ObjectType::AiAggroZone => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0xfc, 0x98, 0x03, 0xb0)),
+                    ObjectType::AiAttackZone => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0xfc, 0x1c, 0x03, 0xb0)),
+                    ObjectType::AiTacticZone => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0x5e, 0x03, 0xfc, 0xb0)),
+                    ObjectType::AiHitZone => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0x4a, 0x04, 0x2e, 0xb0)),
                },
           }
      }

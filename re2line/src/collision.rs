@@ -1,76 +1,6 @@
+use crate::app::{DrawParams, GameObject, ObjectType};
 use crate::math::{Fixed32, Vec2};
-
-const HIGHLIGHT_MAX_INTENSITY: f32 = 0.5;
-const HIGHLIGHT: egui::Rgba = egui::Rgba::from_rgba_premultiplied(0.25, 0.25, 0.25, 0.0);
-const HIGHLIGHT_STROKE: f32 = 2.0;
-const HIGHLIGHT_ALPHA: f32 = 1.5;
-
-#[derive(Debug, Clone)]
-pub struct DrawParams {
-    pub origin: egui::Pos2,
-    pub scale: f32,
-    pub fill_color: egui::Color32,
-    pub stroke: egui::Stroke,
-    pub stroke_kind: egui::StrokeKind,
-}
-
-impl DrawParams {
-    pub fn transform<T, U, V, W>(&self, x: T, z: U, w: V, h: W) -> (f32, f32, f32, f32)
-    where T: Into<Fixed32>, U: Into<Fixed32>, V: Into<Fixed32>, W: Into<Fixed32>
-    {
-        let h = h.into();
-        let z_f32 = (z.into() + h).to_f32();
-        (
-            x.into() * self.scale - self.origin.x,
-            -z_f32 * self.scale - self.origin.y,
-            w.into() * self.scale,
-            h * self.scale,
-        )
-    }
-
-    const fn is_stroke(&self) -> bool {
-        self.stroke.width > 0.0 && self.stroke.color.a() > 0
-    }
-
-    const fn color(&self) -> egui::Color32 {
-        if self.is_stroke() {
-            self.stroke.color
-        } else {
-            self.fill_color
-        }
-    }
-
-    const fn set_color(&mut self, color: egui::Color32) {
-        if self.is_stroke() {
-            self.stroke.color = color;
-        } else {
-            self.fill_color = color;
-        }
-    }
-
-    pub fn highlight(&mut self) {
-        let rgba: egui::Rgba = self.color().into();
-        let mut highlighted = (rgba + HIGHLIGHT).multiply(HIGHLIGHT_ALPHA);
-        let intensity = highlighted.intensity();
-        if intensity > HIGHLIGHT_MAX_INTENSITY {
-            highlighted = highlighted * (HIGHLIGHT_MAX_INTENSITY / intensity);
-        }
-
-        self.set_color(highlighted.into());
-        if self.is_stroke() {
-            self.stroke.width *= HIGHLIGHT_STROKE;
-        }
-    }
-
-    pub fn outline(&mut self) {
-        if self.is_stroke() {
-            return;
-        }
-
-        self.stroke.color = egui::Color32::BLACK;
-        self.stroke.width = HIGHLIGHT_STROKE;
-    }
-}
+use crate::record::State;
 
 const fn rect_contains_point(pos: Vec2, size: Vec2, point: Vec2) -> bool {
     point.x.0 >= pos.x.0 && point.x.0 < pos.x.0 + size.x.0 && point.z.0 >= pos.z.0 && point.z.0 < pos.z.0 + size.z.0
@@ -106,6 +36,7 @@ pub enum SpecialRectType {
     None,
     Ramp,
     HalfPipe,
+    Floor,
 }
 
 #[derive(Debug, Clone)]
@@ -795,17 +726,15 @@ pub enum Collider {
 }
 
 impl Collider {
-    pub fn describe(&self) -> Vec<(String, Vec<String>)> {
-        let mut groups = Vec::new();
-        
-        // type
-        groups.push((String::from("Type"), vec![String::from(match self {
+    fn type_string(&self) -> String {
+        String::from(match self {
             Self::Rect(rect) => {
                 match rect.capsule_type {
                     CapsuleType::None => match rect.special_rect_type {
                         SpecialRectType::None => "Rectangle",
                         SpecialRectType::Ramp => "Ramp",
                         SpecialRectType::HalfPipe => "Half pipe",
+                        SpecialRectType::Floor => "Floor",
                     },
                     CapsuleType::Horizontal => "Capsule (horizontal)",
                     CapsuleType::Vertical => "Capsule (vertical)",
@@ -815,7 +744,55 @@ impl Collider {
             Self::Ellipse(_) => "Ellipse",
             Self::Triangle(_) => "Triangle",
             Self::Quad(_) => "Quadrilateral",
-        })]));
+        })
+    }
+}
+
+impl GameObject for Collider {
+    fn object_type(&self) -> ObjectType {
+        if let Self::Rect(rect) = self {
+            if rect.special_rect_type == SpecialRectType::Floor {
+                return ObjectType::Floor;
+            }
+        }
+        
+        ObjectType::Collider
+    }
+
+    fn contains_point(&self, point: Vec2) -> bool {
+        match self {
+            Self::Rect(rect) => rect.contains_point(point),
+            Self::Ellipse(ellipse) => ellipse.contains_point(point),
+            Self::Diamond(diamond) => diamond.contains_point(point),
+            Self::Triangle(triangle) => triangle.contains_point(point),
+            Self::Quad(quad) => quad.contains_point(point),
+        }
+    }
+
+    fn name(&self) -> String {
+        self.type_string()
+    }
+
+    fn description(&self) -> String {
+        match self {
+            Self::Quad(quad) => {
+                format!("X1: {: >6} | Z1: {: >6}\nX2: {: >6} | Z2: {: >6}\nX3: {: >6} | Z3: {: >6}\nX4: {: >6} | Z4: {: >6}\n", quad.p1.x, quad.p1.z, quad.p2.x, quad.p2.z, quad.p3.x, quad.p3.z, quad.p4.x, quad.p4.z)
+            }
+            Self::Rect(RectCollider { pos, size, .. })
+            | Self::Diamond(DiamondCollider { pos, size, .. })
+            | Self::Ellipse(EllipseCollider { pos, size, .. })
+            | Self::Triangle(TriangleCollider { pos, size, .. })
+            => {
+                format!("X: {: >6} | Z: {: >6}\nW: {: >6} | H: {: >6}", pos.x, pos.z, size.x, size.z)
+            }
+        }
+    }
+
+    fn details(&self) -> Vec<(String, Vec<String>)> {
+        let mut groups = Vec::new();
+        
+        // type
+        groups.push((String::from("Type"), vec![self.type_string()]));
 
         // basic shape parameters
         let label = String::from("Params");
@@ -921,23 +898,13 @@ impl Collider {
         groups
     }
 
-    pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
+    fn gui_shape(&self, draw_params: &DrawParams, _state: &State) -> egui::Shape {
         match self {
             Self::Rect(rect) => rect.gui_shape(draw_params),
             Self::Diamond(diamond) => diamond.gui_shape(draw_params),
             Self::Ellipse(ellipse) => ellipse.gui_shape(draw_params),
             Self::Triangle(triangle) => triangle.gui_shape(draw_params),
             Self::Quad(quad) => quad.gui_shape(draw_params),
-        }
-    }
-
-    pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
-        match self {
-            Self::Rect(rect) => rect.contains_point(point),
-            Self::Ellipse(ellipse) => ellipse.contains_point(point),
-            Self::Diamond(diamond) => diamond.contains_point(point),
-            Self::Triangle(triangle) => triangle.contains_point(point),
-            Self::Quad(quad) => quad.contains_point(point),
         }
     }
 }

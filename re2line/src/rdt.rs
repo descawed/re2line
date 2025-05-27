@@ -315,7 +315,13 @@ impl Rdt {
         let mut floors = Vec::with_capacity(self.floors.len());
 
         for floor in &self.floors {
-            floors.push(collision::Collider::Rect(collision::RectCollider::new(floor.x.to_32(), floor.z.to_32(), floor.width.to_32(), floor.height.to_32(), collision::CapsuleType::None)));
+            floors.push(
+                collision::Collider::Rect(
+                    collision::RectCollider::new(
+                        floor.x.to_32(), floor.z.to_32(), floor.width.to_32(), floor.height.to_32(), collision::CapsuleType::None
+                    ).with_special_rect_type(collision::SpecialRectType::Floor)
+                )
+            );
         }
 
         floors
