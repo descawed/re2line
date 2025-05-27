@@ -7,7 +7,7 @@ const MAX_ARC_ANGLE: f32 = std::f32::consts::PI / 2.0;
 
 const TEXT_BOX_CORNER_RADIUS: f32 = 5.0;
 const TEXT_BOX_PADDING: f32 = 5.0;
-const TEXT_BOX_WRAP_WIDTH: f32 = 150.0;
+const TEXT_BOX_WRAP_WIDTH: f32 = 250.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VAlign {

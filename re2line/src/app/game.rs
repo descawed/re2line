@@ -156,6 +156,7 @@ pub struct DrawParams {
     pub fill_color: Color32,
     pub stroke: egui::Stroke,
     pub stroke_kind: egui::StrokeKind,
+    pub draw_at_origin: bool,
 }
 
 impl DrawParams {
@@ -214,6 +215,11 @@ impl DrawParams {
         self.stroke.color = Color32::BLACK;
         self.stroke.width = HIGHLIGHT_STROKE;
     }
+    
+    pub fn set_draw_origin(&mut self, origin: Pos2) {
+        self.origin = origin;
+        self.draw_at_origin = true;
+    }
 }
 
 ///
@@ -239,18 +245,21 @@ pub trait GameObject {
     fn gui_tooltip(&self, params: &DrawParams, state: &State, ui: &egui::Ui, name_prefix: &str) -> egui::Shape {
         let name = format!("{} {}", name_prefix, self.name());
 
-        let body_shape = self.gui_shape(params, state);
-        let body_rect = body_shape.visual_bounding_rect();
-        let body_center = body_rect.center();
+        let (x, y) = if params.draw_at_origin {
+            (params.origin.x, params.origin.y)
+        } else {
+            let body_shape = self.gui_shape(params, state);
+            let body_rect = body_shape.visual_bounding_rect();
+            let body_center = body_rect.center();
 
-        let center_x = body_center.x;
-        let top_y = body_rect.min.y;
+            (body_center.x, body_rect.min.y)
+        };
         
         let text = format!("{}\n{}", name, self.description());
 
         let (text_bg_shape, text_shape) = text_box(
             text,
-            Pos2::new(center_x, top_y - LABEL_MARGIN),
+            Pos2::new(x, y - LABEL_MARGIN),
             VAlign::Bottom,
             Color32::from_rgb(0x30, 0x30, 0x30),
             Color32::from_rgb(0xe0, 0xe0, 0xe0),

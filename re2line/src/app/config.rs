@@ -90,6 +90,7 @@ impl ObjectSettings {
                     }
                },
                stroke_kind: egui::StrokeKind::Middle,
+               draw_at_origin: false,
           }
      }
 }

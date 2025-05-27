@@ -64,10 +64,6 @@ pub struct AiZone {
 }
 
 impl AiZone {
-    pub fn full_angle(&self) -> Fixed32 {
-        self.half_angle.to_32() * Fixed32(2)
-    }
-    
     pub fn gui_shape(&self, angle: Fixed32, pos: Vec2, mut draw_params: DrawParams, state: &State) -> Shape {
         let facing_angle = angle.to_radians();
         
@@ -187,7 +183,7 @@ impl GameObject for PositionedAiZone {
     fn description(&self) -> String {
         format!(
             "Arc: {:.1}° | Angle: {:.1}° | Radius: {}\n{}",
-            self.ai_zone.full_angle().to_degrees(),
+            self.ai_zone.half_angle.to_degrees() * 2.0,
             self.angle.to_degrees(),
             self.ai_zone.radius,
             self.ai_zone.description
@@ -199,7 +195,7 @@ impl GameObject for PositionedAiZone {
 
         groups.push((String::from("AI Zone"), vec![
             format!("Behavior: {}", self.ai_zone.behavior_type.name()),
-            format!("Arc: {:.1}°", self.ai_zone.full_angle().to_degrees()),
+            format!("Arc: {:.1}°", self.ai_zone.half_angle.to_degrees() * 2.0),
             format!("Angle: {:.1}°", self.angle.to_degrees()),
             format!("Radius: {}", self.ai_zone.radius),
             format!("Inverted: {}", self.ai_zone.inverted),

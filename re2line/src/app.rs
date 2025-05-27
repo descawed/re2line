@@ -3,7 +3,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::io::BufReader;
 use std::str::FromStr;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Result};
 use eframe::{Frame, Storage};
@@ -45,9 +45,11 @@ const INPUT_OFFSET: f32 = INPUT_SIZE + INPUT_MARGIN;
 const TEXT_BOX_DARK: Color32 = Color32::from_rgb(0x30, 0x30, 0x30);
 const TEXT_BOX_LIGHT: Color32 = Color32::from_rgb(0xe0, 0xe0, 0xe0);
 
+const TOOLTIP_HOVER_SECONDS: f32 = 1.0;
+
 trait UiExt {
     fn draw_game_object<O: GameObject>(&self, object: &O, params: &DrawParams, state: &State) -> ShapeIdx;
-    
+
     fn draw_game_tooltip<O: GameObject>(&self, object: &O, params: &DrawParams, state: &State, index: usize) -> ShapeIdx;
 }
 
@@ -68,12 +70,15 @@ enum SelectedObject {
     Collider(usize),
     Floor(usize),
     Character(usize),
+    AiZone(usize),
 }
 
 impl SelectedObject {
     const fn for_object_type(object_type: ObjectType, index: usize) -> Self {
         if object_type.is_character() {
             Self::Character(index)
+        } else if object_type.is_ai_zone() {
+            Self::AiZone(index)
         } else if object_type.is_aot() {
             Self::Entity(index)
         } else if object_type.is_collider() {
@@ -84,12 +89,12 @@ impl SelectedObject {
             Self::None
         }
     }
-    
+
     fn matches<O: GameObject>(&self, object: &O, index: usize) -> bool {
         if matches!(self, Self::None) {
             return false;
         }
-        
+
         *self == Self::for_object_type(object.object_type(), index)
     }
 }
@@ -147,6 +152,8 @@ pub struct App {
     floors: Layer<Collider>,
     pan: egui::Vec2,
     selected_object: SelectedObject,
+    hover_object: SelectedObject,
+    hover_pos: Option<egui::Pos2>,
     config: Config,
     tab: BrowserTab,
     leon_rooms: Vec<(PathBuf, RoomId)>,
@@ -170,6 +177,8 @@ impl App {
             floors: Layer::new("Floors"),
             pan: egui::Vec2::ZERO,
             selected_object: SelectedObject::None,
+            hover_object: SelectedObject::None,
+            hover_pos: None,
             config: Config::get()?,
             tab: BrowserTab::Game,
             leon_rooms: Vec::new(),
@@ -195,7 +204,7 @@ impl App {
         self.is_recording_playing = !self.is_recording_playing;
         self.last_play_tick = Instant::now();
     }
-    
+
     fn visit_layer_objects<O: GameObject, T, F: Fn(usize, &O) -> Option<T>>(&self, layer: &Layer<O>, visitor: F, asc: bool) -> Option<T> {
         if asc {
             for (i, object) in layer.visible_objects(&self.config) {
@@ -210,26 +219,68 @@ impl App {
                 }
             }
         }
-        
+
         None
     }
-    
+
+    fn is_ai_zone_visible(&self, ai_zone: &PositionedAiZone) -> bool {
+        if !self.config.should_show(ai_zone.object_type()) {
+            return false;
+        }
+
+        match (self.get_character(ai_zone.character_index), self.get_character_settings(ai_zone.character_index)) {
+            (Some(character), Some(settings)) => {
+                self.config.should_show(character.object_type()) && settings.show_ai
+            }
+            _ => false,
+        }
+    }
+
     fn check_selected_object<O: GameObject>(object: &O, pos: Vec2, selection_value: SelectedObject) -> Option<SelectedObject> {
         object.contains_point(pos).then_some(selection_value)
     }
 
-    fn click_select(&mut self, pos: Vec2) {
+    fn check_selected_ai_zone(&self, zone: &PositionedAiZone, pos: Vec2, index: usize) -> Option<SelectedObject> {
+        if self.is_ai_zone_visible(zone) {
+            Self::check_selected_object(zone, pos, SelectedObject::AiZone(index))
+        } else {
+            None
+        }
+    }
+
+    fn select_object(&self, pos: Vec2, include_ai_zones: bool) -> SelectedObject {
         let selection = self.visit_layer_objects(
             &self.characters,
             |_, o| Self::check_selected_object(o, pos, SelectedObject::Character(o.index())),
             false,
-        )
-            .or_else(|| self.visit_layer_objects(&self.entities, |i, o| Self::check_selected_object(o, pos, SelectedObject::Entity(i)), false))
+        );
+        if let Some(object) = selection {
+            return object;
+        }
+
+        if include_ai_zones {
+            let selection = self.visit_layer_objects(
+                &self.ai_zones,
+                |i, o| self.check_selected_ai_zone(o, pos, i),
+                false,
+            );
+            if let Some(object) = selection {
+                return object;
+            }
+        }
+
+        self.visit_layer_objects(&self.entities, |i, o| Self::check_selected_object(o, pos, SelectedObject::Entity(i)), false)
             .or_else(|| self.visit_layer_objects(&self.colliders, |i, o| Self::check_selected_object(o, pos, SelectedObject::Collider(i)), false))
             .or_else(|| self.visit_layer_objects(&self.floors, |i, o| Self::check_selected_object(o, pos, SelectedObject::Floor(i)), false))
-        ;
-        
-        self.selected_object = selection.unwrap_or_default();
+            .unwrap_or_default()
+    }
+
+    fn click_select(&mut self, pos: Vec2) {
+        self.selected_object = self.select_object(pos, false);
+    }
+
+    fn hover_select(&mut self, pos: Vec2) {
+        self.hover_object = self.select_object(pos, true);
     }
     
     fn screen_pos_to_game_pos(&self, pos: egui::Pos2, viewport: egui::Rect) -> Vec2 {
@@ -266,6 +317,16 @@ impl App {
                 if let Some(game_pos) = self.pointer_game_pos {
                     self.click_select(game_pos);
                 }
+            }
+
+            if i.pointer.time_since_last_movement() >= TOOLTIP_HOVER_SECONDS {
+                if let Some(hover_pos) = i.pointer.hover_pos() {
+                    self.hover_select(self.screen_pos_to_game_pos(hover_pos, viewport));
+                    self.hover_pos = Some(hover_pos);
+                }
+            } else {
+                self.hover_object = SelectedObject::None;
+                self.hover_pos = None;
             }
 
             self.config.zoom_scale += i.smooth_scroll_delta.y * 0.05;
@@ -600,7 +661,7 @@ impl App {
                 return Some(character);
             }
         }
-        
+
         None
     }
 
@@ -622,6 +683,7 @@ impl App {
                 SelectedObject::Floor(i) => self.floors[i].details(),
                 SelectedObject::Entity(i) => self.entities[i].details(),
                 SelectedObject::Collider(i) => self.colliders[i].details(),
+                SelectedObject::AiZone(i) => self.ai_zones[i].details(),
                 SelectedObject::Character(i) => match self.get_character(i) {
                     Some(character) => character.details(),
                     None => vec![],
@@ -726,10 +788,10 @@ impl App {
                 characters.push(character);
                 ai_zones.extend(character_ai_zones);
             }
-            
+
             self.characters.set_objects(characters);
             self.ai_zones.set_objects(ai_zones);
-            
+
             if self.config.last_rdt != Some(new_room_id) {
                 if let Err(e) = self.load_room(new_room_id) {
                     eprintln!("Failed to load room {}: {}", new_room_id, e);
@@ -760,13 +822,6 @@ impl App {
         
         let new_index = (index as isize + delta).max(0) as usize;
         self.set_recording_frame(new_index);
-    }
-
-    fn player_positions(&self) -> Option<(Vec2, Vec2, u8)> {
-        let recording = self.active_recording.as_ref()?;
-        let state = recording.current_state()?;
-        let player = state.characters().get(0)?.as_ref()?;
-        Some((player.center, player.interaction_point(), player.floor))
     }
 
     fn get_sound_text_box(sound: &PlayerSound, draw_params: &DrawParams, ui: &Ui) -> egui::Shape {
@@ -942,7 +997,7 @@ impl eframe::App for App {
 
                 ui.draw_game_object(collider, &collider_draw_params, state);
             }
-            
+
             for (i, entity) in self.entities.visible_objects(&self.config) {
                 if self.selected_object.matches(entity, i) {
                     continue;
@@ -985,16 +1040,16 @@ impl eframe::App for App {
                     }
                 }
             }
-            
+
             for (_, character) in self.characters.visible_objects(&self.config) {
                 if self.selected_object.matches(character, character.index()) {
                     continue;
                 }
-                
+
                 let char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
                 ui.draw_game_object(character, &char_draw_params, state);
             }
-            
+
             // draw character tooltips on top of the characters themselves
             for (_, character) in self.characters.visible_objects(&self.config) {
                 let i = character.index();
@@ -1018,6 +1073,7 @@ impl eframe::App for App {
                             width: 1.0,
                         },
                         stroke_kind: StrokeKind::Middle,
+                        draw_at_origin: false,
                     };
 
                     for sound in recording.get_player_sounds(MAX_SOUND_AGE) {
@@ -1029,7 +1085,7 @@ impl eframe::App for App {
 
             // draw highlighted object (if any) on top
             match self.selected_object {
-                SelectedObject::None | SelectedObject::Floor(_) => {}
+                SelectedObject::None | SelectedObject::Floor(_) | SelectedObject::AiZone(_) => {}
                 SelectedObject::Entity(i) => {
                     let mut entity_draw_params = self.config.get_draw_params(self.entities[i].object_type(), view_center);
                     entity_draw_params.highlight();
@@ -1045,6 +1101,48 @@ impl eframe::App for App {
                         ui.draw_game_object(character, &char_draw_params, state);
                         if settings.show_tooltip {
                             ui.draw_game_tooltip(character, &char_draw_params, state, i);
+                        }
+                    }
+                }
+            }
+
+            // draw hover tooltip
+            if let Some(hover_pos) = self.hover_pos {
+                match self.hover_object {
+                    SelectedObject::None => {}
+                    SelectedObject::Floor(i) => {
+                        let mut floor_draw_params = self.config.get_draw_params(ObjectType::Floor, view_center);
+                        floor_draw_params.highlight();
+                        floor_draw_params.set_draw_origin(hover_pos);
+                        ui.draw_game_tooltip(&self.floors[i], &floor_draw_params, state, i);
+                    }
+                    SelectedObject::Entity(i) => {
+                        let entity = &self.entities[i];
+                        let mut entity_draw_params = self.config.get_draw_params(entity.object_type(), view_center);
+                        entity_draw_params.highlight();
+                        entity_draw_params.set_draw_origin(hover_pos);
+                        ui.draw_game_tooltip(entity, &entity_draw_params, state, i);
+                    }
+                    SelectedObject::Collider(i) => {
+                        collider_draw_params.highlight();
+                        collider_draw_params.set_draw_origin(hover_pos);
+                        ui.draw_game_tooltip(&self.colliders[i], &collider_draw_params, state, i);
+                    }
+                    SelectedObject::AiZone(i) => {
+                        let ai_zone = &self.ai_zones[i];
+                        let mut ai_draw_params = self.config.get_draw_params(ai_zone.object_type(), view_center);
+                        ai_draw_params.highlight();
+                        ai_draw_params.set_draw_origin(hover_pos);
+                        ui.draw_game_tooltip(ai_zone, &ai_draw_params, state, i);
+                    }
+                    SelectedObject::Character(i) => {
+                        if let (Some(character), Some(settings)) = (self.get_character(i), self.get_character_settings(i)) {
+                            // if the character's tooltip setting is on, we've already drawn their tooltip
+                            if !settings.show_tooltip {
+                                let mut char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
+                                char_draw_params.set_draw_origin(hover_pos);
+                                ui.draw_game_tooltip(character, &char_draw_params, state, i);
+                            }
                         }
                     }
                 }
@@ -1081,16 +1179,22 @@ impl eframe::App for App {
             }
         });
 
-        if self.active_recording.is_some() && self.is_recording_playing {
+        let repaint_duration = if self.active_recording.is_some() && self.is_recording_playing {
             let now = Instant::now();
             let duration = now - self.last_play_tick;
             if duration >= FRAME_DURATION {
                 self.next_recording_frame();
+                FRAME_DURATION
+            } else {
+                // schedule a re-draw for the next frame
+                FRAME_DURATION - duration
             }
-
-            // re-draw regularly while we're animating
-            ctx.request_repaint();
-        }
+        } else {
+            // schedule a re-draw after the hover time expires plus a small margin
+            Duration::from_secs_f32(TOOLTIP_HOVER_SECONDS + 0.1)
+        };
+        
+        ctx.request_repaint_after(repaint_duration);
     }
 
     fn save(&mut self, _storage: &mut dyn Storage) {
