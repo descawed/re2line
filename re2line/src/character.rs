@@ -1,20 +1,20 @@
-use egui::{Color32, Pos2, Shape, Stroke, Ui};
+use egui::{Color32, Pos2, Shape, Stroke};
 use epaint::{CircleShape, ColorMode, PathShape, PathStroke};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-use crate::collision::{CapsuleType, DrawParams, EllipseCollider, RectCollider};
-use crate::draw::{VAlign, text_box};
+use crate::app::{DrawParams, GameObject, ObjectType};
+use crate::collision::{CapsuleType, EllipseCollider, RectCollider};
 use crate::math::{Fixed16, UFixed16, Fixed32, Vec2};
+use crate::record::State;
 
 mod ai;
-use ai::*;
+pub use ai::*;
 
 const INTERACTION_DISTANCE: Fixed32 = Fixed32(620);
 
 const ARROW_HEAD_HEIGHT: f32 = 6.0;
 const ARROW_HEAD_WIDTH: f32 = 6.0;
 const ARROW_SHAFT_WIDTH: f32 = 1.5;
-const LABEL_MARGIN: f32 = 10.0;
 const MOTION_PROJECTION_LENGTH: f32 = 0.25;
 const POINT_RADIUS: f32 = 3.0;
 
@@ -293,6 +293,7 @@ pub struct Character {
     pub floor: u8,
     pub velocity: Vec2,
     pub type_: u8,
+    pub index: usize,
 }
 
 impl Character {
@@ -318,6 +319,7 @@ impl Character {
             floor: 0,
             velocity,
             type_: 0,
+            index: usize::MAX,
         }
     }
 
@@ -346,6 +348,14 @@ impl Character {
         if self.max_health <= 0 {
             self.max_health = health;
         }
+    }
+    
+    pub const fn index(&self) -> usize {
+        self.index
+    }
+    
+    pub const fn set_index(&mut self, index: usize) {
+        self.index = index;
     }
 
     pub fn gui_interaction_point(&self, draw_params: &DrawParams) -> Pos2 {
@@ -377,20 +387,6 @@ impl Character {
         self.shape.set_size(size);
         self.outline_shape.set_size(size);
     }
-    
-    pub fn contains_point(&self, point: Vec2) -> bool {
-        self.shape.contains_point(point)
-    }
-
-    pub fn label(&self, index: usize) -> String {
-        format!(
-            "#{} {}\nState: {:02X} {:02X} {:02X} {:02X}\nHP: {}/{}",
-            index,
-            self.id.name(),
-            self.state[0], self.state[1], self.state[2], self.state[3],
-            self.current_health, self.max_health,
-        )
-    }
 
     const fn is_crawling_zombie(&self) -> bool {
         self.id.is_zombie() && matches!(self.type_ & 0x3f, 1 | 3 | 5 | 7 | 9 | 11 | 13)
@@ -410,7 +406,55 @@ impl Character {
         })
     }
 
-    pub fn describe(&self) -> Vec<(String, Vec<String>)> {
+    pub fn ai_zones(&self) -> Vec<PositionedAiZone> {
+        let ai_zones = match self.id {
+            CharacterId::LickerRed => &RED_LICKER_AI_ZONES[..],
+            CharacterId::LickerBlack => &BLACK_LICKER_AI_ZONES[..],
+            _ if self.is_crawling_zombie() => &CRAWLING_ZOMBIE_AI_ZONES[..],
+            _ if self.id.is_zombie() => &ZOMBIE_AI_ZONES[..],
+            _ => return Vec::new(),
+        };
+        
+        let mut positioned_ai_zones = Vec::new();
+        for ai_zone in ai_zones {
+            if !ai_zone.check_state(&self.state) {
+                // zone is not active in this state; skip it
+                continue;
+            }
+
+            positioned_ai_zones.push(PositionedAiZone::new(ai_zone, self.id, self.index, self.center, self.angle));
+        }
+
+        positioned_ai_zones
+    }
+}
+
+impl GameObject for Character {
+    fn object_type(&self) -> ObjectType {
+        self.id.type_().into()
+    }
+
+    fn contains_point(&self, point: Vec2) -> bool {
+        self.shape.contains_point(point)
+    }
+    
+    fn name(&self) -> String {
+        self.id.name().to_string()
+    }
+
+    fn name_prefix(&self, _index: usize) -> String {
+        format!("#{}", self.index)
+    }
+    
+    fn description(&self) -> String {
+        format!(
+            "State: {:02X} {:02X} {:02X} {:02X}\nHP: {}/{}",
+            self.state[0], self.state[1], self.state[2], self.state[3],
+            self.current_health, self.max_health,
+        )
+    }
+
+    fn details(&self) -> Vec<(String, Vec<String>)> {
         let mut groups = Vec::new();
 
         groups.push((String::from("Character"), vec![
@@ -427,7 +471,7 @@ impl Character {
             format!("XR: {}", self.size.x),
             format!("ZR: {}", self.size.z),
         ]));
-        
+
         groups.push((String::from("Velocity"), vec![
             format!("X: {}", self.velocity.x),
             format!("Z: {}", self.velocity.z),
@@ -442,46 +486,8 @@ impl Character {
 
         groups
     }
-
-    pub fn gui_ai(&self, draw_params: &DrawParams, player_pos: Option<Vec2>) -> Shape {
-        let mut shapes = Vec::new();
-
-        let ai_cones = match self.id {
-            CharacterId::LickerRed => &RED_LICKER_AI_CONES[..],
-            CharacterId::LickerBlack => &BLACK_LICKER_AI_CONES[..],
-            _ if self.is_crawling_zombie() => &CRAWLING_ZOMBIE_AI_CONES[..],
-            _ if self.id.is_zombie() => &ZOMBIE_AI_CONES[..],
-            _ => return Shape::Vec(shapes),
-        };
-
-        let body_shape = self.shape.gui_shape(draw_params);
-        let body_center = body_shape.visual_bounding_rect().center();
-
-        for ai_cone in ai_cones {
-            if !ai_cone.check_state(&self.state) {
-                // cone is not active in this state; skip it
-                continue;
-            }
-
-            let mut draw_params = draw_params.clone();
-            draw_params.origin = body_center;
-            draw_params.fill_color = ai_cone.behavior_type.default_color();
-
-            if let Some(player_pos) = player_pos {
-                if ai_cone.is_point_in_cone(player_pos.saturating_sub(self.center), self.angle) {
-                    // add an outline to the shape when the player is inside
-                    draw_params.stroke.width = 3.0;
-                    draw_params.stroke.color = Color32::from_rgb(0x42, 0x03, 0x03);
-                }
-            }
-
-            shapes.push(ai_cone.gui_shape(self.angle.to_radians(), draw_params));
-        }
-
-        Shape::Vec(shapes)
-    }
-
-    pub fn gui_shape(&self, draw_params: &DrawParams, ui: &Ui, index: usize, show_tooltip: bool) -> Shape {
+    
+    fn gui_shape(&self, draw_params: &DrawParams, _state: &State) -> Shape {
         let body_shape = self.shape.gui_shape(draw_params);
         let body_rect = body_shape.visual_bounding_rect();
         let body_center = body_rect.center();
@@ -532,24 +538,6 @@ impl Character {
 
             shapes.push(interaction_point);
         }
-
-        if !show_tooltip {
-            return Shape::Vec(shapes);
-        }
-
-        let center_x = body_center.x;
-        let top_y = body_rect.min.y;
-        
-        let (text_bg_shape, text_shape) = text_box(
-            self.label(index),
-            Pos2::new(center_x, top_y - LABEL_MARGIN),
-            VAlign::Bottom,
-            Color32::from_rgb(0x30, 0x30, 0x30),
-            Color32::from_rgb(0xe0, 0xe0, 0xe0),
-            ui,
-        );
-
-        shapes.extend([text_bg_shape, text_shape]);
 
         Shape::Vec(shapes)
     }

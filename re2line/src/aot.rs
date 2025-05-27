@@ -1,5 +1,7 @@
-use crate::collision::{Collider, DrawParams};
+use crate::app::{DrawParams, GameObject, ObjectType, RoomId};
+use crate::collision::Collider;
 use crate::math::{Fixed16, Vec2};
+use crate::record::State;
 
 const TRIGGER_ON_ENTER: u8 = 0x40;
 
@@ -125,23 +127,60 @@ impl Entity {
         self.sce.is_trigger() && self.floor == floor && self.collider.contains_point(point)
     }
 
-    pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
-        self.collider.gui_shape(draw_params)
+    pub fn form(&self) -> &EntityForm {
+        &self.form
     }
-    
-    pub fn contains_point(&self, point: Vec2) -> bool {
+
+    pub fn floor(&self) -> u8 {
+        self.floor
+    }
+
+    pub fn sce(&self) -> SceType {
+        self.sce
+    }
+}
+
+impl GameObject for Entity {
+    fn object_type(&self) -> ObjectType {
+        self.sce().into()
+    }
+
+    fn contains_point(&self, point: Vec2) -> bool {
         self.collider.contains_point(point)
     }
-    
-    pub fn describe(&self) -> Vec<(String, Vec<String>)> {
-        let mut groups = self.collider.describe();
-        
+
+    fn name(&self) -> String {
+        self.sce().name().to_string()
+    }
+
+    fn description(&self) -> String {
+        let description = format!(
+            "Floor: {} | ID: {} | Type: {}",
+            self.floor, self.id, self.sce.name(),
+        );
+
+        match self.form {
+            EntityForm::Door { next_stage, next_room, next_n_floor, .. } => {
+                // FIXME: don't know the player ID here
+                let room_id = RoomId::new(next_stage, next_room, 0);
+                format!("{}\nTarget room: {} | Target floor: {}", description, room_id, next_n_floor)
+            }
+            EntityForm::Item { i_item, n_item, flag, .. } => {
+                format!("{}\nItem ID: {} | Item count: {} | Flag: {}", description, i_item, n_item, flag)
+            }
+            EntityForm::Other => description,
+        }
+    }
+
+    fn details(&self) -> Vec<(String, Vec<String>)> {
+        let mut groups = self.collider.details();
+
         groups.push((String::from("Object"), vec![
             format!("Floor: {}", self.floor),
             format!("ID: {}", self.id),
             format!("Type: {}", self.sce.name()),
         ]));
-        
+
         match self.form {
             EntityForm::Door { next_pos_x, next_pos_y, next_pos_z, next_cdir_y, next_stage, next_room, next_n_floor } => {
                 groups.push((String::from("Door"), vec![
@@ -167,15 +206,20 @@ impl Entity {
         groups
     }
 
-    pub fn form(&self) -> &EntityForm {
-        &self.form
-    }
-
-    pub fn floor(&self) -> u8 {
-        self.floor
-    }
-
-    pub fn sce(&self) -> SceType {
-        self.sce
+    fn gui_shape(&self, draw_params: &DrawParams, state: &State) -> egui::Shape {
+        let mut draw_params = draw_params.clone();
+        if let Some(ref player) = state.characters()[0] {
+            let trigger_point = if self.is_trigger_on_enter() {
+                player.center
+            } else {
+                player.interaction_point()
+            };
+            
+            if self.could_trigger(trigger_point, player.floor) {
+                draw_params.outline();
+            }
+        }
+        
+        self.collider.gui_shape(&draw_params, state)
     }
 }

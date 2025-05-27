@@ -3,9 +3,11 @@ use std::f32::consts::PI;
 use egui::{Color32, Shape, Stroke};
 use epaint::{CircleShape, ColorMode, PathShape, PathStroke};
 
-use crate::collision::DrawParams;
+use crate::app::{DrawParams, GameObject, ObjectType};
+use crate::character::CharacterId;
 use crate::draw::*;
 use crate::math::*;
+use crate::record::State;
 
 #[derive(Debug, Clone)]
 pub enum StateMask {
@@ -39,18 +41,18 @@ pub enum BehaviorType {
 }
 
 impl BehaviorType {
-    pub fn default_color(&self) -> Color32 {
+    pub const fn name(&self) -> &'static str {
         match self {
-            Self::Aggro => Color32::from_rgba_unmultiplied(0xfc, 0x98, 0x03, 0xb0),
-            Self::Attack => Color32::from_rgba_unmultiplied(0xfc, 0x1c, 0x03, 0xb0),
-            Self::ChangeTactic => Color32::from_rgba_unmultiplied(0x5e, 0x03, 0xfc, 0xb0),
-            Self::Hit => Color32::from_rgba_unmultiplied(0x4a, 0x04, 0x2e, 0xb0),
+            Self::Aggro => "Aggro",
+            Self::Attack => "Attack",
+            Self::ChangeTactic => "Change tactic",
+            Self::Hit => "Hit",
         }
     }
 }
 
 #[derive(Debug)]
-pub struct AiCone {
+pub struct AiZone {
     pub name: &'static str,
     pub description: &'static str,
     pub behavior_type: BehaviorType,
@@ -61,8 +63,26 @@ pub struct AiCone {
     pub state_mask: [StateMask; 4],
 }
 
-impl AiCone {
-    pub fn gui_shape(&self, facing_angle: f32, draw_params: DrawParams) -> Shape {
+impl AiZone {
+    pub fn full_angle(&self) -> Fixed32 {
+        self.half_angle.to_32() * Fixed32(2)
+    }
+    
+    pub fn gui_shape(&self, angle: Fixed32, pos: Vec2, mut draw_params: DrawParams, state: &State) -> Shape {
+        let facing_angle = angle.to_radians();
+        
+        let (gui_x, gui_y, _, _) = draw_params.transform(pos.x, pos.z, 0, 0);
+        let gui_pos = egui::Pos2::new(gui_x, gui_y);
+        
+        // if the player is in this zone, draw it with an outline
+        if let Some(ref player) = state.characters()[0] {
+            if self.is_point_in_zone(player.center.saturating_sub(pos), angle) {
+                // add an outline to the shape when the player is inside
+                draw_params.stroke.width = 3.0;
+                draw_params.stroke.color = Color32::from_rgb(0x42, 0x03, 0x03);
+            }
+        }
+        
         let radians = self.half_angle.to_radians();
         let radius = self.radius.to_f32() * draw_params.scale;
         if radians.abs() >= PI {
@@ -71,7 +91,7 @@ impl AiCone {
             // we just draw an outline rather than doing a fill out to the edges of the map
             return Shape::Circle(if self.inverted {
                 CircleShape {
-                    center: draw_params.origin,
+                    center: gui_pos,
                     radius,
                     fill: Color32::TRANSPARENT,
                     stroke: Stroke {
@@ -81,7 +101,7 @@ impl AiCone {
                 }
             } else {
                 CircleShape {
-                    center: draw_params.origin,
+                    center: gui_pos,
                     radius,
                     fill: draw_params.fill_color,
                     stroke: draw_params.stroke.clone(),
@@ -90,7 +110,7 @@ impl AiCone {
         }
 
         let offset = self.offset_angle.to_radians();
-        let points = get_path_for_semicircle(draw_params.origin, radius, facing_angle + offset, radians, self.inverted);
+        let points = get_path_for_semicircle(gui_pos, radius, facing_angle + offset, radians, self.inverted);
         Shape::Path(PathShape {
             points,
             closed: true,
@@ -112,11 +132,11 @@ impl AiCone {
         true
     }
 
-    /// Is the given point within the AI cone?
+    /// Is the given point within the AI zone?
     ///
-    /// Note that AiCone does not keep track of its center, so the given point should be relative
+    /// Note that AiZone does not keep track of its center, so the given point should be relative
     /// to the center of the cone.
-    pub fn is_point_in_cone(&self, point: Vec2, facing_angle: Fixed32) -> bool {
+    pub fn is_point_in_zone(&self, point: Vec2, facing_angle: Fixed32) -> bool {
         if point.len() > self.radius.to_32() {
             return false;
         }
@@ -127,6 +147,69 @@ impl AiCone {
         // the & 0xffff here should be redundant since we just did & 0xfff, but this is what the
         // game does, so we'll do it too.
         ((angle & 0xffff) < threshold.0 * 2) ^ self.inverted
+    }
+}
+
+#[derive(Debug)]
+pub struct PositionedAiZone {
+    pub ai_zone: &'static AiZone,
+    pub character_id: CharacterId,
+    pub character_index: usize,
+    pub pos: Vec2,
+    pub angle: Fixed32,
+}
+
+impl PositionedAiZone {
+    pub fn new(ai_zone: &'static AiZone, character_id: CharacterId, character_index: usize, pos: Vec2, angle: Fixed32) -> Self {
+        PositionedAiZone {
+            ai_zone,
+            character_id,
+            character_index,
+            pos,
+            angle,
+        }
+    }
+}
+
+impl GameObject for PositionedAiZone {
+    fn object_type(&self) -> ObjectType {
+        self.ai_zone.behavior_type.into()
+    }
+
+    fn contains_point(&self, point: Vec2) -> bool {
+        self.ai_zone.is_point_in_zone(point - self.pos, self.angle)
+    }
+
+    fn name(&self) -> String {
+        self.ai_zone.name.to_string()
+    }
+
+    fn description(&self) -> String {
+        format!(
+            "Arc: {:.1}° | Angle: {:.1}° | Radius: {}\n{}",
+            self.ai_zone.full_angle().to_degrees(),
+            self.angle.to_degrees(),
+            self.ai_zone.radius,
+            self.ai_zone.description
+        )
+    }
+
+    fn details(&self) -> Vec<(String, Vec<String>)> {
+        let mut groups = Vec::new();
+
+        groups.push((String::from("AI Zone"), vec![
+            format!("Behavior: {}", self.ai_zone.behavior_type.name()),
+            format!("Arc: {:.1}°", self.ai_zone.full_angle().to_degrees()),
+            format!("Angle: {:.1}°", self.angle.to_degrees()),
+            format!("Radius: {}", self.ai_zone.radius),
+            format!("Inverted: {}", self.ai_zone.inverted),
+        ]));
+
+        groups
+    }
+
+    fn gui_shape(&self, params: &DrawParams, state: &State) -> Shape {
+        self.ai_zone.gui_shape(self.angle, self.pos, params.clone(), state)
     }
 }
 
@@ -195,9 +278,9 @@ pub fn describe_licker_ai_state(state: &[u8; 4]) -> &'static str {
     }
 }
 
-pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
+pub const BLACK_LICKER_AI_ZONES: [AiZone; 24] = [
     // same as red licker
-    AiCone {
+    AiZone {
         name: "De-aggro",
         description: "Licker may de-aggro outside this range",
         behavior_type: BehaviorType::ChangeTactic,
@@ -207,7 +290,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: true,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0C), StateMask::Exactly(0x02), StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Investigate aggro",
         description: "Licker may attack",
         behavior_type: BehaviorType::Aggro,
@@ -217,7 +300,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0C), StateMask::Exactly(0x02), StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Sound aggro",
         description: "Licker will hear you if you make an audible sound",
         behavior_type: BehaviorType::Aggro,
@@ -227,7 +310,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0E), StateMask::Any, StateMask::Between(0x0B, 0xFF)],
     },
-    AiCone {
+    AiZone {
         name: "Sound aggro",
         description: "Licker will hear you if you move at all",
         behavior_type: BehaviorType::Aggro,
@@ -237,7 +320,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0E), StateMask::Any, StateMask::Between(0x0B, 0xFF)],
     },
-    AiCone {
+    AiZone {
         name: "Sound alert",
         description: "Licker will be alerted if you make an audible sound",
         behavior_type: BehaviorType::ChangeTactic,
@@ -247,7 +330,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Slash hit",
         description: "Licker's slash attack hits you",
         behavior_type: BehaviorType::Hit,
@@ -257,7 +340,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x09), StateMask::Any, StateMask::Between(0x02, 0x06)],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -267,7 +350,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Exactly(0x19)],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -277,7 +360,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Exactly(0x17)],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -287,7 +370,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Exactly(0x15)],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -297,7 +380,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Exactly(0x14)],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -307,7 +390,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Exactly(0x13)],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -317,7 +400,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Either(0x12, 0x16)],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -327,7 +410,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Either(0x11, 0x18)],
     },
-    AiCone {
+    AiZone {
         name: "Jump hit",
         description: "Jump attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -337,7 +420,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0A), StateMask::Either(4, 5), StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Slash",
         description: "Licker will slash at you with its claws",
         behavior_type: BehaviorType::Attack,
@@ -347,7 +430,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x06), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Recoil",
         description: "Licker will recoil from you",
         behavior_type: BehaviorType::ChangeTactic,
@@ -357,7 +440,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: true,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x06), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Pursuit aggro",
         description: "Licker may attack",
         behavior_type: BehaviorType::Aggro,
@@ -368,7 +451,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x14), StateMask::Any, StateMask::Any],
     },
     // different from red licker
-    AiCone {
+    AiZone {
         name: "Jump 62.5%",
         description: "Licker has a 62.5% chance to jump at you",
         behavior_type: BehaviorType::Attack,
@@ -378,7 +461,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0F), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Caution jump 37.5%",
         description: "Licker has a 37.5% chance to jump at you if below fine health", // <= 100 HP
         behavior_type: BehaviorType::Attack,
@@ -388,7 +471,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0F), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Jump 37.5%",
         description: "Licker has a 37.5% chance to jump at you",
         behavior_type: BehaviorType::Attack,
@@ -398,7 +481,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0F), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Lick 50%",
         description: "Licker has a 50% chance to lick at you",
         behavior_type: BehaviorType::Attack,
@@ -408,7 +491,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0F), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Lick",
         description: "Licker will lick at you",
         behavior_type: BehaviorType::Attack,
@@ -418,7 +501,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0F), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Slash 25%",
         description: "Licker has a 25% chance to slash at you",
         behavior_type: BehaviorType::Attack,
@@ -428,7 +511,7 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0F), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Slash 50%",
         description: "Licker has a 50% chance to slash at you",
         behavior_type: BehaviorType::Attack,
@@ -440,8 +523,8 @@ pub const BLACK_LICKER_AI_CONES: [AiCone; 24] = [
     },
 ];
 
-pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
-    AiCone {
+pub const RED_LICKER_AI_ZONES: [AiZone; 24] = [
+    AiZone {
         name: "Investigate aggro",
         description: "Licker may attack",
         behavior_type: BehaviorType::Aggro,
@@ -451,7 +534,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0C), StateMask::Exactly(0x02), StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "De-aggro",
         description: "Licker may de-aggro outside this range",
         behavior_type: BehaviorType::ChangeTactic,
@@ -461,7 +544,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: true,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0C), StateMask::Exactly(0x02), StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Pursuit aggro",
         description: "Licker may attack",
         behavior_type: BehaviorType::Aggro,
@@ -473,7 +556,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
     },
     // licker will hear you at any distance if you make a running footstep sound or fire a gun, but
     // still only in the below states
-    AiCone {
+    AiZone {
         name: "Sound aggro",
         description: "Licker will hear you if you make any audible sound",
         behavior_type: BehaviorType::Aggro,
@@ -483,7 +566,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0E), StateMask::Any, StateMask::Between(0x0B, 0xFF)],
     },
-    AiCone {
+    AiZone {
         name: "Sound aggro",
         description: "Licker will hear you if you move at all",
         behavior_type: BehaviorType::Aggro,
@@ -493,7 +576,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0E), StateMask::Any, StateMask::Between(0x0B, 0xFF)],
     },
-    AiCone {
+    AiZone {
         name: "Sound alert",
         description: "Licker will be alerted if you make an audible sound",
         behavior_type: BehaviorType::ChangeTactic,
@@ -503,7 +586,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Slash hit",
         description: "Licker's slash attack hits you",
         behavior_type: BehaviorType::Hit,
@@ -513,7 +596,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x09), StateMask::Any, StateMask::Between(0x02, 0x06)],
     },
-    AiCone {
+    AiZone {
         name: "Ranged",
         description: "Licker has a random chance to jump or lick outside this range (fine health = 37.5% to jump, 31.25% to lick; lower health = 25% to jump)",
         behavior_type: BehaviorType::Attack,
@@ -523,7 +606,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: true,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x06), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Slash",
         description: "Licker will slash at you with its claws",
         behavior_type: BehaviorType::Attack,
@@ -533,7 +616,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x06), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Recoil",
         description: "Licker will recoil from you",
         behavior_type: BehaviorType::ChangeTactic,
@@ -544,7 +627,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x06), StateMask::Any, StateMask::Any],
     },
     // TODO: implement a minimum radius, as the below cones should have breaks between them
-    AiCone {
+    AiZone {
         name: "Jump",
         description: "Licker has a random chance to jump (fine health = 62.5% to jump; lower health = 25% to jump)",
         behavior_type: BehaviorType::Attack,
@@ -554,7 +637,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0F), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Jump",
         description: "Licker has a random chance to jump (fine health = 62.5% to jump; lower health = 25% to jump)",
         behavior_type: BehaviorType::Attack,
@@ -564,7 +647,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0F), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Lick",
         description: "Licker will lick at you",
         behavior_type: BehaviorType::Attack,
@@ -574,7 +657,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0F), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Ranged",
         description: "Licker has a random chance to jump or lick (fine health = 37.5% to jump, 31.25% to lick; lower health = 25% to jump)",
         behavior_type: BehaviorType::Attack,
@@ -584,7 +667,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0F), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Slash",
         description: "Licker will slash at you with its claws",
         behavior_type: BehaviorType::Attack,
@@ -594,7 +677,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0F), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -604,7 +687,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Exactly(0x19)],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -614,7 +697,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Exactly(0x17)],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -624,7 +707,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Exactly(0x15)],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -634,7 +717,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Exactly(0x14)],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -644,7 +727,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Exactly(0x13)],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -654,7 +737,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Either(0x12, 0x16)],
     },
-    AiCone {
+    AiZone {
         name: "Lick hit",
         description: "Lick attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -664,7 +747,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Either(0x11, 0x18)],
     },
-    AiCone {
+    AiZone {
         name: "Attack",
         description: "Licker will attack if possible",
         behavior_type: BehaviorType::ChangeTactic,
@@ -674,7 +757,7 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x14), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Jump hit",
         description: "Jump attack will hit you",
         behavior_type: BehaviorType::Hit,
@@ -686,8 +769,8 @@ pub const RED_LICKER_AI_CONES: [AiCone; 24] = [
     },
 ];
 
-pub const CRAWLING_ZOMBIE_AI_CONES: [AiCone; 1] = [
-    AiCone {
+pub const CRAWLING_ZOMBIE_AI_ZONES: [AiZone; 1] = [
+    AiZone {
         name: "Bite",
         description: "Zombie will bite you",
         behavior_type: BehaviorType::Hit,
@@ -699,8 +782,8 @@ pub const CRAWLING_ZOMBIE_AI_CONES: [AiCone; 1] = [
     },
 ];
 
-pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
-    AiCone {
+pub const ZOMBIE_AI_ZONES: [AiZone; 10] = [
+    AiZone {
         name: "Passive aggro",
         description: "Zombie will begin to pursue you if you are within this zone after a random amount of time",
         behavior_type: BehaviorType::Aggro,
@@ -710,7 +793,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::Either(0x01, 0x03), StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Aggro",
         description: "Zombie will begin to pursue you",
         behavior_type: BehaviorType::Aggro,
@@ -720,7 +803,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Aggro far lunge",
         description: "Zombie has a 25% chance to lunge at you each loud sound",
         behavior_type: BehaviorType::Attack,
@@ -730,7 +813,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
         inverted: true,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Wander aggro",
         description: "Zombie will begin to pursue you if you enter this zone while the zombie is wandering",
         behavior_type: BehaviorType::Aggro,
@@ -740,7 +823,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::Exactly(0x03), StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Far lunge",
         description: "Zombie has a 50% chance to lunge at you each loud sound",
         behavior_type: BehaviorType::Attack,
@@ -750,7 +833,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
         inverted: true,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Raised arm lunge",
         description: "Zombie has a 50% chance to lunge at you each sound",
         behavior_type: BehaviorType::Attack,
@@ -760,7 +843,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
         inverted: true,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x02), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Aggro near lunge",
         description: "Zombie has a 50% chance to lunge at you each sound, in addition to the aggro far lunge chance",
         behavior_type: BehaviorType::Attack,
@@ -770,7 +853,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
         inverted: true,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Near lunge",
         description: "Zombie has a second 50% chance to lunge at you each sound, in addition to the far lunge chance",
         behavior_type: BehaviorType::Attack,
@@ -780,7 +863,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
         inverted: true,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::Any, StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Lunge bite",
         description: "Zombie will bite you if you are within this zone",
         behavior_type: BehaviorType::Hit,
@@ -790,7 +873,7 @@ pub const ZOMBIE_AI_CONES: [AiCone; 10] = [
         inverted: false,
         state_mask: [StateMask::Exactly(0x01), StateMask::Exactly(0x0C), StateMask::Exactly(0x03), StateMask::Any],
     },
-    AiCone {
+    AiZone {
         name: "Bite",
         description: "Zombie will bite you if you are within this zone",
         behavior_type: BehaviorType::Hit,

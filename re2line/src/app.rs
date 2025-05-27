@@ -8,23 +8,29 @@ use std::time::Instant;
 use anyhow::{anyhow, bail, Result};
 use eframe::{Frame, Storage};
 use egui::{Color32, Context, Key, Ui, ViewportCommand};
+use egui::layers::ShapeIdx;
 use egui::widgets::color_picker::Alpha;
 use epaint::{Stroke, StrokeKind};
 use re2shared::game::NUM_CHARACTERS;
 use re2shared::record::FrameRecord;
 use rfd::FileDialog;
 
-use crate::aot::{Entity, SceType};
-use crate::character::{Character, CharacterId};
-use crate::collision::{Collider, DrawParams};
+use crate::aot::Entity;
+use crate::character::{Character, CharacterId, PositionedAiZone};
+use crate::collision::Collider;
 use crate::draw::{VAlign, text_box};
 use crate::math::{Fixed16, Fixed32, UFixed16, Vec2};
 use crate::rdt::Rdt;
 use crate::record::{PlayerSound, Recording, State, FRAME_DURATION};
 
 mod config;
-use config::{Config, ObjectType};
+mod game;
+mod layer;
+
+use config::Config;
 pub use config::RoomId;
+pub use game::{DrawParams, GameObject, ObjectType};
+use layer::Layer;
 
 pub const APP_NAME: &str = "re2line";
 
@@ -39,6 +45,22 @@ const INPUT_OFFSET: f32 = INPUT_SIZE + INPUT_MARGIN;
 const TEXT_BOX_DARK: Color32 = Color32::from_rgb(0x30, 0x30, 0x30);
 const TEXT_BOX_LIGHT: Color32 = Color32::from_rgb(0xe0, 0xe0, 0xe0);
 
+trait UiExt {
+    fn draw_game_object<O: GameObject>(&self, object: &O, params: &DrawParams, state: &State) -> ShapeIdx;
+    
+    fn draw_game_tooltip<O: GameObject>(&self, object: &O, params: &DrawParams, state: &State, index: usize) -> ShapeIdx;
+}
+
+impl UiExt for Ui {
+    fn draw_game_object<O: GameObject>(&self, object: &O, params: &DrawParams, state: &State) -> ShapeIdx {
+        self.painter().add(object.gui_shape(params, state))
+    }
+
+    fn draw_game_tooltip<O: GameObject>(&self, object: &O, params: &DrawParams, state: &State, index: usize) -> ShapeIdx {
+        self.painter().add(object.gui_tooltip(params, state, self, &object.name_prefix(index)))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SelectedObject {
     None,
@@ -46,6 +68,36 @@ enum SelectedObject {
     Collider(usize),
     Floor(usize),
     Character(usize),
+}
+
+impl SelectedObject {
+    const fn for_object_type(object_type: ObjectType, index: usize) -> Self {
+        if object_type.is_character() {
+            Self::Character(index)
+        } else if object_type.is_aot() {
+            Self::Entity(index)
+        } else if object_type.is_collider() {
+            Self::Collider(index)
+        } else if object_type.is_floor() {
+            Self::Floor(index)
+        } else {
+            Self::None
+        }
+    }
+    
+    fn matches<O: GameObject>(&self, object: &O, index: usize) -> bool {
+        if matches!(self, Self::None) {
+            return false;
+        }
+        
+        *self == Self::for_object_type(object.object_type(), index)
+    }
+}
+
+impl Default for SelectedObject {
+    fn default() -> Self {
+        Self::None
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,9 +140,11 @@ impl Default for CharacterSettings {
 
 pub struct App {
     center: (Fixed16, Fixed16),
-    colliders: Vec<Collider>,
-    entities: Vec<Entity>,
-    floors: Vec<Collider>,
+    colliders: Layer<Collider>,
+    characters: Layer<Character>,
+    ai_zones: Layer<PositionedAiZone>,
+    entities: Layer<Entity>,
+    floors: Layer<Collider>,
     pan: egui::Vec2,
     selected_object: SelectedObject,
     config: Config,
@@ -109,9 +163,11 @@ impl App {
     pub fn new() -> Result<Self> {
         Ok(Self {
             center: (Fixed16(0), Fixed16(0)),
-            colliders: Vec::new(),
-            entities: Vec::new(),
-            floors: Vec::new(),
+            colliders: Layer::new("Colliders"),
+            characters: Layer::new("Characters"),
+            ai_zones: Layer::new("AI Zones"),
+            entities: Layer::new("AOTs"),
+            floors: Layer::new("Floors"),
             pan: egui::Vec2::ZERO,
             selected_object: SelectedObject::None,
             config: Config::get()?,
@@ -139,54 +195,41 @@ impl App {
         self.is_recording_playing = !self.is_recording_playing;
         self.last_play_tick = Instant::now();
     }
+    
+    fn visit_layer_objects<O: GameObject, T, F: Fn(usize, &O) -> Option<T>>(&self, layer: &Layer<O>, visitor: F, asc: bool) -> Option<T> {
+        if asc {
+            for (i, object) in layer.visible_objects(&self.config) {
+                if let Some(value) = visitor(i, object) {
+                    return Some(value);
+                }
+            }
+        } else {
+            for (i, object) in layer.visible_objects_desc(&self.config) {
+                if let Some(value) = visitor(i, object) {
+                    return Some(value);
+                }
+            }
+        }
+        
+        None
+    }
+    
+    fn check_selected_object<O: GameObject>(object: &O, pos: Vec2, selection_value: SelectedObject) -> Option<SelectedObject> {
+        object.contains_point(pos).then_some(selection_value)
+    }
 
     fn click_select(&mut self, pos: Vec2) {
-        if let Some(recording) = &self.active_recording {
-            if let Some(state) = recording.current_state() {
-                for (i, character) in state.characters().iter().enumerate() {
-                    let Some(character) = character.as_ref() else {
-                        continue;
-                    };
-                    
-                    if character.contains_point(pos) {
-                        self.selected_object = SelectedObject::Character(i);
-                        return;
-                    }
-                }
-            }
-        }
-
-        for (i, entity) in self.entities.iter().enumerate() {
-            let object_type: ObjectType = entity.sce().into();
-            if !self.config.should_show(object_type) {
-                continue;
-            }
-
-            if entity.contains_point(pos) {
-                self.selected_object = SelectedObject::Entity(i);
-                return;
-            }
-        }
+        let selection = self.visit_layer_objects(
+            &self.characters,
+            |_, o| Self::check_selected_object(o, pos, SelectedObject::Character(o.index())),
+            false,
+        )
+            .or_else(|| self.visit_layer_objects(&self.entities, |i, o| Self::check_selected_object(o, pos, SelectedObject::Entity(i)), false))
+            .or_else(|| self.visit_layer_objects(&self.colliders, |i, o| Self::check_selected_object(o, pos, SelectedObject::Collider(i)), false))
+            .or_else(|| self.visit_layer_objects(&self.floors, |i, o| Self::check_selected_object(o, pos, SelectedObject::Floor(i)), false))
+        ;
         
-        if self.config.should_show(ObjectType::Collider) {
-            for (i, collider) in self.colliders.iter().enumerate() {
-                if collider.contains_point(pos) {
-                    self.selected_object = SelectedObject::Collider(i);
-                    return;
-                }
-            }
-        }
-
-        if self.config.should_show(ObjectType::Floor) {
-            for (i, floor) in self.floors.iter().enumerate() {
-                if floor.contains_point(pos) {
-                    self.selected_object = SelectedObject::Floor(i);
-                    return;
-                }
-            }
-        }
-        
-        self.selected_object = SelectedObject::None;
+        self.selected_object = selection.unwrap_or_default();
     }
     
     fn screen_pos_to_game_pos(&self, pos: egui::Pos2, viewport: egui::Rect) -> Vec2 {
@@ -266,9 +309,9 @@ impl App {
     fn set_rdt(&mut self, rdt: Rdt, id: RoomId) {
         let (x, y) = rdt.get_center();
         self.center = (x, -y);
-        self.colliders = rdt.get_colliders();
-        self.entities = rdt.get_entities();
-        self.floors = rdt.get_floors();
+        self.colliders.set_objects(rdt.get_colliders());
+        self.entities.set_objects(rdt.get_entities());
+        self.floors.set_objects(rdt.get_floors());
         self.pan = egui::Vec2::ZERO;
         self.selected_object = SelectedObject::None;
         self.config.last_rdt = Some(id);
@@ -405,6 +448,8 @@ impl App {
         self.active_recording = None;
         self.is_recording_playing = false;
         self.character_settings.clear();
+        self.ai_zones.clear();
+        self.characters.clear();
         if matches!(self.selected_object, SelectedObject::Character(_)) {
             self.selected_object = SelectedObject::None;
         }
@@ -442,8 +487,8 @@ impl App {
 
             ui.collapsing("Door", |ui| {
                 let mut door_count = 0;
-                for (i, entity) in self.entities.iter().enumerate() {
-                    if entity.sce() != SceType::Door {
+                for (i, entity) in self.entities.objects().iter().enumerate() {
+                    if entity.object_type() != ObjectType::Door {
                         continue;
                     }
 
@@ -454,8 +499,8 @@ impl App {
 
             ui.collapsing("Item", |ui| {
                 let mut item_count = 0;
-                for (i, entity) in self.entities.iter().enumerate() {
-                    if entity.sce() != SceType::Item {
+                for (i, entity) in self.entities.objects().iter().enumerate() {
+                    if entity.object_type() != ObjectType::Item {
                         continue;
                     }
 
@@ -466,8 +511,8 @@ impl App {
 
             ui.collapsing("AOT", |ui| {
                 let mut aot_count = 0;
-                for (i, entity) in self.entities.iter().enumerate() {
-                    if matches!(entity.sce(), SceType::Door | SceType::Item) {
+                for (i, entity) in self.entities.objects().iter().enumerate() {
+                    if matches!(entity.object_type(), ObjectType::Door | ObjectType::Item) {
                         continue;
                     }
 
@@ -476,18 +521,13 @@ impl App {
                 }
             });
 
-            if let Some(recording) = &mut self.active_recording {
-                if let Some(state) = recording.current_state() {
-                    ui.collapsing("Characters", |ui| {
-                        for (i, character) in state.characters().iter().enumerate() {
-                            let Some(character) = character.as_ref() else {
-                                continue;
-                            };
-
-                            ui.selectable_value(&mut self.selected_object, SelectedObject::Character(i), format!("#{}: {}", i, character.name()));
-                        }
-                    });
-                }
+            if self.active_recording.is_some() {
+                ui.collapsing("Characters", |ui| {
+                    for character in self.characters.objects() {
+                        let i = character.index();
+                        ui.selectable_value(&mut self.selected_object, SelectedObject::Character(i), format!("#{}: {}", i, character.name()));
+                    }
+                });
             }
         });
     }
@@ -555,9 +595,13 @@ impl App {
     }
 
     fn get_character(&self, index: usize) -> Option<&Character> {
-        self.active_recording.as_ref().and_then(Recording::current_state).and_then(|state| {
-            state.characters().get(index)
-        }).and_then(Option::as_ref)
+        for character in self.characters.objects() {
+            if character.index() == index {
+                return Some(character);
+            }
+        }
+        
+        None
     }
 
     fn get_character_settings(&self, index: usize) -> Option<CharacterSettings> {
@@ -575,11 +619,11 @@ impl App {
     fn object_details(&mut self, ui: &mut Ui) {
         egui::ScrollArea::horizontal().show(ui, |ui| {
             let description = match self.selected_object {
-                SelectedObject::Floor(i) => self.floors[i].describe(),
-                SelectedObject::Entity(i) => self.entities[i].describe(),
-                SelectedObject::Collider(i) => self.colliders[i].describe(),
+                SelectedObject::Floor(i) => self.floors[i].details(),
+                SelectedObject::Entity(i) => self.entities[i].details(),
+                SelectedObject::Collider(i) => self.colliders[i].details(),
                 SelectedObject::Character(i) => match self.get_character(i) {
-                    Some(character) => character.describe(),
+                    Some(character) => character.details(),
                     None => vec![],
                 },
                 SelectedObject::None => return,
@@ -665,6 +709,27 @@ impl App {
         self.last_play_tick = Instant::now();
         if let Some(next_state) = self.active_recording.as_mut().and_then(func) {
             let new_room_id = next_state.room_id();
+
+            let mut ai_zones = Vec::with_capacity(NUM_CHARACTERS);
+            let mut characters = Vec::with_capacity(NUM_CHARACTERS);
+
+            for (i, character) in next_state.characters().iter().enumerate() {
+                let Some(character) = character.as_ref() else {
+                    continue;
+                };
+
+                let mut character = character.clone();
+                character.set_index(i);
+
+                let character_ai_zones = character.ai_zones();
+
+                characters.push(character);
+                ai_zones.extend(character_ai_zones);
+            }
+            
+            self.characters.set_objects(characters);
+            self.ai_zones.set_objects(ai_zones);
+            
             if self.config.last_rdt != Some(new_room_id) {
                 if let Err(e) = self.load_room(new_room_id) {
                     eprintln!("Failed to load room {}: {}", new_room_id, e);
@@ -854,114 +919,94 @@ impl eframe::App for App {
             }
             
             let view_center = self.calculate_origin(ctx);
-            let (player_pos, player_interaction_pos, player_floor) = match self.player_positions() {
-                Some((player_pos, player_interaction_pos, player_floor)) => (Some(player_pos), Some(player_interaction_pos), Some(player_floor)),
-                None => (None, None, None),
-            };
+            let empty_state = State::empty();
+            let state = self.active_recording.as_ref().and_then(|recording| recording.current_state()).unwrap_or(&empty_state);
 
-            if self.config.should_show(ObjectType::Floor) {
-                for (i, floor) in self.floors.iter().enumerate() {
-                    let mut floor_draw_params = self.config.get_draw_params(ObjectType::Floor, view_center);
-                    if self.selected_object == SelectedObject::Floor(i) {
-                        // unlike the other object types, we don't draw the floor on top when it's highlighted
-                        // because it covers everything up and makes it hard to tell what's actually on the
-                        // given floor
-                        floor_draw_params.highlight();
-                    }
-
-                    let shape = floor.gui_shape(&floor_draw_params);
-                    ui.painter().add(shape);
+            for (i, floor) in self.floors.visible_objects(&self.config) {
+                let mut floor_draw_params = self.config.get_draw_params(ObjectType::Floor, view_center);
+                if self.selected_object.matches(floor, i) {
+                    // unlike the other object types, we don't draw the floor on top when it's highlighted
+                    // because it covers everything up and makes it hard to tell what's actually on the
+                    // given floor
+                    floor_draw_params.highlight();
                 }
+
+                ui.draw_game_object(floor, &floor_draw_params, state);
             }
 
             let mut collider_draw_params = self.config.get_draw_params(ObjectType::Collider, view_center);
-            if self.config.should_show(ObjectType::Collider) {
-                for (i, collider) in self.colliders.iter().enumerate() {
-                    if self.selected_object == SelectedObject::Collider(i) {
-                        continue;
-                    }
-
-                    let shape = collider.gui_shape(&collider_draw_params);
-                    ui.painter().add(shape);
+            for (i, collider) in self.colliders.visible_objects(&self.config) {
+                if self.selected_object.matches(collider, i) {
+                    continue;
                 }
+
+                ui.draw_game_object(collider, &collider_draw_params, state);
+            }
+            
+            for (i, entity) in self.entities.visible_objects(&self.config) {
+                if self.selected_object.matches(entity, i) {
+                    continue;
+                }
+
+                let entity_draw_params = self.config.get_draw_params(entity.object_type(), view_center);
+                ui.draw_game_object(entity, &entity_draw_params, state);
             }
 
-            for (i, entity) in self.entities.iter().enumerate() {
-                if self.selected_object == SelectedObject::Entity(i) {
+            // draw all AI zones first, then all characters, so characters are always on top of the zones
+            for (i, ai_zone) in self.ai_zones.visible_objects(&self.config) {
+                let (Some(character), Some(settings)) = (state.characters()[ai_zone.character_index].as_ref(), self.get_character_settings(ai_zone.character_index)) else {
+                    // the character must not be none because otherwise we wouldn't have AI zones for them
+                    eprintln!("AI zone {} has no character (expected character {} at index {})", i, ai_zone.character_id.name(), ai_zone.character_index);
                     continue;
-                }
-
-                let object_type: ObjectType = entity.sce().into();
-                if !self.config.should_show(object_type) {
-                    continue;
-                }
-
-                let mut entity_draw_params = self.config.get_draw_params(object_type, view_center);
-
-                let trigger_point = if entity.is_trigger_on_enter() {
-                    player_pos
-                } else {
-                    player_interaction_pos
                 };
-                if let (Some(trigger_point), Some(trigger_floor)) = (trigger_point, player_floor) {
-                    if entity.could_trigger(trigger_point, trigger_floor) {
-                        entity_draw_params.outline();
+                // if the character the AI zones belong to isn't shown here, we shouldn't show the AI zones either
+                if self.selected_object.matches(character, ai_zone.character_index) || !self.config.should_show(character.object_type()) || !settings.show_ai {
+                    continue;
+                }
+
+                let ai_draw_params = self.config.get_draw_params(ai_zone.object_type(), view_center);
+                ui.draw_game_object(ai_zone, &ai_draw_params, state);
+            }
+
+            // if the current selected object is a character, and that character has AI zones, draw those
+            // zones after all other zones, but still before characters, because we always want those to
+            // be on top
+            if let SelectedObject::Character(i) = self.selected_object {
+                if let (Some(character), Some(settings)) = (state.characters()[i].as_ref(), self.get_character_settings(i)) {
+                    if self.config.should_show(character.object_type()) && settings.show_ai {
+                        for (_, ai_zone) in self.ai_zones.visible_objects(&self.config) {
+                            if ai_zone.character_index != i {
+                                continue;
+                            }
+
+                            let ai_draw_params = self.config.get_draw_params(ai_zone.object_type(), view_center);
+                            ui.draw_game_object(ai_zone, &ai_draw_params, state);
+                        }
                     }
                 }
+            }
+            
+            for (_, character) in self.characters.visible_objects(&self.config) {
+                if self.selected_object.matches(character, character.index()) {
+                    continue;
+                }
+                
+                let char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
+                ui.draw_game_object(character, &char_draw_params, state);
+            }
+            
+            // draw character tooltips on top of the characters themselves
+            for (_, character) in self.characters.visible_objects(&self.config) {
+                let i = character.index();
+                if self.selected_object.matches(character, i) || !self.get_character_settings(i).map(|s| s.show_tooltip).unwrap_or(false) {
+                    continue;
+                }
 
-                let shape = entity.gui_shape(&entity_draw_params);
-                ui.painter().add(shape);
+                let char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
+                ui.draw_game_tooltip(character, &char_draw_params, state, i);
             }
 
             if let Some(recording) = &self.active_recording {
-                if let Some(state) = recording.current_state() {
-                    let mut ai_zones = Vec::with_capacity(NUM_CHARACTERS);
-                    let mut character_icons = Vec::with_capacity(NUM_CHARACTERS);
-
-                    for (i, character) in state.characters().iter().enumerate() {
-                        if self.selected_object == SelectedObject::Character(i) {
-                            continue;
-                        }
-
-                        let (Some(character), Some(settings)) = (character.as_ref(), self.get_character_settings(i)) else {
-                            continue;
-                        };
-
-                        let object_type: ObjectType = character.type_().into();
-                        if !self.config.should_show(object_type) {
-                            continue;
-                        }
-
-                        let char_draw_params = self.config.get_draw_params(object_type, view_center);
-                        character_icons.push(character.gui_shape(&char_draw_params, ui, i, settings.show_tooltip));
-                        if settings.show_ai {
-                            ai_zones.push(character.gui_ai(&char_draw_params, player_pos));
-                        }
-                    }
-
-                    // draw all AI zones first, then all characters, so characters are always on top of the zones
-                    for ai_zone in ai_zones {
-                        ui.painter().add(ai_zone);
-                    }
-
-                    // if the current selected object is a character, and that character has AI zones, draw those
-                    // zones after all other zones, but still before characters, because we always want those to
-                    // be on top
-                    if let SelectedObject::Character(i) = self.selected_object {
-                        if let (Some(Some(character)), Some(settings)) = (state.characters().iter().nth(i).map(Option::as_ref), self.get_character_settings(i)) {
-                            let object_type: ObjectType = character.type_().into();
-                            if settings.show_ai && self.config.should_show(object_type) {
-                                let char_draw_params = self.config.get_draw_params(object_type, view_center);
-                                ui.painter().add(character.gui_ai(&char_draw_params, player_pos));
-                            }
-                        }
-                    }
-
-                    for character_icon in character_icons {
-                        ui.painter().add(character_icon);
-                    }
-                }
-
                 if self.config.show_sounds {
                     // TODO: make sound text box colors configurable
                     let sound_draw_params = DrawParams {
@@ -986,24 +1031,22 @@ impl eframe::App for App {
             match self.selected_object {
                 SelectedObject::None | SelectedObject::Floor(_) => {}
                 SelectedObject::Entity(i) => {
-                    let mut entity_draw_params = self.config.get_draw_params(self.entities[i].sce().into(), view_center);
+                    let mut entity_draw_params = self.config.get_draw_params(self.entities[i].object_type(), view_center);
                     entity_draw_params.highlight();
-                    let shape = self.entities[i].gui_shape(&entity_draw_params);
-                    ui.painter().add(shape);
+                    ui.draw_game_object(&self.entities[i], &entity_draw_params, state);
                 }
                 SelectedObject::Collider(i) => {
                     collider_draw_params.highlight();
-                    let shape = self.colliders[i].gui_shape(&collider_draw_params);
-                    ui.painter().add(shape);
+                    ui.draw_game_object(&self.colliders[i], &collider_draw_params, state);
                 }
                 SelectedObject::Character(i) => {
-                    let (Some(character), Some(settings)) = (self.get_character(i), self.get_character_settings(i)) else {
-                        return;
-                    };
-
-                    let object_type: ObjectType = character.type_().into();
-                    let char_draw_params = self.config.get_draw_params(object_type, view_center);
-                    ui.painter().add(character.gui_shape(&char_draw_params, ui, i, settings.show_tooltip));
+                    if let (Some(character), Some(settings)) = (self.get_character(i), self.get_character_settings(i)) {
+                        let char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
+                        ui.draw_game_object(character, &char_draw_params, state);
+                        if settings.show_tooltip {
+                            ui.draw_game_tooltip(character, &char_draw_params, state, i);
+                        }
+                    }
                 }
             }
 
