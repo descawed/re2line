@@ -2,6 +2,7 @@ use egui::{Color32, Pos2, Shape, Stroke};
 use epaint::{CircleShape, ColorMode, PathShape, PathStroke};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
+use crate::aot::Item;
 use crate::app::{DrawParams, GameObject, ObjectType};
 use crate::collision::{CapsuleType, EllipseCollider, RectCollider};
 use crate::math::{Fixed16, UFixed16, Fixed32, Vec2};
@@ -459,10 +460,16 @@ impl GameObject for Character {
 
     fn details(&self) -> Vec<(String, Vec<String>)> {
         let mut groups = Vec::new();
+        
+        let sub_type_string = if self.id.is_player() {
+            format!("Equipped: {}", Item::name_from_id(self.type_ as u16))
+        } else {
+            format!("Sub-type: {}", self.type_ & 0x3f)
+        };
 
         groups.push((String::from("Character"), vec![
             format!("Type: {} ({})", self.name(), self.id as u8),
-            format!("Sub-type: {}", self.type_ & 0x3f),
+            sub_type_string,
             format!("HP: {}/{}", self.current_health, self.max_health),
         ]));
 
