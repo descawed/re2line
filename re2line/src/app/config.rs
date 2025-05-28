@@ -177,6 +177,7 @@ impl Default for Config {
                     ObjectType::AiAttackZone => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0xfc, 0x1c, 0x03, 0xb0)),
                     ObjectType::AiTacticZone => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0x5e, 0x03, 0xfc, 0xb0)),
                     ObjectType::AiHitZone => ObjectSettings::fill(Color32::from_rgba_unmultiplied(0x4a, 0x04, 0x2e, 0xb0)),
+                    ObjectType::WeaponRange => ObjectSettings::stroke(Color32::from_rgba_unmultiplied(41, 0, 188, 128)),
                     ObjectType::CharacterPath => ObjectSettings::stroke(Color32::from_rgba_unmultiplied(0x57, 0xe9, 0x64, 0x80)),
                },
           }

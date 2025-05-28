@@ -16,7 +16,7 @@ use re2shared::record::FrameRecord;
 use rfd::FileDialog;
 
 use crate::aot::Entity;
-use crate::character::{Character, CharacterId, PositionedAiZone};
+use crate::character::{Character, CharacterId, PositionedAiZone, WeaponRangeVisualization};
 use crate::collision::Collider;
 use crate::draw::{VAlign, text_box};
 use crate::math::{Fixed16, Fixed32, UFixed16, Vec2};
@@ -1055,6 +1055,16 @@ impl eframe::App for App {
                     let mut path_draw_params = self.config.get_draw_params(path.object_type(), view_center);
                     path_draw_params.stroke.width = character.size.x * self.config.zoom_scale * 2.0;
                     ui.draw_game_object(&path, &path_draw_params, state);
+                }
+            }
+            
+            // draw player's equipped weapon ranges if enabled
+            if let Some(range_visualization) = WeaponRangeVisualization::for_state(state) {
+                if self.config.should_show(range_visualization.object_type()) {
+                    let mut range_draw_params = self.config.get_draw_params(range_visualization.object_type(), view_center);
+                    range_draw_params.stroke.width *= 2.0;
+                    range_draw_params.stroke_kind = StrokeKind::Inside;
+                    ui.draw_game_object(&range_visualization, &range_draw_params, state);
                 }
             }
 

@@ -596,6 +596,10 @@ impl Vec2 {
             z: Fixed32(self.z.0.saturating_sub(rhs.z.0)),
         }
     }
+    
+    pub const fn is_zero(&self) -> bool {
+        self.x.is_zero() && self.z.is_zero()
+    }
 }
 
 impl std::ops::Add for Vec2 {

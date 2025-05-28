@@ -8,7 +8,7 @@ use crate::record::State;
 const TRIGGER_ON_ENTER: u8 = 0x40;
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, IntoPrimitive, TryFromPrimitive)]
 #[repr(u16)]
 pub enum Item {
     Empty = 0,
@@ -114,6 +114,17 @@ pub enum Item {
 }
 
 impl Item {
+    pub const fn is_weapon(&self) -> bool {
+        matches!(
+            self,
+            Self::Knife | Self::HandgunLeon | Self::HandgunClaire | Self::CustomHandgun
+            | Self::Magnum | Self::CustomMagnum | Self::Shotgun | Self::CustomShotgun
+            | Self::GrenadeLauncherExplosive | Self::GrenadeLauncherFlame | Self::GrenadeLauncherAcid
+            | Self::Bowgun | Self::ColtSaa | Self::Sparkshot | Self::SubMachinegun
+            | Self::Flamethrower | Self::RocketLauncher | Self::GatlingGun | Self::Beretta
+        )
+    }
+    
     pub const fn name(&self) -> &'static str {
         match self {
             Self::Empty => "Empty",

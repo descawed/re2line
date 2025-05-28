@@ -41,6 +41,7 @@ pub enum ObjectType {
     AiAttackZone,
     AiAggroZone,
     AiTacticZone,
+    WeaponRange,
     // GUI objects
     CharacterPath,
 }
@@ -74,6 +75,7 @@ impl ObjectType {
             Self::AiAttackZone => "AI Attack Zone",
             Self::AiAggroZone => "AI Aggro Zone",
             Self::AiTacticZone => "AI Tactic Zone",
+            Self::WeaponRange => "Weapon Range",
             Self::CharacterPath => "Character Path",       
         }
     }

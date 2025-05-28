@@ -11,6 +11,9 @@ use crate::record::State;
 mod ai;
 pub use ai::*;
 
+mod hit;
+pub use hit::*;
+
 const INTERACTION_DISTANCE: Fixed32 = Fixed32(620);
 
 const ARROW_HEAD_HEIGHT: f32 = 6.0;
@@ -431,6 +434,14 @@ impl Character {
 
         positioned_ai_zones
     }
+    
+    pub fn equipped_item(&self) -> Option<Item> {
+        if self.id.is_player() {
+            Item::try_from(self.type_ as u16).ok()
+        } else {
+            None
+        }
+    }
 }
 
 impl GameObject for Character {
@@ -460,16 +471,14 @@ impl GameObject for Character {
 
     fn details(&self) -> Vec<(String, Vec<String>)> {
         let mut groups = Vec::new();
-        
-        let sub_type_string = if self.id.is_player() {
-            format!("Equipped: {}", Item::name_from_id(self.type_ as u16))
-        } else {
-            format!("Sub-type: {}", self.type_ & 0x3f)
-        };
 
         groups.push((String::from("Character"), vec![
             format!("Type: {} ({})", self.name(), self.id as u8),
-            sub_type_string,
+            if self.id.is_player() {
+                format!("Equipped: {}", Item::name_from_id(self.type_ as u16))
+            } else {
+                format!("Sub-type: {}", self.type_ & 0x3f)
+            },
             format!("HP: {}/{}", self.current_health, self.max_health),
         ]));
 
