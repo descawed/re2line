@@ -342,6 +342,10 @@ pub fn describe_dog_ai_state(state: &[u8; 4]) -> &'static str {
         [0x01, 0x01, _, _] => "Walk",
         [0x01, 0x02, _, _] => "Run",
         [0x01, 0x03, _, _] => "Jump",
+        [0x01, 0x05, _, _] => "Growl",
+        [0x01, 0x06, _, _] => "Get up",
+        [0x02, _, _, _] => "Hit",
+        [0x03, _, _, _] => "Dying",
         [0x07, _, _, _] => "Dead",
         _ => "Unknown",
     }
