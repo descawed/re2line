@@ -168,6 +168,7 @@ pub struct App {
     last_play_tick: Instant,
     character_settings: HashMap<(RoomId, CharacterId, usize), CharacterSettings>,
     pointer_game_pos: Option<Vec2>,
+    current_rdt: Option<Rdt>,
 }
 
 impl App {
@@ -193,6 +194,7 @@ impl App {
             last_play_tick: Instant::now(),
             character_settings: HashMap::new(),
             pointer_game_pos: None,
+            current_rdt: None,
         })
     }
 
@@ -382,6 +384,7 @@ impl App {
         self.hover_object = SelectedObject::None;
         self.config.last_rdt = Some(id);
         self.need_title_update = true;
+        self.current_rdt = Some(rdt);
     }
 
     pub fn try_resume(&mut self) -> Result<()> {
@@ -535,9 +538,15 @@ impl App {
                 
                 ui.label(format!("RNG rolls:\t{}", stats.num_rng_rolls));
                 ui.label(format!("RNG position:\t{}", stats.rng_position));
-
-                ui.separator();
             }
+            
+            if let Some(ref rdt) = self.current_rdt {
+                if ui.button("Print scripts").clicked() {
+                    rdt.print_scripts();
+                }
+            }
+
+            ui.separator();
 
             ui.collapsing("Floor", |ui| {
                 for i in 0..self.floors.len() {

@@ -381,4 +381,18 @@ impl Rdt {
 
         entities
     }
+    
+    pub fn print_scripts(&self) {
+        println!("Init script:");
+        for instruction in &self.init_script {
+            println!("\t{:?}", instruction);
+        }
+        
+        for (i, function) in self.exec_script.iter().enumerate() {
+            println!("\nExec function {}:", i);
+            for instruction in function.as_slice() {
+                println!("\t{:?}", instruction);
+            }
+        }
+    }
 }
