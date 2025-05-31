@@ -351,7 +351,7 @@ pub fn describe_dog_ai_state(state: &[u8; 4]) -> &'static str {
     }
 }
 
-pub const DOG_AI_ZONES: [AiZone; 2] = [
+pub const DOG_AI_ZONES: [AiZone; 3] = [
     AiZone::arc(
         "Jump",
         "Dog will jump at you",
@@ -367,6 +367,13 @@ pub const DOG_AI_ZONES: [AiZone; 2] = [
         UFixed16(1000), // range is reduced to 700 if player HP <= 12
         [StateMask::Exactly(0x01), StateMask::Exactly(0x03), StateMask::Exactly(0x01), StateMask::Any],
     ).with_origin(ZoneOrigin::ModelPart(4)),
+    AiZone::circle(
+        "Pursue",
+        "Dog will pursue you",
+        BehaviorType::Aggro,
+        UFixed16(4000),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x0A), StateMask::Any, StateMask::Any],
+    ),
 ];
 
 pub const BLACK_LICKER_AI_ZONES: [AiZone; 24] = [
