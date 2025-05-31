@@ -351,7 +351,7 @@ pub fn describe_dog_ai_state(state: &[u8; 4]) -> &'static str {
     }
 }
 
-pub const DOG_AI_ZONES: [AiZone; 3] = [
+pub const DOG_AI_ZONES: [AiZone; 4] = [
     AiZone::arc(
         "Jump",
         "Dog will jump at you",
@@ -359,6 +359,16 @@ pub const DOG_AI_ZONES: [AiZone; 3] = [
         Fixed16(0x80),
         UFixed16(3000),
         [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::Any, StateMask::Any],
+    ),
+    // TODO: in some cases the dog doesn't immediately jump at you even when you're in this zone and
+    //  I haven't been able to figure out why
+    AiZone::arc(
+        "Jump",
+        "Dog will jump at you",
+        BehaviorType::Attack,
+        Fixed16(0x100),
+        UFixed16(4000),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x02), StateMask::Either(0x01, 0x03), StateMask::Any],
     ),
     AiZone::circle(
         "Bite",
