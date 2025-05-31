@@ -60,6 +60,19 @@ pub struct AiZone {
 }
 
 impl AiZone {
+    pub const fn arc(name: &'static str, description: &'static str, behavior_type: BehaviorType, half_angle: Fixed16, radius: UFixed16, state_mask: [StateMask; 4]) -> Self {
+        Self {
+            name,
+            description,
+            behavior_type,
+            half_angle,
+            offset_angle: Fixed16(0),
+            radius,
+            inverted: false,
+            state_mask,
+        }
+    }
+
     pub fn gui_shape(&self, angle: Fixed32, pos: Vec2, mut draw_params: DrawParams, state: &State) -> Shape {
         let facing_angle = angle.to_radians();
         
@@ -275,6 +288,28 @@ pub fn describe_licker_ai_state(state: &[u8; 4]) -> &'static str {
         _ => "Unknown",
     }
 }
+
+pub fn describe_dog_ai_state(state: &[u8; 4]) -> &'static str {
+    match state {
+        [0x01, 0x00, _, _] => "Idle",
+        [0x01, 0x01, _, _] => "Walk",
+        [0x01, 0x02, _, _] => "Run",
+        [0x01, 0x03, _, _] => "Jump",
+        [0x07, _, _, _] => "Dead",
+        _ => "Unknown",
+    }
+}
+
+pub const DOG_AI_ZONES: [AiZone; 1] = [
+    AiZone::arc(
+        "Jump",
+        "Dog will jump at you",
+        BehaviorType::Attack,
+        Fixed16(0x80),
+        UFixed16(3000),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::Any, StateMask::Any],
+    ),
+];
 
 pub const BLACK_LICKER_AI_ZONES: [AiZone; 24] = [
     // same as red licker

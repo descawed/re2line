@@ -66,6 +66,11 @@ pub enum RollType {
     ZombieAnimationOffset16 = 57,
     ZombieSpeed2 = 58,
     HandgunCrit = 59,
+    DogHealth1 = 60,
+    DogHealth2 = 61,
+    DogAnimationOffset1 = 62,
+    DogAnimationOffset2 = 63,
+    DogAnimationOffset3 = 64,
     Partial = 0xFFFE, // a roll that's part of a larger series of rolls and not used on its own
     Invalid = 0xFFFF,
 }

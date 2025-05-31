@@ -86,6 +86,20 @@ const IVY_TENTACLE_SETS: [[u8; 4]; 4] = [
     [1, 2, 6, 7],
 ];
 
+const DOG_HEALTHS1: [i16; 16] = [
+    0x77, 0x55, 0x55, 0x55,
+    0x77, 0x46, 0x55, 0x55,
+    0x46, 0x55, 0x3B, 0x46,
+    0x3B, 0x55, 0x3B, 0x46,
+];
+
+const DOG_HEALTHS2: [i16; 16] = [
+    0x39, 0x39, 0x52, 0x41,
+    0x52, 0x41, 0x39, 0x3B,
+    0x41, 0x39, 0x1E, 0x39,
+    0x1E, 0x39, 0x1E, 0x45,
+];
+
 pub const fn roll8(seed: u16) -> u8 {
     (roll(seed) & 0xff) as u8
 }
@@ -188,6 +202,14 @@ fn zombie_health2(seed: u16) -> String {
     health(roll8(seed) & 0xf, &ZOMBIE_HEALTHS1)
 }
 
+fn dog_health(seed: u16) -> String {
+    health(roll8(seed) & 0xf, &DOG_HEALTHS1)
+}
+
+fn dog_health2(seed: u16) -> String {
+    health(roll8(seed) & 0xf, &DOG_HEALTHS2)
+}
+
 fn zombie_animation_offset(seed: u16) -> String {
     format!("{}", roll8(seed) & 0x1f)
 }
@@ -245,6 +267,18 @@ fn tentacle_animation_offset(seed: u16) -> String {
 
 fn tentacle_attach_angle(seed: u16) -> String {
     format!("{}", (roll8(seed) as u16) * 2)
+}
+
+fn dog_animation_offset1(seed: u16) -> String {
+    format!("{}", roll8(seed) & 0x3f)
+}
+
+fn dog_animation_offset2(seed: u16) -> String {
+    format!("{}", roll8(seed) & 0xf)
+}
+
+fn dog_animation_offset3(seed: u16) -> String {
+    format!("{}", roll8(seed) & 0x1f)
 }
 
 fn spider_health1(seed: u16) -> String {
@@ -417,6 +451,11 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::SpiderHealth2 => RollDescription::new("rolled for health", spider_health2),
         RollType::SpiderPoison3In32 => RollDescription::new("rolled to poison (9.375%)", spider_poison_3_in_32),
         RollType::HandgunCrit => RollDescription::new("Handgun rolled to crit (6.25%)", handgun_crit),
+        RollType::DogHealth1 => RollDescription::new("rolled for health", dog_health),
+        RollType::DogHealth2 => RollDescription::new("rolled for health", dog_health2),
+        RollType::DogAnimationOffset1 => RollDescription::new("rolled for animation offset", dog_animation_offset1),
+        RollType::DogAnimationOffset2 => RollDescription::new("rolled for animation offset", dog_animation_offset2),
+        RollType::DogAnimationOffset3 => RollDescription::new("rolled for animation offset", dog_animation_offset3),
         RollType::Partial => RollDescription::simple("Partial roll in a larger series"),
         RollType::Invalid => RollDescription::simple("Invalid roll"),
     }

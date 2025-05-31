@@ -28,7 +28,7 @@ pub struct GameVersion {
     pub script_rng_patch: usize,
     pub script_rng_seed: usize,
     pub sound_flags: usize,
-    pub known_rng_rolls: [(usize, RollType); 94],
+    pub known_rng_rolls: [(usize, RollType); 101],
 }
 
 const GAME_VERSIONS: [GameVersion; 1] = [
@@ -168,6 +168,14 @@ const GAME_VERSIONS: [GameVersion; 1] = [
             (0x004d3adc, RollType::HandgunCrit),
             (0x004d3b41, RollType::Partial),
             (0x004d3b4c, RollType::HandgunCrit),
+
+            (0x0045c196, RollType::DogHealth1),
+            (0x0045c182, RollType::DogHealth2),
+            (0x0045c1a8, RollType::HealthBonus),
+            (0x0045c306, RollType::DogAnimationOffset1),
+            (0x0045c34b, RollType::DogAnimationOffset2),
+            (0x0045c35d, RollType::DogAnimationOffset3),
+            (0x0045c3b8, RollType::DogAnimationOffset1),
         ],
     },
 ];
@@ -335,7 +343,7 @@ impl Game {
             })
         }
     }
-    
+
     pub fn objects(&self) -> impl Iterator<Item = Option<*const Character>> {
         unsafe {
             (0..NUM_OBJECTS).map(|i| {
