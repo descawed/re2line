@@ -286,6 +286,110 @@ impl CharacterId {
 }
 
 #[derive(Debug, Clone)]
+pub struct Object {
+    pub flags: u32,
+    pub center: Vec2,
+    pub size: Vec2,
+    pub shape: RectCollider,
+    pub floor: u8,
+    pub index: usize,
+}
+
+impl Object {
+    pub const fn new(flags: u32, x: Fixed32, z: Fixed32, width: UFixed16, height: UFixed16) -> Self {
+        let game_x = Fixed32(x.0 - width.0 as i32);
+        let game_z = Fixed32(z.0 - height.0 as i32);
+        let game_width = UFixed16(width.0 << 1).to_32();
+        let game_height = UFixed16(height.0 << 1).to_32();
+        
+        let center = Vec2 { x, z };
+        let size = Vec2 { x: Fixed32(width.0 as i32), z: Fixed32(height.0 as i32) };
+        
+        Self {
+            flags,
+            center,
+            size,
+            shape: RectCollider::new(game_x, game_z, game_width, game_height, CapsuleType::None),
+            floor: 0,
+            index: usize::MAX,
+        }
+    }
+    
+    pub const fn empty() -> Self {
+        Self::new(0, Fixed32(0), Fixed32(0), UFixed16(0), UFixed16(0))
+    }
+
+    pub const fn index(&self) -> usize {
+        self.index
+    }
+
+    pub const fn set_index(&mut self, index: usize) {
+        self.index = index;
+    }
+
+    pub fn set_pos(&mut self, x: impl Into<Fixed32>, z: impl Into<Fixed32>) {
+        self.center = Vec2::new(x, z);
+        let pos = self.center - self.size;
+        self.shape.set_pos(pos);
+    }
+
+    pub fn set_size(&mut self, width: impl Into<Fixed32>, height: impl Into<Fixed32>) {
+        self.size.x = width.into();
+        self.size.z = height.into();
+        let size = Vec2::new(self.size.x << 1, self.size.z << 1);
+        self.shape.set_size(size);
+    }
+    
+    pub const fn is_pushable(&self) -> bool {
+        self.flags & 2 == 0
+    }
+}
+
+impl GameObject for Object {
+    fn object_type(&self) -> ObjectType {
+        ObjectType::Object
+    }
+
+    fn contains_point(&self, point: Vec2) -> bool {
+        self.shape.contains_point(point)
+    }
+
+    fn name(&self) -> String {
+        String::from("Object")
+    }
+
+    fn name_prefix(&self, _index: usize) -> String {
+        format!("Object #{}", self.index)
+    }
+
+    fn description(&self) -> String {
+        format!("X: {} | Z: {}", self.center.x, self.center.z)
+    }
+
+    fn details(&self) -> Vec<(String, Vec<String>)> {
+        let mut groups = Vec::new();
+
+        groups.push((String::from("Object"), vec![
+            format!("Flags: {:08X}", self.flags),
+        ]));
+
+        groups.push((String::from("Position"), vec![
+            format!("X: {}", self.center.x),
+            format!("Z: {}", self.center.z),
+            format!("XR: {}", self.size.x),
+            format!("ZR: {}", self.size.z),
+            format!("Floor: {}", self.floor),
+        ]));
+        
+        groups
+    }
+
+    fn gui_shape(&self, params: &DrawParams, _state: &State) -> Shape {
+        self.shape.gui_shape(params)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Character {
     pub id: CharacterId,
     pub center: Vec2,

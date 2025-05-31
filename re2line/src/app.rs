@@ -11,12 +11,12 @@ use egui::{Color32, Context, Key, Ui, ViewportCommand};
 use egui::layers::ShapeIdx;
 use egui::widgets::color_picker::Alpha;
 use epaint::{Stroke, StrokeKind};
-use re2shared::game::NUM_CHARACTERS;
+use re2shared::game::{NUM_CHARACTERS, NUM_OBJECTS};
 use re2shared::record::FrameRecord;
 use rfd::FileDialog;
 
 use crate::aot::Entity;
-use crate::character::{Character, CharacterId, PositionedAiZone, WeaponRangeVisualization};
+use crate::character::{Character, CharacterId, Object, PositionedAiZone, WeaponRangeVisualization};
 use crate::collision::Collider;
 use crate::draw::{VAlign, text_box};
 use crate::math::{Fixed16, Fixed32, UFixed16, Vec2};
@@ -69,6 +69,7 @@ enum SelectedObject {
     Entity(usize),
     Collider(usize),
     Floor(usize),
+    Object(usize),
     Character(usize),
     AiZone(usize),
 }
@@ -79,6 +80,8 @@ impl SelectedObject {
             Self::Character(index)
         } else if object_type.is_ai_zone() {
             Self::AiZone(index)
+        } else if matches!(object_type, ObjectType::Object) {
+            Self::Object(index)
         } else if object_type.is_aot() {
             Self::Entity(index)
         } else if object_type.is_collider() {
@@ -150,6 +153,7 @@ impl Default for CharacterSettings {
 pub struct App {
     center: (Fixed16, Fixed16),
     colliders: Layer<Collider>,
+    objects: Layer<Object>,
     characters: Layer<Character>,
     ai_zones: Layer<PositionedAiZone>,
     entities: Layer<Entity>,
@@ -176,6 +180,7 @@ impl App {
         Ok(Self {
             center: (Fixed16(0), Fixed16(0)),
             colliders: Layer::new("Colliders"),
+            objects: Layer::new("Objects"),
             characters: Layer::new("Characters"),
             ai_zones: Layer::new("AI Zones"),
             entities: Layer::new("AOTs"),
@@ -275,7 +280,8 @@ impl App {
             }
         }
 
-        self.visit_layer_objects(&self.entities, |i, o| Self::check_selected_object(o, pos, SelectedObject::Entity(i)), false)
+        self.visit_layer_objects(&self.objects, |_, o| Self::check_selected_object(o, pos, SelectedObject::Object(o.index())), false)
+            .or_else(|| self.visit_layer_objects(&self.entities, |i, o| Self::check_selected_object(o, pos, SelectedObject::Entity(i)), false))
             .or_else(|| self.visit_layer_objects(&self.colliders, |i, o| Self::check_selected_object(o, pos, SelectedObject::Collider(i)), false))
             .or_else(|| self.visit_layer_objects(&self.floors, |i, o| Self::check_selected_object(o, pos, SelectedObject::Floor(i)), false))
             .unwrap_or_default()
@@ -516,10 +522,11 @@ impl App {
     fn close_recording(&mut self) {
         self.active_recording = None;
         self.is_recording_playing = false;
+        self.objects.clear();
         self.character_settings.clear();
         self.ai_zones.clear();
         self.characters.clear();
-        if matches!(self.selected_object, SelectedObject::Character(_)) {
+        if matches!(self.selected_object, SelectedObject::Character(_) | SelectedObject::Object(_)) {
             self.selected_object = SelectedObject::None;
         }
     }
@@ -597,6 +604,13 @@ impl App {
             });
 
             if self.active_recording.is_some() {
+                ui.collapsing("Objects", |ui| {
+                    for object in self.objects.objects() {
+                        let i = object.index();
+                        ui.selectable_value(&mut self.selected_object, SelectedObject::Object(i), format!("Object {}", i));
+                    }
+                });
+                
                 ui.collapsing("Characters", |ui| {
                     for character in self.characters.objects() {
                         let i = character.index();
@@ -703,6 +717,16 @@ impl App {
 
         None
     }
+    
+    fn get_object(&self, index: usize) -> Option<&Object> {
+        for object in self.objects.objects() {
+            if object.index() == index {
+                return Some(object);
+            }
+        }
+        
+        None
+    }
 
     fn get_character_settings(&self, index: usize) -> Option<CharacterSettings> {
         let room_id = self.active_recording.as_ref().and_then(Recording::current_state).map(State::room_id)?;
@@ -722,6 +746,10 @@ impl App {
                 SelectedObject::Floor(i) => self.floors[i].details(),
                 SelectedObject::Entity(i) => self.entities[i].details(),
                 SelectedObject::Collider(i) => self.colliders[i].details(),
+                SelectedObject::Object(i) => match self.get_object(i) {
+                    Some(object) => object.details(),
+                    None => vec![],
+                }
                 SelectedObject::AiZone(i) => self.ai_zones[i].details(),
                 SelectedObject::Character(i) => match self.get_character(i) {
                     Some(character) => character.details(),
@@ -831,6 +859,24 @@ impl App {
 
             self.characters.set_objects(characters);
             self.ai_zones.set_objects(ai_zones);
+            
+            let mut objects = Vec::with_capacity(NUM_OBJECTS);
+            for (i, object) in next_state.objects().iter().enumerate() {
+                let Some(object) = object.as_ref() else {
+                    continue;
+                };
+                
+                // we don't care about displaying arbitrary 3D objects
+                if !object.is_pushable() {
+                    continue;
+                }
+                
+                let mut object = object.clone();
+                object.set_index(i);
+                objects.push(object);
+            }
+            
+            self.objects.set_objects(objects);
 
             if self.config.last_rdt != Some(new_room_id) {
                 if let Err(e) = self.load_room(new_room_id) {
@@ -1048,6 +1094,15 @@ impl eframe::App for App {
                 ui.draw_game_object(entity, &entity_draw_params, state);
             }
 
+            let object_draw_params = self.config.get_draw_params(ObjectType::Object, view_center);
+            for (_, object) in self.objects.visible_objects(&self.config) {
+                if self.selected_object.matches(object, object.index()) {
+                    continue;
+                }
+                
+                ui.draw_game_object(object, &object_draw_params, state);
+            }
+
             // draw all AI zones first, then all characters, so characters are always on top of the zones
             for (i, ai_zone) in self.ai_zones.visible_objects(&self.config) {
                 let (Some(character), Some(settings)) = (state.characters()[ai_zone.character_index].as_ref(), self.get_character_settings(ai_zone.character_index)) else {
@@ -1159,6 +1214,13 @@ impl eframe::App for App {
                     collider_draw_params.highlight();
                     ui.draw_game_object(&self.colliders[i], &collider_draw_params, state);
                 }
+                SelectedObject::Object(i) => {
+                    if let Some(object) = self.get_object(i) {
+                        let mut object_draw_params = self.config.get_draw_params(ObjectType::Object, view_center);
+                        object_draw_params.highlight();
+                        ui.draw_game_object(object, &object_draw_params, state);
+                    }
+                }
                 SelectedObject::Character(i) => {
                     if let (Some(character), Some(settings)) = (self.get_character(i), self.get_character_settings(i)) {
                         let char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
@@ -1191,6 +1253,14 @@ impl eframe::App for App {
                         collider_draw_params.highlight();
                         collider_draw_params.set_draw_origin(hover_pos);
                         ui.draw_game_tooltip(&self.colliders[i], &collider_draw_params, state, i);
+                    }
+                    SelectedObject::Object(i) => {
+                        if let Some(object) = self.get_object(i) {
+                            let mut object_draw_params = self.config.get_draw_params(ObjectType::Object, view_center);
+                            object_draw_params.highlight();
+                            object_draw_params.set_draw_origin(hover_pos);
+                            ui.draw_game_tooltip(object, &object_draw_params, state, i);
+                        }
                     }
                     SelectedObject::AiZone(i) => {
                         let ai_zone = &self.ai_zones[i];

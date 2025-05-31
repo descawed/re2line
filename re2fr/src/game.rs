@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use anyhow::{Result, bail};
 use hook86::mem::ByteSearcher;
 use re2shared::game::*;
@@ -13,6 +11,8 @@ pub struct GameVersion {
     pub rdt_path_template: usize,
     pub char_array: usize,
     pub current_char: usize,
+    pub obj_array: usize,
+    pub last_obj: usize,
     pub rng_seed: usize,
     pub igt_seconds: usize,
     pub igt_frames: usize,
@@ -37,6 +37,8 @@ const GAME_VERSIONS: [GameVersion; 1] = [
         rdt_path_template: 0x0053ab98,
         char_array: 0x0098a10c,
         current_char: 0x00988628,
+        obj_array: 0x0098a61c,
+        last_obj: 0x0098e51c,
         rng_seed: 0x00988610,
         igt_seconds: 0x00680588,
         igt_frames: 0x0068058c,
@@ -176,6 +178,8 @@ pub struct Game {
     characters: *const *const Character,
     dummy_char: *const Character,
     current_char: *const *const Character,
+    objects: *const Character,
+    last_obj: *const *const Character,
     rng_seed: *const u32,
     keys_down: *const u32,
     keys_down_this_frame: *const u32,
@@ -207,6 +211,8 @@ impl Game {
             let characters = version.char_array as *const *const Character;
             let dummy_char = version.dummy_char as *const Character;
             let current_char = version.current_char as *const *const Character;
+            let objects = version.obj_array as *const Character;
+            let last_obj = version.last_obj as *const *const Character;
             let rng_seed = version.rng_seed as *const u32;
             let keys_down = version.keys_down as *const u32;
             let keys_down_this_frame = version.keys_down_this_frame as *const u32;
@@ -223,6 +229,8 @@ impl Game {
                 characters,
                 dummy_char,
                 current_char,
+                objects,
+                last_obj,
                 rng_seed,
                 keys_down,
                 keys_down_this_frame,
@@ -319,17 +327,20 @@ impl Game {
         }
     }
 
-    pub fn igt(&self) -> Duration {
-        unsafe {
-            Duration::from_secs(*self.igt_seconds as u64) + Duration::from_millis(*self.igt_frames as u64 * 1000 / FRAMES_PER_SECOND)
-        }
-    }
-
     pub fn characters(&self) -> impl Iterator<Item = Option<*const Character>> {
         unsafe {
             (0..NUM_CHARACTERS).map(|i| {
                 let char = *self.characters.add(i);
                 self.is_char_valid(char).then_some(char)
+            })
+        }
+    }
+    
+    pub fn objects(&self) -> impl Iterator<Item = Option<*const Character>> {
+        unsafe {
+            (0..NUM_OBJECTS).map(|i| {
+                let obj = self.objects.byte_add(OBJECT_CHARACTER_SIZE * i);
+                (obj < *self.last_obj).then_some(obj)
             })
         }
     }

@@ -3,8 +3,8 @@ use binrw::binrw;
 use crate::game::{FRAMES_PER_SECOND, MATRIX, SVECTOR};
 use crate::rng::RollType;
 
-pub const RECORD_VERSION: u16 = 1;
-pub const MAX_CHARACTER_CHANGES: usize = 10;
+pub const RECORD_VERSION: u16 = 2;
+pub const MAX_CHARACTER_CHANGES: usize = 11;
 
 #[binrw]
 #[derive(Debug, Clone)]
@@ -20,6 +20,7 @@ pub enum CharacterField {
     #[brw(magic = 8u8)] Health(i16),
     #[brw(magic = 9u8)] Removed,
     #[brw(magic = 10u8)] Type(u8),
+    #[brw(magic = 11u8)] Flags(u32),
 }
 
 #[binrw]
@@ -81,7 +82,7 @@ impl CharacterDiff {
 
 #[binrw]
 #[derive(Debug)]
-pub struct FrameRecord {
+pub struct FrameRecordV1 {
     pub igt_seconds: u32,
     pub igt_frames: u8,
     pub num_rng_rolls: u16,
@@ -97,12 +98,48 @@ pub struct FrameRecord {
     pub character_diffs: Vec<CharacterDiff>,
 }
 
+#[binrw]
+#[derive(Debug)]
+pub struct FrameRecord {
+    pub igt_seconds: u32,
+    pub igt_frames: u8,
+    pub num_rng_rolls: u16,
+
+    #[bw(calc = game_changes.len() as u8)]
+    num_game_changes: u8,
+    #[br(count = num_game_changes)]
+    pub game_changes: Vec<GameField>,
+
+    #[bw(calc = character_diffs.len() as u8)]
+    num_character_diffs: u8,
+    #[br(count = num_character_diffs)]
+    pub character_diffs: Vec<CharacterDiff>,
+    
+    #[bw(calc = object_diffs.len() as u8)]
+    num_object_diffs: u8,
+    #[br(count = num_object_diffs)]   
+    pub object_diffs: Vec<CharacterDiff>,
+}
+
 impl FrameRecord {
     pub fn time(&self) -> String {
         let minutes = self.igt_seconds / 60;
         let seconds = self.igt_seconds % 60;
         let frames = ((self.igt_frames as f32 / FRAMES_PER_SECOND as f32) * 100.0) as u32;
         format!("{:02}:{:02}:{:02}", minutes, seconds, frames)
+    }
+}
+
+impl From<FrameRecordV1> for FrameRecord {
+    fn from(value: FrameRecordV1) -> Self {
+        Self {
+            igt_seconds: value.igt_seconds,
+            igt_frames: value.igt_frames,
+            num_rng_rolls: value.num_rng_rolls,
+            game_changes: value.game_changes,
+            character_diffs: value.character_diffs,
+            object_diffs: vec![],
+        }
     }
 }
 

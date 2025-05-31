@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use anyhow::{Result, bail};
 use binrw::BinReaderExt;
-use re2shared::game::NUM_CHARACTERS;
+use re2shared::game::{NUM_CHARACTERS, NUM_OBJECTS};
 use re2shared::record::*;
 
 use crate::app::RoomId;
@@ -93,6 +93,7 @@ pub struct State {
     room_id: RoomId,
     sounds: SoundEnvironment,
     characters: [Option<Character>; NUM_CHARACTERS],
+    objects: [Option<Object>; NUM_OBJECTS],
     rng_value: u16,
     input_flags: u32,
     is_new_game_start: bool,
@@ -108,6 +109,7 @@ impl State {
             room_id: RoomId::new(0, 0, 0),
             sounds: SoundEnvironment::new(0),
             characters: [const { None }; NUM_CHARACTERS],
+            objects: [const { None }; NUM_OBJECTS],
             rng_value: 0,
             input_flags: 0,
             is_new_game_start: false,
@@ -148,6 +150,7 @@ impl State {
                 }
 
                 let character = character.as_mut().unwrap();
+                character.set_index(index);
                 match change {
                     CharacterField::State(state) => character.state.copy_from_slice(state),
                     CharacterField::Id(id) => character.id = match CharacterId::try_from(*id).ok() {
@@ -173,11 +176,42 @@ impl State {
                     CharacterField::Health(health) => character.set_health(*health),
                     CharacterField::Removed => unreachable!(),
                     CharacterField::Type(type_) => character.type_ = *type_,
+                    CharacterField::Flags(_) => (), // don't currently care about this for NPCs
                 }
             }
 
             if let (Some(new_character), Some(old_character)) = (character.as_mut(), self.characters[index].as_ref()) {
                 new_character.set_prev_pos(old_character.center.x, old_character.center.z);
+            }
+        }
+        
+        let mut objects = self.objects.clone();
+        for diff in &record.object_diffs {
+            let index = diff.index as usize;
+            let object = &mut objects[index];
+            for change in &diff.changes {
+                if matches!(change, CharacterField::Removed) {
+                    *object = None;
+                    break;
+                }
+                
+                if object.is_none() {
+                    *object = Some(Object::empty());
+                }
+                
+                let object = object.as_mut().unwrap();
+                object.set_index(index);
+                match change {
+                    CharacterField::Transform(matrix) => object.set_pos(matrix.t.x, matrix.t.z),
+                    CharacterField::Size(width, height) => object.set_size(*width as i32, *height as i32),
+                    CharacterField::Floor(floor) => object.floor = *floor,
+                    CharacterField::Flags(flags) => object.flags = *flags,
+                    CharacterField::Removed => unreachable!(),
+                    // don't care about these for objects
+                    CharacterField::State(_) | CharacterField::Id(_) | CharacterField::MotionAngle(_)
+                    | CharacterField::Motion(_) | CharacterField::Health(_) | CharacterField::Type(_)
+                    | CharacterField::Velocity(_) => (),
+                }
             }
         }
 
@@ -199,6 +233,7 @@ impl State {
             room_id,
             sounds,
             characters,
+            objects,
             rng_value,
             input_flags,
             is_new_game_start,
@@ -220,6 +255,10 @@ impl State {
         }
 
         characters
+    }
+    
+    pub fn objects(&self) -> &[Option<Object>] {
+        &self.objects
     }
     
     pub fn player_sounds(&self) -> Option<PlayerSound> {
@@ -266,7 +305,7 @@ impl Recording {
         f.seek(SeekFrom::Start(0))?;
 
         let header: RecordHeader = f.read_le()?;
-        if header.version != RECORD_VERSION {
+        if header.version == 0 || header.version > RECORD_VERSION {
             bail!("Unsupported record version {}", header.version);
         }
 
@@ -275,7 +314,14 @@ impl Recording {
         let mut checkpoints: Vec<State> = Vec::new();
         let mut max_room_size = 0usize;
         while f.seek(SeekFrom::Current(0))? < size {
-            let frame = f.read_le()?;
+            let frame = match header.version {
+                1 => {
+                    let frame_v1: FrameRecordV1 = f.read_le()?;
+                    frame_v1.into()
+                }
+                2 => f.read_le()?,
+                _ => unreachable!(),
+            };
             state = state.make_next_state(&frame);
             if state.room_index >= max_room_size {
                 max_room_size = state.room_index + 1;

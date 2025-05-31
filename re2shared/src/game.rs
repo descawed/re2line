@@ -4,6 +4,8 @@ use binrw::binrw;
 
 pub const FRAMES_PER_SECOND: u64 = 60;
 pub const NUM_CHARACTERS: usize = 34;
+pub const NUM_OBJECTS: usize = 32;
+pub const OBJECT_CHARACTER_SIZE: usize = 0x1F8;
 
 #[repr(C)]
 #[binrw]
@@ -34,22 +36,38 @@ pub struct MATRIX {
 }
 
 #[repr(C)]
+#[derive(Debug, Clone)]
+pub struct CharacterPart {
+    pub pos: VECTOR,      // 00
+    pub x_size: u16,      // 0C
+    pub z_size: u16,      // 0E
+    pub unk_x: i16,       // 10
+    pub unk_z: i16,       // 12
+    pub unk_y: i16,       // 14
+    pub size_offset: u16, // 16
+    pub unk_18: u16,      // 18
+    pub y_size: u16,      // 1A
+    pub x_offset: i16,    // 1C
+    pub z_offset: i16,    // 1E
+}
+
+#[repr(C)]
 #[derive(Debug)]
 pub struct Character {
     pub flags: u32,                 // 000
     pub state: [u8; 4],             // 004
     pub id: u8,                     // 005
-    pub unk_09: [u8; 0x1b],         // 009
+    pub unk_09: [u8; 0x3],          // 009
+    pub index: u8,                  // 00C
+    pub unk_0d: [u8; 0x17],         // 00D
     pub transform: MATRIX,          // 024
     pub pos_short: SVECTOR,         // 044
     pub base_pos_short: SVECTOR,    // 04C
     pub unk_54: [u8; 0x22],         // 054
     pub motion_angle: i16,          // 076
     pub unk_78: [u8; 0xc],          // 078
-    pub base_pos: VECTOR,           // 084
-    pub x_size: u16,                // 090
-    pub z_size: u16,                // 092
-    pub unk_94: [u8; 0x72],         // 094
+    pub parts: [CharacterPart; 4],  // 084
+    pub unk_104: u16,               // 104
     pub floor: u8,                  // 106
     pub unk_107: [u8; 7],           // 107
     pub type_: u16,                 // 10E
@@ -204,11 +222,12 @@ mod tests {
         assert_eq!(size_of::<SVECTOR>(), 8);
         assert_eq!(size_of::<VECTOR>(), 12);
         assert_eq!(size_of::<MATRIX>(), 32);
+        assert_eq!(size_of::<CharacterPart>(), 32);
     }
 
     #[test]
     fn test_layout() {
-        assert_eq!(offset_of!(Character, unk_94), 0x94);
+        assert_eq!(offset_of!(Character, parts), 0x84);
         assert_eq!(offset_of!(Character, floor), 0x106);
         assert_eq!(offset_of!(Character, type_), 0x10e);
         assert_eq!(offset_of!(Character, unk_11c), 0x11c);
