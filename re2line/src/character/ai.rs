@@ -369,7 +369,7 @@ pub const DOG_AI_ZONES: [AiZone; 3] = [
     ).with_origin(ZoneOrigin::ModelPart(4)),
     AiZone::circle(
         "Pursue",
-        "Dog will pursue you",
+        "Dog will begin to pursue you if you fire a gun in this zone",
         BehaviorType::Aggro,
         UFixed16(4000),
         [StateMask::Exactly(0x01), StateMask::Exactly(0x0A), StateMask::Any, StateMask::Any],
