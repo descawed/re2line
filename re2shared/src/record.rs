@@ -49,6 +49,8 @@ pub enum GameField {
     RngRoll(u32, u16),
     #[brw(magic = 11u8)]
     SoundFlags(u8),
+    #[brw(magic = 12u8)]
+    NewGame,
 }
 
 #[binrw]

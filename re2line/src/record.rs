@@ -95,6 +95,7 @@ pub struct State {
     characters: [Option<Character>; NUM_CHARACTERS],
     rng_value: u16,
     input_flags: u32,
+    is_new_game_start: bool,
 }
 
 impl State {
@@ -109,6 +110,7 @@ impl State {
             characters: [const { None }; NUM_CHARACTERS],
             rng_value: 0,
             input_flags: 0,
+            is_new_game_start: false,
         }
     }
 
@@ -117,6 +119,7 @@ impl State {
         let mut sounds = self.sounds;
         let mut rng_value = self.rng_value;
         let mut input_flags = self.input_flags;
+        let mut is_new_game_start = false;
         for change in &record.game_changes {
             match change {
                 GameField::StageIndex(stage_index) => room_id.stage = *stage_index,
@@ -125,6 +128,7 @@ impl State {
                 GameField::SoundFlags(flags) => sounds = SoundEnvironment::new(*flags),
                 GameField::Rng(rng) => rng_value = *rng,
                 GameField::KeysDown(flags) => input_flags = *flags,
+                GameField::NewGame => is_new_game_start = true,
                 _ => (),
             }
         }
@@ -197,6 +201,7 @@ impl State {
             characters,
             rng_value,
             input_flags,
+            is_new_game_start,
         }
     }
 
@@ -239,6 +244,10 @@ impl State {
             is_run_cancel_pressed: self.input_flags & KEY_RUN_CANCEL != 0,
             is_aim_pressed: self.input_flags & KEY_AIM != 0,
         }
+    }
+    
+    pub const fn frame_index(&self) -> usize {
+        self.frame_index
     }
 }
 
@@ -452,5 +461,25 @@ impl Recording {
         }
         
         Some(CharacterPath::new(points, character.id, index))
+    }
+    
+    pub fn timeline(&self) -> Vec<Vec<(String, &State)>> {
+        let mut timeline = Vec::new();
+        let mut current_run = Vec::new();
+        for state in &self.checkpoints {
+            if state.is_new_game_start && !current_run.is_empty() {
+                timeline.push(current_run);
+                current_run = Vec::new();
+            }
+            
+            let timestamp = self.frames[state.frame_index].time();
+            current_run.push((timestamp, state));
+        }
+        
+        if !current_run.is_empty() {
+            timeline.push(current_run);
+        }
+        
+        timeline
     }
 }

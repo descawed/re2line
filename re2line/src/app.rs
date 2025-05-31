@@ -111,11 +111,12 @@ enum BrowserTab {
     Room,
     Settings,
     Rng,
+    Recording,
 }
 
 impl BrowserTab {
-    const fn list() -> [BrowserTab; 4] {
-        [BrowserTab::Game, BrowserTab::Room, BrowserTab::Rng, BrowserTab::Settings]
+    const fn list() -> [BrowserTab; 5] {
+        [BrowserTab::Game, BrowserTab::Room, BrowserTab::Recording, BrowserTab::Rng, BrowserTab::Settings]
     }
 
     const fn name(&self) -> &'static str {
@@ -124,6 +125,7 @@ impl BrowserTab {
             Self::Room => "Room",
             Self::Settings => "Settings",
             Self::Rng => "RNG",
+            Self::Recording => "Recording",
         }
     }
 }
@@ -631,6 +633,31 @@ impl App {
         });
     }
     
+    fn recording_browser(&mut self, ui: &mut Ui) {
+        let mut selected_frame = None;
+        egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
+            let Some(ref recording) = self.active_recording else {
+                return;
+            };
+            
+            for (i, run) in recording.timeline().into_iter().enumerate() {
+                ui.collapsing(format!("Run #{}", i + 1), |ui| {
+                    for (timestamp, state) in run {
+                        let frame_index = state.frame_index();
+                        let label = format!("{} - {} ({})", state.room_id(), timestamp, frame_index);
+                        if ui.selectable_label(frame_index == recording.index(), label).clicked() {
+                            selected_frame = Some(frame_index);
+                        }
+                    }
+                });
+            }
+        });
+        
+        if let Some(frame_index) = selected_frame {
+            self.change_recording_frame(|r| r.set_index(frame_index));
+        }
+    }
+    
     fn rng_browser(&mut self, ui: &mut Ui) {
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
             let Some(ref recording) = self.active_recording else {
@@ -923,6 +950,7 @@ impl eframe::App for App {
                     BrowserTab::Room => self.room_browser(ui),
                     BrowserTab::Settings => self.settings_browser(ui),
                     BrowserTab::Rng => self.rng_browser(ui),
+                    BrowserTab::Recording => self.recording_browser(ui),
                 }
             });
         });

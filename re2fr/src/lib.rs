@@ -46,6 +46,7 @@ struct FlightRecorder {
     rng_track: RngTrack,
     frame_tick: FrameTick,
     rng_calls: Vec<GameField>,
+    is_in_game: bool,
 }
 
 impl FlightRecorder {
@@ -78,6 +79,7 @@ impl FlightRecorder {
 
     pub fn record_frame(&mut self) -> Result<()> {
         if !self.game.is_in_game() {
+            self.is_in_game = false;
             return Ok(());
         }
 
@@ -89,6 +91,10 @@ impl FlightRecorder {
         let mut frame_record = self.tracker.track_delta(&self.game);
         frame_record.num_rng_rolls = self.rng_calls.len() as u16;
         frame_record.game_changes.extend(self.rng_calls.drain(..));
+        if !self.is_in_game {
+            frame_record.game_changes.push(GameField::NewGame);
+            self.is_in_game = true;       
+        }
         file.write_le(&frame_record)?;
         Ok(())
     }
@@ -152,6 +158,7 @@ fn init_recorder() -> Result<()> {
         rng_track: RngTrack::new(),
         frame_tick: FrameTick::new(),
         rng_calls: Vec::new(),
+        is_in_game: false,
     })).map_err(|_| anyhow!("Flight recorder was already initialized"))
 }
 
