@@ -1,6 +1,6 @@
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-use crate::app::{DrawParams, GameObject, ObjectType, RoomId};
+use crate::app::{DrawParams, Floor, GameObject, ObjectType, RoomId};
 use crate::collision::Collider;
 use crate::math::{Fixed16, Vec2};
 use crate::record::State;
@@ -332,7 +332,7 @@ pub enum EntityForm {
 pub struct Entity {
     form: EntityForm,
     collider: Collider,
-    floor: u8,
+    floor: Floor,
     id: u8,
     sce: SceType,
     sat: u8,
@@ -343,7 +343,7 @@ impl Entity {
         Self {
             form,
             collider,
-            floor,
+            floor: Floor::Id(floor),
             id,
             sce: SceType::from(sce),
             sat,
@@ -354,15 +354,15 @@ impl Entity {
         self.sat & TRIGGER_ON_ENTER != 0
     }
 
-    pub fn could_trigger(&self, point: Vec2, floor: u8) -> bool {
-        self.sce.is_trigger() && self.floor == floor && self.collider.contains_point(point)
+    pub fn could_trigger(&self, point: Vec2, floor: Floor) -> bool {
+        self.sce.is_trigger() && self.floor.matches(floor) && self.collider.contains_point(point)
     }
 
     pub fn form(&self) -> &EntityForm {
         &self.form
     }
 
-    pub fn floor(&self) -> u8 {
+    pub fn floor(&self) -> Floor {
         self.floor
     }
 
@@ -437,6 +437,10 @@ impl GameObject for Entity {
         groups
     }
 
+    fn floor(&self) -> Floor {
+        self.floor
+    }
+
     fn gui_shape(&self, draw_params: &DrawParams, state: &State) -> egui::Shape {
         let mut draw_params = draw_params.clone();
         if let Some(ref player) = state.characters()[0] {
@@ -446,7 +450,7 @@ impl GameObject for Entity {
                 player.interaction_point()
             };
             
-            if self.could_trigger(trigger_point, player.floor) {
+            if self.could_trigger(trigger_point, player.floor()) {
                 draw_params.outline();
             }
         }

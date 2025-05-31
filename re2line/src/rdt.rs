@@ -4,6 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use binrw::{binrw, BinReaderExt};
 
 use crate::aot::Entity;
+use crate::app::Floor as FloorId;
 use crate::collision;
 use crate::math::{Fixed16, UFixed16};
 use crate::script::Instruction;
@@ -318,7 +319,7 @@ impl Rdt {
             floors.push(
                 collision::Collider::Rect(
                     collision::RectCollider::new(
-                        floor.x.to_32(), floor.z.to_32(), floor.width.to_32(), floor.height.to_32(), collision::CapsuleType::None
+                        floor.x.to_32(), floor.z.to_32(), floor.width.to_32(), floor.height.to_32(), FloorId::Id(floor.level as u8), collision::CapsuleType::None
                     ).with_special_rect_type(collision::SpecialRectType::Floor)
                 )
             );
@@ -332,32 +333,32 @@ impl Rdt {
 
         for collider in &self.collision.colliders {
             colliders.push(match collider.shape() {
-                CollisionShape::Rectangle => collision::Collider::Rect(collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), collision::CapsuleType::None)),
+                CollisionShape::Rectangle => collision::Collider::Rect(collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), FloorId::Mask(collider.floor), collision::CapsuleType::None)),
                 CollisionShape::TriangleTopRight => collision::Collider::Triangle(collision::TriangleCollider::new(
                     collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(),
-                    collision::TriangleType::TopRight,
+                    FloorId::Mask(collider.floor), collision::TriangleType::TopRight,
                 )),
                 CollisionShape::TriangleTopLeft => collision::Collider::Triangle(collision::TriangleCollider::new(
                     collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(),
-                    collision::TriangleType::TopLeft,
+                    FloorId::Mask(collider.floor), collision::TriangleType::TopLeft,
                 )),
                 CollisionShape::TriangleBottomRight => collision::Collider::Triangle(collision::TriangleCollider::new(
                     collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(),
-                    collision::TriangleType::BottomRight,
+                    FloorId::Mask(collider.floor), collision::TriangleType::BottomRight,
                 )),
                 CollisionShape::TriangleBottomLeft => collision::Collider::Triangle(collision::TriangleCollider::new(
                     collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(),
-                    collision::TriangleType::BottomLeft,
+                    FloorId::Mask(collider.floor), collision::TriangleType::BottomLeft,
                 )),
-                CollisionShape::Diamond => collision::Collider::Diamond(collision::DiamondCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32())),
-                CollisionShape::Circle => collision::Collider::Ellipse(collision::EllipseCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32())),
-                CollisionShape::HorizontalCapsule => collision::Collider::Rect(collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), collision::CapsuleType::Horizontal)),
-                CollisionShape::VerticalCapsule => collision::Collider::Rect(collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), collision::CapsuleType::Vertical)),
+                CollisionShape::Diamond => collision::Collider::Diamond(collision::DiamondCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), FloorId::Mask(collider.floor))),
+                CollisionShape::Circle => collision::Collider::Ellipse(collision::EllipseCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), FloorId::Mask(collider.floor))),
+                CollisionShape::HorizontalCapsule => collision::Collider::Rect(collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), FloorId::Mask(collider.floor), collision::CapsuleType::Horizontal)),
+                CollisionShape::VerticalCapsule => collision::Collider::Rect(collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), FloorId::Mask(collider.floor), collision::CapsuleType::Vertical)),
                 CollisionShape::Ramp => collision::Collider::Rect(
-                    collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), collision::CapsuleType::None).with_special_rect_type(collision::SpecialRectType::Ramp),
+                    collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), FloorId::Mask(collider.floor), collision::CapsuleType::None).with_special_rect_type(collision::SpecialRectType::Ramp),
                 ),
                 CollisionShape::HalfPipe => collision::Collider::Rect(
-                    collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), collision::CapsuleType::None).with_special_rect_type(collision::SpecialRectType::HalfPipe),
+                    collision::RectCollider::new(collider.x.to_32(), collider.z.to_32(), collider.w.to_32(), collider.h.to_32(), FloorId::Mask(collider.floor), collision::CapsuleType::None).with_special_rect_type(collision::SpecialRectType::HalfPipe),
                 ),
             });
         }

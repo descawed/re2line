@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 use eframe::emath::Pos2;
 use egui::Color32;
 use enum_map::Enum;
@@ -8,6 +10,64 @@ use crate::character::{BehaviorType, CharacterType};
 use crate::draw::{VAlign, text_box};
 use crate::math::{Fixed32, Vec2};
 use crate::record::State;
+
+#[derive(Debug, Clone, Copy)]
+pub enum Floor {
+    Mask(u32),
+    Id(u8),
+    Aot(u8),
+}
+
+impl Floor {
+    pub const fn matches_any(&self) -> bool {
+        if let Self::Aot(floor) = self {
+            *floor & 0x80 != 0
+        } else {
+            false
+        }
+    }
+    
+    pub const fn mask(&self) -> u32 {
+        match self {
+            Self::Mask(mask) => *mask,
+            Self::Aot(_) if self.matches_any() => 0xFFFFFFFF,
+            Self::Id(floor) | Self::Aot(floor) => 1 << *floor,       
+        }
+    }
+    
+    pub const fn matches(&self, other: Self) -> bool {
+        self.mask() & other.mask() != 0
+    }
+}
+
+impl Display for Floor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Id(floor) => write!(f, "{}", floor)?,
+            Self::Aot(floor) => if self.matches_any() {
+                write!(f, "Any")
+            } else {
+                write!(f, "{}", floor)           
+            }?,
+            Self::Mask(mask) => {
+                let mut wrote = false;
+                for i in 0..32 {
+                    if mask & (1 << i) != 0 {
+                        if wrote {
+                            write!(f, ", ")?;
+                        } else {
+                            wrote = true;
+                        }
+                        
+                        write!(f, "{}", i)?;   
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+}
 
 ///
 #[derive(Debug, Enum, PartialEq, Eq, Hash, Clone, Copy, Deserialize, Serialize)]
@@ -206,6 +266,10 @@ impl DrawParams {
             self.fill_color = color;
         }
     }
+    
+    pub fn fade(&mut self, factor: f32) {
+        self.set_color(self.color().gamma_multiply(factor))
+    }
 
     pub fn highlight(&mut self) {
         let rgba: egui::Rgba = self.color().into();
@@ -253,6 +317,8 @@ pub trait GameObject {
     fn description(&self) -> String;
     
     fn details(&self) -> Vec<(String, Vec<String>)>;
+    
+    fn floor(&self) -> Floor;
 
     fn gui_shape(&self, params: &DrawParams, state: &State) -> egui::Shape;
     

@@ -1,4 +1,4 @@
-use crate::app::{DrawParams, GameObject, ObjectType};
+use crate::app::{DrawParams, Floor, GameObject, ObjectType};
 use crate::math::{Fixed32, Vec2};
 use crate::record::State;
 
@@ -45,13 +45,15 @@ pub struct RectCollider {
     size: Vec2,
     capsule_type: CapsuleType,
     special_rect_type: SpecialRectType,
+    floor: Floor,
 }
 
 impl RectCollider {
-    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, capsule_type: CapsuleType) -> Self {
+    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, floor: Floor, capsule_type: CapsuleType) -> Self {
         Self {
             pos: Vec2 { x, z },
             size: Vec2 { x: width, z: height },
+            floor,
             capsule_type,
             special_rect_type: SpecialRectType::None,
         }
@@ -60,6 +62,10 @@ impl RectCollider {
     pub const fn with_special_rect_type(mut self, special_rect_type: SpecialRectType) -> Self {
         self.special_rect_type = special_rect_type;
         self
+    }
+    
+    pub const fn set_floor(&mut self, floor: Floor) {
+        self.floor = floor;
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
@@ -127,11 +133,12 @@ impl RectCollider {
 pub struct DiamondCollider {
     pos: Vec2,
     size: Vec2,
+    floor: Floor,
 }
 
 impl DiamondCollider {
-    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32) -> Self {
-        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height } }
+    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, floor: Floor) -> Self {
+        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height }, floor }
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
@@ -373,11 +380,16 @@ impl DiamondCollider {
 pub struct EllipseCollider {
     pos: Vec2,
     size: Vec2,
+    floor: Floor,
 }
 
 impl EllipseCollider {
-    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32) -> Self {
-        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height } }
+    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, floor: Floor) -> Self {
+        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height }, floor }
+    }
+    
+    pub const fn set_floor(&mut self, floor: Floor) {
+        self.floor = floor;
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
@@ -441,12 +453,13 @@ impl TriangleType {
 pub struct TriangleCollider {
     pos: Vec2,
     size: Vec2,
+    floor: Floor,
     type_: TriangleType,
 }
 
 impl TriangleCollider {
-    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, type_: TriangleType) -> Self {
-        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height }, type_ }
+    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, floor: Floor, type_: TriangleType) -> Self {
+        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height }, floor, type_ }
     }
 
     pub const fn offsets(&self) -> [(f32, f32); 3] {
@@ -646,15 +659,17 @@ pub struct QuadCollider {
     p2: Vec2,
     p3: Vec2,
     p4: Vec2,
+    floor: Floor,
 }
 
 impl QuadCollider {
-    pub const fn new(x1: Fixed32, z1: Fixed32, x2: Fixed32, z2: Fixed32, x3: Fixed32, z3: Fixed32, x4: Fixed32, z4: Fixed32) -> Self {
+    pub const fn new(x1: Fixed32, z1: Fixed32, x2: Fixed32, z2: Fixed32, x3: Fixed32, z3: Fixed32, x4: Fixed32, z4: Fixed32, floor: Floor) -> Self {
         Self {
             p1: Vec2 { x: x1, z: z1 },
             p2: Vec2 { x: x2, z: z2 },
             p3: Vec2 { x: x3, z: z3 },
             p4: Vec2 { x: x4, z: z4 },
+            floor,
         }
     }
 
@@ -807,18 +822,20 @@ impl GameObject for Collider {
                     format!("Z3: {}", quad.p3.z),
                     format!("X4: {}", quad.p4.x),
                     format!("Z4: {}", quad.p4.z),
+                    format!("Floor: {}", quad.floor),
                 ]));
             }
-            Self::Rect(RectCollider { pos, size, .. })
-            | Self::Diamond(DiamondCollider { pos, size, .. })
-            | Self::Ellipse(EllipseCollider { pos, size, .. })
-            | Self::Triangle(TriangleCollider { pos, size, .. })
+            Self::Rect(RectCollider { pos, size, floor, .. })
+            | Self::Diamond(DiamondCollider { pos, size, floor, .. })
+            | Self::Ellipse(EllipseCollider { pos, size, floor, .. })
+            | Self::Triangle(TriangleCollider { pos, size, floor, .. })
             => {
                 groups.push((label, vec![
                     format!("X: {}", pos.x),
                     format!("Z: {}", pos.z),
                     format!("W: {}", size.x),
                     format!("H: {}", size.z),
+                    format!("Floor: {}", floor),
                 ]));
             }
         }
@@ -896,6 +913,16 @@ impl GameObject for Collider {
         }
 
         groups
+    }
+
+    fn floor(&self) -> Floor {
+        match self {
+            Self::Rect(rect) => rect.floor,
+            Self::Diamond(diamond) => diamond.floor,
+            Self::Ellipse(ellipse) => ellipse.floor,
+            Self::Triangle(triangle) => triangle.floor,
+            Self::Quad(quad) => quad.floor,
+        }
     }
 
     fn gui_shape(&self, draw_params: &DrawParams, _state: &State) -> egui::Shape {

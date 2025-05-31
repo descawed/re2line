@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use egui::{Color32, Shape, Stroke};
 use epaint::{CircleShape, ColorMode, PathShape, PathStroke};
 
-use crate::app::{DrawParams, GameObject, ObjectType};
+use crate::app::{DrawParams, Floor, GameObject, ObjectType};
 use crate::character::CharacterId;
 use crate::draw::*;
 use crate::math::*;
@@ -153,16 +153,18 @@ pub struct PositionedAiZone {
     pub character_index: usize,
     pub pos: Vec2,
     pub angle: Fixed32,
+    pub floor: Floor,
 }
 
 impl PositionedAiZone {
-    pub fn new(ai_zone: &'static AiZone, character_id: CharacterId, character_index: usize, pos: Vec2, angle: Fixed32) -> Self {
+    pub fn new(ai_zone: &'static AiZone, character_id: CharacterId, character_index: usize, pos: Vec2, angle: Fixed32, floor: Floor) -> Self {
         PositionedAiZone {
             ai_zone,
             character_id,
             character_index,
             pos,
             angle,
+            floor,
         }
     }
 }
@@ -202,6 +204,10 @@ impl GameObject for PositionedAiZone {
         ]));
 
         groups
+    }
+
+    fn floor(&self) -> Floor {
+        self.floor
     }
 
     fn gui_shape(&self, params: &DrawParams, state: &State) -> Shape {

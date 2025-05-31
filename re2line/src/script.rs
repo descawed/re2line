@@ -1,6 +1,7 @@
 use binrw::binrw;
 
 use crate::aot::{Entity, EntityForm};
+use crate::app::Floor;
 use crate::collision::{CapsuleType, Collider, QuadCollider, RectCollider};
 use crate::math::{Fixed16, UFixed16};
 
@@ -590,7 +591,7 @@ impl Instruction {
         Some(match self {
             Self::AotSet { aot, sce, sat, n_floor, x, z, w, h, .. } => Entity::new(
                 EntityForm::Other,
-                Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), CapsuleType::None)),
+                Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), Floor::Aot(*n_floor), CapsuleType::None)),
                 *n_floor,
                 *aot as u8,
                 *sce,
@@ -607,7 +608,7 @@ impl Instruction {
                         next_room: *next_room,
                         next_n_floor: *next_nfloor,
                     },
-                    Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), CapsuleType::None)),
+                    Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), Floor::Aot(*n_floor), CapsuleType::None)),
                     *n_floor,
                     *aot,
                     *sce,
@@ -615,7 +616,7 @@ impl Instruction {
                 ),
             Self::AotSet4p { aot, sce, sat, n_floor, x0, z0, x1, z1, x2, z2, x3, z3, .. } => Entity::new(
                 EntityForm::Other,
-                Collider::Quad(QuadCollider::new((*x0).to_32(), (*z0).to_32(), (*x1).to_32(), (*z1).to_32(), (*x2).to_32(), (*z2).to_32(), (*x3).to_32(), (*z3).to_32())),
+                Collider::Quad(QuadCollider::new((*x0).to_32(), (*z0).to_32(), (*x1).to_32(), (*z1).to_32(), (*x2).to_32(), (*z2).to_32(), (*x3).to_32(), (*z3).to_32(), Floor::Aot(*n_floor))),
                 *n_floor,
                 *aot,
                 *sce,
@@ -632,7 +633,7 @@ impl Instruction {
                         next_room: *next_room,
                         next_n_floor: *next_nfloor,
                     },
-                    Collider::Quad(QuadCollider::new((*x0).to_32(), (*z0).to_32(), (*x1).to_32(), (*z1).to_32(), (*x2).to_32(), (*z2).to_32(), (*x3).to_32(), (*z3).to_32())),
+                    Collider::Quad(QuadCollider::new((*x0).to_32(), (*z0).to_32(), (*x1).to_32(), (*z1).to_32(), (*x2).to_32(), (*z2).to_32(), (*x3).to_32(), (*z3).to_32(), Floor::Aot(*n_floor))),
                     *n_floor,
                     *aot,
                     *sce,
@@ -646,7 +647,7 @@ impl Instruction {
                     md1: *md1,
                     action: *action,
                 },
-                Collider::Quad(QuadCollider::new((*x0).to_32(), (*z0).to_32(), (*x1).to_32(), (*z1).to_32(), (*x2).to_32(), (*z2).to_32(), (*x3).to_32(), (*z3).to_32())),
+                Collider::Quad(QuadCollider::new((*x0).to_32(), (*z0).to_32(), (*x1).to_32(), (*z1).to_32(), (*x2).to_32(), (*z2).to_32(), (*x3).to_32(), (*z3).to_32(), Floor::Aot(*n_floor))),
                 *n_floor,
                 *aot,
                 *sce,
@@ -661,7 +662,7 @@ impl Instruction {
                     md1: *md1,
                     action: *action,
                 },
-                Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), CapsuleType::None)),
+                Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), Floor::Aot(*n_floor), CapsuleType::None)),
                 *n_floor,
                 *aot,
                 *sce,

@@ -29,7 +29,7 @@ mod layer;
 
 use config::Config;
 pub use config::RoomId;
-pub use game::{DrawParams, GameObject, ObjectType};
+pub use game::{DrawParams, Floor, GameObject, ObjectType};
 use layer::Layer;
 
 pub const APP_NAME: &str = "re2line";
@@ -44,6 +44,7 @@ const INPUT_OFFSET: f32 = INPUT_SIZE + INPUT_MARGIN;
 
 const TEXT_BOX_DARK: Color32 = Color32::from_rgb(0x30, 0x30, 0x30);
 const TEXT_BOX_LIGHT: Color32 = Color32::from_rgb(0xe0, 0xe0, 0xe0);
+const UNFOCUSED_FADE: f32 = 0.25;
 
 const TOOLTIP_HOVER_SECONDS: f32 = 1.0;
 
@@ -696,6 +697,7 @@ impl App {
 
     fn settings_browser(&mut self, ui: &mut Ui) {
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
+            ui.checkbox(&mut self.config.focus_current_floor, "Focus current floor");
             ui.checkbox(&mut self.config.show_sounds, "Show sounds");
             ui.separator();
 
@@ -909,6 +911,40 @@ impl App {
         let new_index = (index as isize + delta).max(0) as usize;
         self.set_recording_frame(new_index);
     }
+    
+    fn fade_focus<O: GameObject>(&self, draw_params: &mut DrawParams, object: &O) {
+        if self.config.focus_current_floor {
+            let floor = match self.selected_object {
+                SelectedObject::Floor(i) => self.floors[i].floor(),
+                SelectedObject::Collider(i) => self.colliders[i].floor(),
+                SelectedObject::Entity(i) => self.entities[i].floor(),
+                SelectedObject::AiZone(i) => self.ai_zones[i].floor(),
+                SelectedObject::Object(i) => match self.get_object(i) {
+                    Some(object) => object.floor(),
+                    None => return,
+                }
+                SelectedObject::Character(i) => match self.get_character(i) {
+                    Some(character) => character.floor(),
+                    None => return,
+                }
+                SelectedObject::None => return,
+            };
+
+            if !floor.matches(object.floor()) {
+                draw_params.fade(UNFOCUSED_FADE);
+            }
+        }
+    }
+    
+    fn adjust_draw_for_selection<O: GameObject>(&self, draw_params: &mut DrawParams, object: &O, index: usize) -> bool {
+        if self.selected_object.matches(object, index) {
+            draw_params.highlight();
+            true
+        } else {
+            self.fade_focus(draw_params, object);
+            false
+        }
+    }
 
     fn get_sound_text_box(sound: &PlayerSound, draw_params: &DrawParams, ui: &Ui) -> egui::Shape {
         let (x, y, _, _) = draw_params.transform(sound.pos.x, sound.pos.z, UFixed16(0), UFixed16(0));
@@ -1066,19 +1102,17 @@ impl eframe::App for App {
 
             for (i, floor) in self.floors.visible_objects(&self.config) {
                 let mut floor_draw_params = self.config.get_draw_params(ObjectType::Floor, view_center);
-                if self.selected_object.matches(floor, i) {
-                    // unlike the other object types, we don't draw the floor on top when it's highlighted
-                    // because it covers everything up and makes it hard to tell what's actually on the
-                    // given floor
-                    floor_draw_params.highlight();
-                }
+                // unlike the other object types, we don't draw the floor on top when it's highlighted
+                // because it covers everything up and makes it hard to tell what's actually on the
+                // given floor
+                self.adjust_draw_for_selection(&mut floor_draw_params, floor, i);
 
                 ui.draw_game_object(floor, &floor_draw_params, state);
             }
 
-            let mut collider_draw_params = self.config.get_draw_params(ObjectType::Collider, view_center);
             for (i, collider) in self.colliders.visible_objects(&self.config) {
-                if self.selected_object.matches(collider, i) {
+                let mut collider_draw_params = self.config.get_draw_params(ObjectType::Collider, view_center);
+                if self.adjust_draw_for_selection(&mut collider_draw_params, collider, i) {
                     continue;
                 }
 
@@ -1086,17 +1120,17 @@ impl eframe::App for App {
             }
 
             for (i, entity) in self.entities.visible_objects(&self.config) {
-                if self.selected_object.matches(entity, i) {
+                let mut entity_draw_params = self.config.get_draw_params(entity.object_type(), view_center);
+                if self.adjust_draw_for_selection(&mut entity_draw_params, entity, i) {
                     continue;
                 }
 
-                let entity_draw_params = self.config.get_draw_params(entity.object_type(), view_center);
                 ui.draw_game_object(entity, &entity_draw_params, state);
             }
 
-            let object_draw_params = self.config.get_draw_params(ObjectType::Object, view_center);
             for (_, object) in self.objects.visible_objects(&self.config) {
-                if self.selected_object.matches(object, object.index()) {
+                let mut object_draw_params = self.config.get_draw_params(ObjectType::Object, view_center);
+                if self.adjust_draw_for_selection(&mut object_draw_params, object, object.index()) {
                     continue;
                 }
                 
@@ -1111,11 +1145,15 @@ impl eframe::App for App {
                     continue;
                 };
                 // if the character the AI zones belong to isn't shown here, we shouldn't show the AI zones either
-                if self.selected_object.matches(character, ai_zone.character_index) || !self.config.should_show(character.object_type()) || !settings.show_ai {
+                if !self.config.should_show(character.object_type()) || !settings.show_ai {
                     continue;
                 }
 
-                let ai_draw_params = self.config.get_draw_params(ai_zone.object_type(), view_center);
+                let mut ai_draw_params = self.config.get_draw_params(ai_zone.object_type(), view_center);
+                if self.adjust_draw_for_selection(&mut ai_draw_params, ai_zone, i) {
+                    continue;
+                }
+                
                 ui.draw_game_object(ai_zone, &ai_draw_params, state);
             }
 
@@ -1125,12 +1163,13 @@ impl eframe::App for App {
             if let SelectedObject::Character(i) = self.selected_object {
                 if let (Some(character), Some(settings)) = (state.characters()[i].as_ref(), self.get_character_settings(i)) {
                     if self.config.should_show(character.object_type()) && settings.show_ai {
-                        for (_, ai_zone) in self.ai_zones.visible_objects(&self.config) {
+                        for (i, ai_zone) in self.ai_zones.visible_objects(&self.config) {
                             if ai_zone.character_index != i {
                                 continue;
                             }
 
-                            let ai_draw_params = self.config.get_draw_params(ai_zone.object_type(), view_center);
+                            let mut ai_draw_params = self.config.get_draw_params(ai_zone.object_type(), view_center);
+                            self.adjust_draw_for_selection(&mut ai_draw_params, ai_zone, i);
                             ui.draw_game_object(ai_zone, &ai_draw_params, state);
                         }
                     }
@@ -1161,11 +1200,11 @@ impl eframe::App for App {
             }
 
             for (_, character) in self.characters.visible_objects(&self.config) {
-                if self.selected_object.matches(character, character.index()) {
+                let mut char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
+                if self.adjust_draw_for_selection(&mut char_draw_params, character, character.index()) {
                     continue;
                 }
 
-                let char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
                 ui.draw_game_object(character, &char_draw_params, state);
             }
 
@@ -1176,7 +1215,8 @@ impl eframe::App for App {
                     continue;
                 }
 
-                let char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
+                let mut char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
+                self.fade_focus(&mut char_draw_params, character);
                 ui.draw_game_tooltip(character, &char_draw_params, state, i);
             }
 
@@ -1211,6 +1251,7 @@ impl eframe::App for App {
                     ui.draw_game_object(&self.entities[i], &entity_draw_params, state);
                 }
                 SelectedObject::Collider(i) => {
+                    let mut collider_draw_params = self.config.get_draw_params(self.colliders[i].object_type(), view_center);
                     collider_draw_params.highlight();
                     ui.draw_game_object(&self.colliders[i], &collider_draw_params, state);
                 }
@@ -1250,6 +1291,7 @@ impl eframe::App for App {
                         ui.draw_game_tooltip(entity, &entity_draw_params, state, i);
                     }
                     SelectedObject::Collider(i) => {
+                        let mut collider_draw_params = self.config.get_draw_params(self.colliders[i].object_type(), view_center);
                         collider_draw_params.highlight();
                         collider_draw_params.set_draw_origin(hover_pos);
                         ui.draw_game_tooltip(&self.colliders[i], &collider_draw_params, state, i);

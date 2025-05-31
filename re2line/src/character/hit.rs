@@ -3,7 +3,7 @@ use epaint::{Color32, Shape};
 use re2shared::game::{AimZone, HitBounds, WeaponRange};
 
 use crate::aot::Item;
-use crate::app::{DrawParams, GameObject, ObjectType};
+use crate::app::{DrawParams, Floor, GameObject, ObjectType};
 use crate::character::CharacterType;
 use crate::math::{Fixed16, Fixed32, Vec2};
 use crate::record::State;
@@ -187,6 +187,7 @@ pub const fn get_weapon_aim_ranges(item: Item) -> Option<&'static WeaponAimRange
 pub struct WeaponRangeVisualization {
     pub weapon: Item,
     pub pos: Vec2,
+    pub floor: Floor,
     pub angle: Fixed32,
     pub aim_range: [(Vec2, Vec2); 3],
 }
@@ -260,6 +261,7 @@ impl WeaponRangeVisualization {
         Some(Self {
             weapon,
             pos: player.center,
+            floor: player.floor(),
             angle: player.angle,
             aim_range: [bounds0, bounds1, bounds2],
         })
@@ -357,6 +359,10 @@ impl GameObject for WeaponRangeVisualization {
         }
         
         groups
+    }
+
+    fn floor(&self) -> Floor {
+        self.floor
     }
 
     fn gui_shape(&self, params: &DrawParams, _state: &State) -> Shape {

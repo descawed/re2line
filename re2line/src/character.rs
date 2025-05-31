@@ -3,7 +3,7 @@ use epaint::{CircleShape, ColorMode, PathShape, PathStroke};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::aot::Item;
-use crate::app::{DrawParams, GameObject, ObjectType};
+use crate::app::{DrawParams, Floor, GameObject, ObjectType};
 use crate::collision::{CapsuleType, EllipseCollider, RectCollider};
 use crate::math::{Fixed16, UFixed16, Fixed32, Vec2};
 use crate::record::State;
@@ -291,12 +291,12 @@ pub struct Object {
     pub center: Vec2,
     pub size: Vec2,
     pub shape: RectCollider,
-    pub floor: u8,
+    floor: Floor,
     pub index: usize,
 }
 
 impl Object {
-    pub const fn new(flags: u32, x: Fixed32, z: Fixed32, width: UFixed16, height: UFixed16) -> Self {
+    pub const fn new(flags: u32, x: Fixed32, z: Fixed32, width: UFixed16, height: UFixed16, floor: Floor) -> Self {
         let game_x = Fixed32(x.0 - width.0 as i32);
         let game_z = Fixed32(z.0 - height.0 as i32);
         let game_width = UFixed16(width.0 << 1).to_32();
@@ -309,14 +309,19 @@ impl Object {
             flags,
             center,
             size,
-            shape: RectCollider::new(game_x, game_z, game_width, game_height, CapsuleType::None),
-            floor: 0,
+            shape: RectCollider::new(game_x, game_z, game_width, game_height, floor, CapsuleType::None),
+            floor,
             index: usize::MAX,
         }
     }
     
     pub const fn empty() -> Self {
-        Self::new(0, Fixed32(0), Fixed32(0), UFixed16(0), UFixed16(0))
+        Self::new(0, Fixed32(0), Fixed32(0), UFixed16(0), UFixed16(0), Floor::Id(0))
+    }
+    
+    pub fn set_floor(&mut self, floor: Floor) {
+        self.floor = floor;
+        self.shape.set_floor(floor);
     }
 
     pub const fn index(&self) -> usize {
@@ -384,6 +389,10 @@ impl GameObject for Object {
         groups
     }
 
+    fn floor(&self) -> Floor {
+        self.floor
+    }
+
     fn gui_shape(&self, params: &DrawParams, _state: &State) -> Shape {
         self.shape.gui_shape(params)
     }
@@ -401,14 +410,14 @@ pub struct Character {
     current_health: i16,
     max_health: i16,
     pub state: [u8; 4],
-    pub floor: u8,
+    floor: Floor,
     pub velocity: Vec2,
     pub type_: u8,
     pub index: usize,
 }
 
 impl Character {
-    pub const fn new(id: CharacterId, health: i16, x: Fixed16, z: Fixed16, width: UFixed16, height: UFixed16, angle: Fixed16, velocity: Vec2) -> Self {
+    pub const fn new(id: CharacterId, health: i16, x: Fixed16, z: Fixed16, width: UFixed16, height: UFixed16, angle: Fixed16, floor: Floor, velocity: Vec2) -> Self {
         let game_x = Fixed32(x.0 as i32 - width.0 as i32);
         let game_z = Fixed32(z.0 as i32 - height.0 as i32);
         let game_width = UFixed16(width.0 << 1).to_32();
@@ -421,13 +430,13 @@ impl Character {
             center,
             prev_center: center,
             size: Vec2 { x: Fixed32(width.0 as i32), z: Fixed32(height.0 as i32) },
-            shape: EllipseCollider::new(game_x, game_z, game_width, game_height),
-            outline_shape: RectCollider::new(game_x, game_z, game_width, game_height, CapsuleType::None),
+            shape: EllipseCollider::new(game_x, game_z, game_width, game_height, floor),
+            outline_shape: RectCollider::new(game_x, game_z, game_width, game_height, floor, CapsuleType::None),
             angle: angle.to_32(),
             current_health: health,
             max_health: health,
             state: [0; 4],
-            floor: 0,
+            floor,
             velocity,
             type_: 0,
             index: usize::MAX,
@@ -435,7 +444,13 @@ impl Character {
     }
 
     pub const fn empty(id: CharacterId) -> Self {
-        Self::new(id, 0, Fixed16(0), Fixed16(0), UFixed16(0), UFixed16(0), Fixed16(0), Vec2::zero())
+        Self::new(id, 0, Fixed16(0), Fixed16(0), UFixed16(0), UFixed16(0), Fixed16(0), Floor::Id(0), Vec2::zero())
+    }
+    
+    pub fn set_floor(&mut self, floor: Floor) {
+        self.floor = floor;
+        self.shape.set_floor(floor);
+        self.outline_shape.set_floor(floor);
     }
 
     pub const fn name(&self) -> &'static str {
@@ -533,7 +548,7 @@ impl Character {
                 continue;
             }
 
-            positioned_ai_zones.push(PositionedAiZone::new(ai_zone, self.id, self.index, self.center, self.angle));
+            positioned_ai_zones.push(PositionedAiZone::new(ai_zone, self.id, self.index, self.center, self.angle, self.floor));
         }
 
         positioned_ai_zones
@@ -609,6 +624,10 @@ impl GameObject for Character {
 
         groups
     }
+
+    fn floor(&self) -> Floor {
+        self.floor
+    }
     
     fn gui_shape(&self, draw_params: &DrawParams, _state: &State) -> Shape {
         let body_shape = self.shape.gui_shape(draw_params);
@@ -671,11 +690,12 @@ pub struct CharacterPath {
     pub points: Vec<Vec2>,
     pub character_id: CharacterId,
     pub character_index: usize,
+    pub floor: Floor,
 }
 
 impl CharacterPath {
-    pub fn new(points: Vec<Vec2>, character_id: CharacterId, character_index: usize) -> Self {
-        Self { points, character_id, character_index }
+    pub fn new(points: Vec<Vec2>, character_id: CharacterId, character_index: usize, floor: Floor) -> Self {
+        Self { points, character_id, character_index, floor }
     }
     
     pub fn len(&self) -> Fixed32 {
@@ -713,6 +733,10 @@ impl GameObject for CharacterPath {
         ]));
         
         groups
+    }
+
+    fn floor(&self) -> Floor {
+        self.floor
     }
 
     fn gui_shape(&self, params: &DrawParams, _state: &State) -> Shape {

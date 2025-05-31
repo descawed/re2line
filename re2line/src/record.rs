@@ -7,7 +7,7 @@ use binrw::BinReaderExt;
 use re2shared::game::{NUM_CHARACTERS, NUM_OBJECTS};
 use re2shared::record::*;
 
-use crate::app::RoomId;
+use crate::app::{Floor, GameObject, RoomId};
 use crate::character::*;
 use crate::math::*;
 use crate::rng::{RNG_SEQUENCE, ROLL_DESCRIPTIONS};
@@ -169,7 +169,7 @@ impl State {
                     CharacterField::Size(width, height) => {
                         character.set_size(*width as i32, *height as i32);
                     }
-                    CharacterField::Floor(floor) => character.floor = *floor,
+                    CharacterField::Floor(floor) => character.set_floor(Floor::Id(*floor)),
                     CharacterField::Velocity(velocity) => {
                         character.velocity = Vec2::new(Fixed16(velocity.vx), Fixed16(velocity.vz));
                     }
@@ -204,7 +204,7 @@ impl State {
                 match change {
                     CharacterField::Transform(matrix) => object.set_pos(matrix.t.x, matrix.t.z),
                     CharacterField::Size(width, height) => object.set_size(*width as i32, *height as i32),
-                    CharacterField::Floor(floor) => object.floor = *floor,
+                    CharacterField::Floor(floor) => object.set_floor(Floor::Id(*floor)),
                     CharacterField::Flags(flags) => object.flags = *flags,
                     CharacterField::Removed => unreachable!(),
                     // don't care about these for objects
@@ -246,15 +246,6 @@ impl State {
 
     pub fn characters(&self) -> &[Option<Character>] {
         &self.characters
-    }
-
-    pub fn characters_mut(&mut self) -> [Option<&mut Character>; NUM_CHARACTERS] {
-        let mut characters = [const { None }; NUM_CHARACTERS];
-        for (i, character) in self.characters.iter_mut().enumerate() {
-            characters[i] = character.as_mut();
-        }
-
-        characters
     }
     
     pub fn objects(&self) -> &[Option<Object>] {
@@ -506,7 +497,7 @@ impl Recording {
             points.push(state_char.center);
         }
         
-        Some(CharacterPath::new(points, character.id, index))
+        Some(CharacterPath::new(points, character.id, index, character.floor()))
     }
     
     pub fn timeline(&self) -> Vec<Vec<(String, &State)>> {
