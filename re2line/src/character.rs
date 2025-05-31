@@ -404,6 +404,8 @@ pub struct Character {
     pub id: CharacterId,
     pub center: Vec2,
     pub prev_center: Vec2,
+    part_center: Vec2,
+    model_part_centers: Vec<Vec2>,
     pub size: Vec2,
     pub shape: EllipseCollider,
     pub outline_shape: RectCollider,
@@ -430,6 +432,8 @@ impl Character {
             id,
             center,
             prev_center: center,
+            part_center: Vec2::zero(),
+            model_part_centers: Vec::new(),
             size: Vec2 { x: Fixed32(width.0 as i32), z: Fixed32(height.0 as i32) },
             shape: EllipseCollider::new(game_x, game_z, game_width, game_height, floor),
             outline_shape: RectCollider::new(game_x, game_z, game_width, game_height, floor, CapsuleType::None),
@@ -483,6 +487,25 @@ impl Character {
     
     pub const fn set_index(&mut self, index: usize) {
         self.index = index;
+    }
+    
+    pub const fn part_center(&self) -> Vec2 {
+        self.part_center
+    }
+    
+    pub const fn set_part_center(&mut self, part_center: Vec2) {
+        self.part_center = part_center;
+    }
+    
+    pub fn model_part_centers(&self) -> &[Vec2] {
+        &self.model_part_centers
+    }
+    
+    pub fn set_model_part_center(&mut self, i: usize, model_part_center: Vec2) {
+        if self.model_part_centers.len() <= i {
+            self.model_part_centers.resize(i + 1, Vec2::zero());
+        }
+        self.model_part_centers[i] = model_part_center;
     }
 
     pub fn gui_interaction_point(&self, draw_params: &DrawParams) -> Pos2 {
@@ -551,8 +574,26 @@ impl Character {
                 // zone is not active in this state; skip it
                 continue;
             }
+            
+            let pos = match ai_zone.origin {
+                ZoneOrigin::Base => self.center,
+                ZoneOrigin::Part(i) => {
+                    if i != 0 {
+                        continue;
+                    }
+                    
+                    self.part_center
+                }
+                ZoneOrigin::ModelPart(i) => {
+                    if i >= self.model_part_centers.len() {
+                        continue;
+                    }
+                    
+                    self.model_part_centers[i]
+                }
+            };
 
-            positioned_ai_zones.push(PositionedAiZone::new(ai_zone, self.id, self.index, self.center, self.angle, self.floor));
+            positioned_ai_zones.push(PositionedAiZone::new(ai_zone, self.id, self.index, pos, self.angle, self.floor));
         }
 
         positioned_ai_zones

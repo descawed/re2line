@@ -164,6 +164,15 @@ impl State {
                         character.set_pos(matrix.t.x, matrix.t.z);
                         character.set_prev_pos(matrix.t.x, matrix.t.z);
                     },
+                    CharacterField::PartTranslation(i, vector) => {
+                        if *i == 0 {
+                            character.set_part_center(Vec2::new(vector.x, vector.z));
+                        }
+                    }
+                    CharacterField::ModelPartTransform(i, matrix) => {
+                        let pos = Vec2::new(matrix.t.x, matrix.t.z);
+                        character.set_model_part_center(*i as usize, pos);
+                    }
                     CharacterField::MotionAngle(angle) => character.angle = Fixed32(*angle as i32),
                     CharacterField::Motion(_) => (), // seems like this might not be something useful?
                     CharacterField::Size(width, height) => {
@@ -202,7 +211,11 @@ impl State {
                 let object = object.as_mut().unwrap();
                 object.set_index(index);
                 match change {
-                    CharacterField::Transform(matrix) => object.set_pos(matrix.t.x, matrix.t.z),
+                    CharacterField::PartTranslation(i, vector) => {
+                        if *i == 0 {
+                            object.set_pos(vector.x, vector.z);
+                        }
+                    }
                     CharacterField::Size(width, height) => object.set_size(*width as i32, *height as i32),
                     CharacterField::Floor(floor) => object.set_floor(Floor::Id(*floor)),
                     CharacterField::Flags(flags) => object.flags = *flags,
@@ -210,7 +223,8 @@ impl State {
                     // don't care about these for objects
                     CharacterField::State(_) | CharacterField::Id(_) | CharacterField::MotionAngle(_)
                     | CharacterField::Motion(_) | CharacterField::Health(_) | CharacterField::Type(_)
-                    | CharacterField::Velocity(_) => (),
+                    | CharacterField::Velocity(_) | CharacterField::Transform(_)
+                    | CharacterField::ModelPartTransform(_, _) => (),
                 }
             }
         }

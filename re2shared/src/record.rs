@@ -1,10 +1,10 @@
 use binrw::binrw;
 
-use crate::game::{FRAMES_PER_SECOND, MATRIX, SVECTOR};
+use crate::game::{FRAMES_PER_SECOND, MATRIX, SVECTOR, VECTOR};
 use crate::rng::RollType;
 
 pub const RECORD_VERSION: u16 = 2;
-pub const MAX_CHARACTER_CHANGES: usize = 11;
+pub const MAX_CHARACTER_CHANGES: usize = 20; // this is kind of arbitrary now because there can be multiple PartTransforms and ModelPartTransforms
 
 #[binrw]
 #[derive(Debug, Clone)]
@@ -21,6 +21,8 @@ pub enum CharacterField {
     #[brw(magic = 9u8)] Removed,
     #[brw(magic = 10u8)] Type(u8),
     #[brw(magic = 11u8)] Flags(u32),
+    #[brw(magic = 12u8)] PartTranslation(u8, VECTOR),
+    #[brw(magic = 13u8)] ModelPartTransform(u8, MATRIX),
 }
 
 #[binrw]

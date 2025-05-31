@@ -1,4 +1,4 @@
-use re2shared::game::{Character, MATRIX, SVECTOR, NUM_CHARACTERS, NUM_OBJECTS};
+use re2shared::game::{Character, MATRIX, SVECTOR, VECTOR, NUM_CHARACTERS, NUM_OBJECTS};
 use re2shared::record::*;
 
 use crate::game::Game;
@@ -9,6 +9,8 @@ pub struct CharacterState {
     state: [u8; 4],
     id: u8,
     transform: MATRIX,
+    part_translation: VECTOR,
+    model_part_transforms: Vec<MATRIX>,
     motion_angle: i16,
     motion: i16,
     x_size: u16,
@@ -17,21 +19,17 @@ pub struct CharacterState {
     velocity: SVECTOR,
     health: i16,
     type_: u8,
-    use_part_pos: bool,
 }
 
 impl CharacterState {
-    pub fn from_character(char: &Character, use_part_pos: bool) -> Self {
-        let mut transform = char.transform.clone();
-        if use_part_pos {
-            transform.t = char.parts[0].pos.clone();       
-        }
-        
+    pub fn from_character(char: &Character) -> Self {
         Self {
             flags: char.flags,
             state: char.state.clone(),
             id: char.id,
             transform: char.transform.clone(),
+            part_translation: char.parts[0].pos.clone(),
+            model_part_transforms: char.model_parts().into_iter().map(|p| p.composite_transform.clone()).collect(),
             motion_angle: char.motion_angle,
             motion: char.motion,
             x_size: char.parts[0].x_size,
@@ -40,15 +38,22 @@ impl CharacterState {
             velocity: char.velocity.clone(),
             health: char.health,
             type_: (char.type_ & 0xff) as u8,
-            use_part_pos,       
+        }
+    }
+    
+    const fn model_parts_needed(&self) -> &'static [usize] {
+        match self.id {
+            32 => &[4], // dog
+            _ => &[],
         }
     }
 
     pub fn full_delta(&self) -> Vec<CharacterField> {
-        vec![
+        let mut delta = vec![
             CharacterField::State(self.state.clone()),
             CharacterField::Id(self.id),
             CharacterField::Transform(self.transform.clone()),
+            CharacterField::PartTranslation(0, self.part_translation.clone()),
             CharacterField::MotionAngle(self.motion_angle),
             CharacterField::Motion(self.motion),
             CharacterField::Size(self.x_size, self.z_size),
@@ -57,7 +62,13 @@ impl CharacterState {
             CharacterField::Health(self.health),
             CharacterField::Type(self.type_),
             CharacterField::Flags(self.flags),
-        ]
+        ];
+        
+        for &i in self.model_parts_needed() {
+            delta.push(CharacterField::ModelPartTransform(i as u8, self.model_part_transforms[i].clone()));
+        }
+        
+        delta
     }
 
     pub fn track_delta(&mut self, char: &Character) -> Vec<CharacterField> {
@@ -77,17 +88,24 @@ impl CharacterState {
             self.id = char.id;
             fields.push(CharacterField::Id(char.id));
         }
-
-        if self.use_part_pos {
-            if self.transform.t != char.parts[0].pos || self.transform.m != char.transform.m {
-                self.transform.t = char.parts[0].pos.clone();
-                self.transform.m = char.transform.m.clone();
-                fields.push(CharacterField::Transform(self.transform.clone()));  
-            }
-        } else {
-            if self.transform != char.transform {
-                self.transform = char.transform.clone();
-                fields.push(CharacterField::Transform(char.transform.clone()));
+        
+        if self.transform != char.transform {
+            self.transform = char.transform.clone();
+            fields.push(CharacterField::Transform(char.transform.clone()));
+        }
+        
+        if self.part_translation != char.parts[0].pos {
+            self.part_translation = char.parts[0].pos.clone();
+            fields.push(CharacterField::PartTranslation(0, char.parts[0].pos.clone()));
+        }
+        
+        let model_parts_needed = self.model_parts_needed();
+        for (i, model_part) in char.model_parts().iter().enumerate() {
+            if self.model_part_transforms[i] != model_part.composite_transform {
+                self.model_part_transforms[i] = model_part.composite_transform.clone();
+                if model_parts_needed.contains(&i) {
+                    fields.push(CharacterField::ModelPartTransform(i as u8, model_part.composite_transform.clone()));
+                }
             }
         }
 
@@ -231,7 +249,7 @@ impl GameTracker {
         }
     }
     
-    fn track_char_change(i: usize, char: Option<*const Character>, state: &mut Option<CharacterState>, character_diffs: &mut Vec<CharacterDiff>, use_part_pos: bool) {
+    fn track_char_change(i: usize, char: Option<*const Character>, state: &mut Option<CharacterState>, character_diffs: &mut Vec<CharacterDiff>) {
         match (char, state.as_mut()) {
             (None, Some(_)) => {
                 character_diffs.push(CharacterDiff::removed(i));
@@ -239,7 +257,7 @@ impl GameTracker {
             }
             (Some(char), None) => {
                 let char = unsafe { &*char };
-                let char_state = CharacterState::from_character(char, use_part_pos);
+                let char_state = CharacterState::from_character(char);
                 character_diffs.push(CharacterDiff::new(i, char_state.full_delta()));
                 *state = Some(char_state);
             }
@@ -262,12 +280,12 @@ impl GameTracker {
 
         let mut character_diffs = Vec::with_capacity(NUM_CHARACTERS);
         for (i, (char, state)) in game.characters().zip(self.characters.iter_mut()).enumerate() {
-            Self::track_char_change(i, char, state, &mut character_diffs, false);
+            Self::track_char_change(i, char, state, &mut character_diffs);
         }
         
         let mut object_diffs = Vec::with_capacity(NUM_OBJECTS);
         for (i, (char, state)) in game.objects().zip(self.objects.iter_mut()).enumerate() {
-            Self::track_char_change(i, char, state, &mut object_diffs, true);       
+            Self::track_char_change(i, char, state, &mut object_diffs);       
         }
 
         FrameRecord {
