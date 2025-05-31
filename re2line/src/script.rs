@@ -138,7 +138,7 @@ pub enum Instruction {
     #[brw(magic = 0x2Eu8)]
     WorkSet { type_: u8, entity_id: u8 },
     #[brw(magic = 0x2Fu8)]
-    SpeedSet { speed_id: u8, speed_value: u16 },
+    SpeedSet { speed_id: u8, speed_value: Fixed16 },
     #[brw(magic = 0x30u8)]
     AddSpeed,
     #[brw(magic = 0x31u8)]
