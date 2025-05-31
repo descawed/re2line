@@ -697,7 +697,8 @@ impl App {
 
     fn settings_browser(&mut self, ui: &mut Ui) {
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
-            ui.checkbox(&mut self.config.focus_current_floor, "Focus current floor");
+            ui.checkbox(&mut self.config.focus_current_selected_object, "Focus for current selection");
+            ui.checkbox(&mut self.config.alternate_collision_colors, "Alternate collision colors");
             ui.checkbox(&mut self.config.show_sounds, "Show sounds");
             ui.separator();
 
@@ -913,7 +914,7 @@ impl App {
     }
     
     fn fade_focus<O: GameObject>(&self, draw_params: &mut DrawParams, object: &O) {
-        if self.config.focus_current_floor {
+        if self.config.focus_current_selected_object {
             let floor = match self.selected_object {
                 SelectedObject::Floor(i) => self.floors[i].floor(),
                 SelectedObject::Collider(i) => self.colliders[i].floor(),
@@ -1101,7 +1102,7 @@ impl eframe::App for App {
             let state = self.active_recording.as_ref().and_then(|recording| recording.current_state()).unwrap_or(&empty_state);
 
             for (i, floor) in self.floors.visible_objects(&self.config) {
-                let mut floor_draw_params = self.config.get_draw_params(ObjectType::Floor, view_center);
+                let mut floor_draw_params = self.config.get_obj_draw_params(floor, view_center);
                 // unlike the other object types, we don't draw the floor on top when it's highlighted
                 // because it covers everything up and makes it hard to tell what's actually on the
                 // given floor
@@ -1111,7 +1112,7 @@ impl eframe::App for App {
             }
 
             for (i, collider) in self.colliders.visible_objects(&self.config) {
-                let mut collider_draw_params = self.config.get_draw_params(ObjectType::Collider, view_center);
+                let mut collider_draw_params = self.config.get_obj_draw_params(collider, view_center);
                 if self.adjust_draw_for_selection(&mut collider_draw_params, collider, i) {
                     continue;
                 }
@@ -1120,7 +1121,7 @@ impl eframe::App for App {
             }
 
             for (i, entity) in self.entities.visible_objects(&self.config) {
-                let mut entity_draw_params = self.config.get_draw_params(entity.object_type(), view_center);
+                let mut entity_draw_params = self.config.get_obj_draw_params(entity, view_center);
                 if self.adjust_draw_for_selection(&mut entity_draw_params, entity, i) {
                     continue;
                 }
@@ -1129,7 +1130,7 @@ impl eframe::App for App {
             }
 
             for (_, object) in self.objects.visible_objects(&self.config) {
-                let mut object_draw_params = self.config.get_draw_params(ObjectType::Object, view_center);
+                let mut object_draw_params = self.config.get_obj_draw_params(object, view_center);
                 if self.adjust_draw_for_selection(&mut object_draw_params, object, object.index()) {
                     continue;
                 }
@@ -1149,7 +1150,7 @@ impl eframe::App for App {
                     continue;
                 }
 
-                let mut ai_draw_params = self.config.get_draw_params(ai_zone.object_type(), view_center);
+                let mut ai_draw_params = self.config.get_obj_draw_params(ai_zone, view_center);
                 if self.adjust_draw_for_selection(&mut ai_draw_params, ai_zone, i) {
                     continue;
                 }
@@ -1168,7 +1169,7 @@ impl eframe::App for App {
                                 continue;
                             }
 
-                            let mut ai_draw_params = self.config.get_draw_params(ai_zone.object_type(), view_center);
+                            let mut ai_draw_params = self.config.get_obj_draw_params(ai_zone, view_center);
                             self.adjust_draw_for_selection(&mut ai_draw_params, ai_zone, i);
                             ui.draw_game_object(ai_zone, &ai_draw_params, state);
                         }
@@ -1183,7 +1184,7 @@ impl eframe::App for App {
                 }
                 
                 if let Some(path) = self.active_recording.as_ref().and_then(|r| r.get_path_for_character(character.index())) {
-                    let mut path_draw_params = self.config.get_draw_params(path.object_type(), view_center);
+                    let mut path_draw_params = self.config.get_obj_draw_params(&path, view_center);
                     path_draw_params.stroke.width = character.size.x * self.config.zoom_scale * 2.0;
                     ui.draw_game_object(&path, &path_draw_params, state);
                 }
@@ -1192,7 +1193,7 @@ impl eframe::App for App {
             // draw player's equipped weapon ranges if enabled
             if let Some(range_visualization) = WeaponRangeVisualization::for_state(state) {
                 if self.config.should_show(range_visualization.object_type()) {
-                    let mut range_draw_params = self.config.get_draw_params(range_visualization.object_type(), view_center);
+                    let mut range_draw_params = self.config.get_obj_draw_params(&range_visualization, view_center);
                     range_draw_params.stroke.width *= 2.0;
                     range_draw_params.stroke_kind = StrokeKind::Inside;
                     ui.draw_game_object(&range_visualization, &range_draw_params, state);
@@ -1200,7 +1201,7 @@ impl eframe::App for App {
             }
 
             for (_, character) in self.characters.visible_objects(&self.config) {
-                let mut char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
+                let mut char_draw_params = self.config.get_obj_draw_params(character, view_center);
                 if self.adjust_draw_for_selection(&mut char_draw_params, character, character.index()) {
                     continue;
                 }
@@ -1215,7 +1216,7 @@ impl eframe::App for App {
                     continue;
                 }
 
-                let mut char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
+                let mut char_draw_params = self.config.get_obj_draw_params(character, view_center);
                 self.fade_focus(&mut char_draw_params, character);
                 ui.draw_game_tooltip(character, &char_draw_params, state, i);
             }
@@ -1246,25 +1247,25 @@ impl eframe::App for App {
             match self.selected_object {
                 SelectedObject::None | SelectedObject::Floor(_) | SelectedObject::AiZone(_) => {}
                 SelectedObject::Entity(i) => {
-                    let mut entity_draw_params = self.config.get_draw_params(self.entities[i].object_type(), view_center);
+                    let mut entity_draw_params = self.config.get_obj_draw_params(&self.entities[i], view_center);
                     entity_draw_params.highlight();
                     ui.draw_game_object(&self.entities[i], &entity_draw_params, state);
                 }
                 SelectedObject::Collider(i) => {
-                    let mut collider_draw_params = self.config.get_draw_params(self.colliders[i].object_type(), view_center);
+                    let mut collider_draw_params = self.config.get_obj_draw_params(&self.colliders[i], view_center);
                     collider_draw_params.highlight();
                     ui.draw_game_object(&self.colliders[i], &collider_draw_params, state);
                 }
                 SelectedObject::Object(i) => {
                     if let Some(object) = self.get_object(i) {
-                        let mut object_draw_params = self.config.get_draw_params(ObjectType::Object, view_center);
+                        let mut object_draw_params = self.config.get_obj_draw_params(object, view_center);
                         object_draw_params.highlight();
                         ui.draw_game_object(object, &object_draw_params, state);
                     }
                 }
                 SelectedObject::Character(i) => {
                     if let (Some(character), Some(settings)) = (self.get_character(i), self.get_character_settings(i)) {
-                        let char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
+                        let char_draw_params = self.config.get_obj_draw_params(character, view_center);
                         ui.draw_game_object(character, &char_draw_params, state);
                         if settings.show_tooltip {
                             ui.draw_game_tooltip(character, &char_draw_params, state, i);
@@ -1278,27 +1279,29 @@ impl eframe::App for App {
                 match self.hover_object {
                     SelectedObject::None => {}
                     SelectedObject::Floor(i) => {
-                        let mut floor_draw_params = self.config.get_draw_params(ObjectType::Floor, view_center);
+                        let floor = &self.floors[i];
+                        let mut floor_draw_params = self.config.get_obj_draw_params(floor, view_center);
                         floor_draw_params.highlight();
                         floor_draw_params.set_draw_origin(hover_pos);
-                        ui.draw_game_tooltip(&self.floors[i], &floor_draw_params, state, i);
+                        ui.draw_game_tooltip(floor, &floor_draw_params, state, i);
                     }
                     SelectedObject::Entity(i) => {
                         let entity = &self.entities[i];
-                        let mut entity_draw_params = self.config.get_draw_params(entity.object_type(), view_center);
+                        let mut entity_draw_params = self.config.get_obj_draw_params(entity, view_center);
                         entity_draw_params.highlight();
                         entity_draw_params.set_draw_origin(hover_pos);
                         ui.draw_game_tooltip(entity, &entity_draw_params, state, i);
                     }
                     SelectedObject::Collider(i) => {
-                        let mut collider_draw_params = self.config.get_draw_params(self.colliders[i].object_type(), view_center);
+                        let collider = &self.colliders[i];
+                        let mut collider_draw_params = self.config.get_obj_draw_params(collider, view_center);
                         collider_draw_params.highlight();
                         collider_draw_params.set_draw_origin(hover_pos);
-                        ui.draw_game_tooltip(&self.colliders[i], &collider_draw_params, state, i);
+                        ui.draw_game_tooltip(collider, &collider_draw_params, state, i);
                     }
                     SelectedObject::Object(i) => {
                         if let Some(object) = self.get_object(i) {
-                            let mut object_draw_params = self.config.get_draw_params(ObjectType::Object, view_center);
+                            let mut object_draw_params = self.config.get_obj_draw_params(object, view_center);
                             object_draw_params.highlight();
                             object_draw_params.set_draw_origin(hover_pos);
                             ui.draw_game_tooltip(object, &object_draw_params, state, i);
@@ -1306,7 +1309,7 @@ impl eframe::App for App {
                     }
                     SelectedObject::AiZone(i) => {
                         let ai_zone = &self.ai_zones[i];
-                        let mut ai_draw_params = self.config.get_draw_params(ai_zone.object_type(), view_center);
+                        let mut ai_draw_params = self.config.get_obj_draw_params(ai_zone, view_center);
                         ai_draw_params.highlight();
                         ai_draw_params.set_draw_origin(hover_pos);
                         ui.draw_game_tooltip(ai_zone, &ai_draw_params, state, i);
@@ -1315,7 +1318,7 @@ impl eframe::App for App {
                         if let (Some(character), Some(settings)) = (self.get_character(i), self.get_character_settings(i)) {
                             // if the character's tooltip setting is on, we've already drawn their tooltip
                             if !settings.show_tooltip {
-                                let mut char_draw_params = self.config.get_draw_params(character.object_type(), view_center);
+                                let mut char_draw_params = self.config.get_obj_draw_params(character, view_center);
                                 char_draw_params.set_draw_origin(hover_pos);
                                 ui.draw_game_tooltip(character, &char_draw_params, state, i);
                             }

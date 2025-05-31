@@ -353,19 +353,6 @@ impl Recording {
         self.states.get(room_index)
     }
 
-    pub fn current_state_mut(&mut self) -> Option<&mut State> {
-        if !self.range.contains(&self.index) {
-            return None;
-        }
-
-        let room_index = self.index - self.range.start;
-        self.states.get_mut(room_index)
-    }
-
-    pub fn current_room(&self) -> &[State] {
-        &self.states
-    }
-
     pub fn next(&mut self) -> Option<&State> {
         self.set_index(self.index + 1)
     }

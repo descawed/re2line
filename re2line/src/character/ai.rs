@@ -14,8 +14,6 @@ pub enum StateMask {
     Any,
     Exactly(u8),
     Either(u8, u8),
-    OneOf3(u8, u8, u8),
-    OneOf4(u8, u8, u8, u8),
     Between(u8, u8),
 }
 
@@ -25,8 +23,6 @@ impl StateMask {
             Self::Any => true,
             Self::Exactly(value) => state == *value,
             Self::Either(value1, value2) => state == *value1 || state == *value2,
-            Self::OneOf3(value1, value2, value3) => state == *value1 || state == *value2 || state == *value3,
-            Self::OneOf4(value1, value2, value3, value4) => state == *value1 || state == *value2 || state == *value3 || state == *value4,
             Self::Between(value1, value2) => state >= *value1 && state <= *value2,
         }
     }

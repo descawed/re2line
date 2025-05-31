@@ -259,7 +259,7 @@ impl DrawParams {
         }
     }
 
-    const fn set_color(&mut self, color: Color32) {
+    pub const fn set_color(&mut self, color: Color32) {
         if self.is_stroke() {
             self.stroke.color = color;
         } else {
@@ -319,6 +319,10 @@ pub trait GameObject {
     fn details(&self) -> Vec<(String, Vec<String>)>;
     
     fn floor(&self) -> Floor;
+    
+    fn collision_mask(&self) -> u16 {
+        0xFFFF
+    }
 
     fn gui_shape(&self, params: &DrawParams, state: &State) -> egui::Shape;
     

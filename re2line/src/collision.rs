@@ -46,6 +46,7 @@ pub struct RectCollider {
     capsule_type: CapsuleType,
     special_rect_type: SpecialRectType,
     floor: Floor,
+    collision_mask: u16,
 }
 
 impl RectCollider {
@@ -56,7 +57,17 @@ impl RectCollider {
             floor,
             capsule_type,
             special_rect_type: SpecialRectType::None,
+            collision_mask: 0xFFFF,
         }
+    }
+    
+    pub const fn collision_mask(&self) -> u16 {
+        self.collision_mask
+    }
+
+    pub fn with_collision_mask(mut self, collision_mask: u16) -> Self {
+        self.collision_mask = collision_mask;
+        self
     }
     
     pub const fn with_special_rect_type(mut self, special_rect_type: SpecialRectType) -> Self {
@@ -134,11 +145,26 @@ pub struct DiamondCollider {
     pos: Vec2,
     size: Vec2,
     floor: Floor,
+    collision_mask: u16,
 }
 
 impl DiamondCollider {
     pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, floor: Floor) -> Self {
-        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height }, floor }
+        Self {
+            pos: Vec2 { x, z },
+            size: Vec2 { x: width, z: height },
+            floor,
+            collision_mask: 0xFFFF,
+        }
+    }
+    
+    pub fn with_collision_mask(mut self, collision_mask: u16) -> Self {
+        self.collision_mask = collision_mask;
+        self
+    }
+
+    pub const fn collision_mask(&self) -> u16 {
+        self.collision_mask
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
@@ -381,11 +407,26 @@ pub struct EllipseCollider {
     pos: Vec2,
     size: Vec2,
     floor: Floor,
+    collision_mask: u16,
 }
 
 impl EllipseCollider {
     pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, floor: Floor) -> Self {
-        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height }, floor }
+        Self {
+            pos: Vec2 { x, z },
+            size: Vec2 { x: width, z: height },
+            floor,
+            collision_mask: 0xFFFF,
+        }
+    }
+
+    pub const fn collision_mask(&self) -> u16 {
+        self.collision_mask
+    }
+
+    pub fn with_collision_mask(mut self, collision_mask: u16) -> Self {
+        self.collision_mask = collision_mask;
+        self
     }
     
     pub const fn set_floor(&mut self, floor: Floor) {
@@ -455,11 +496,27 @@ pub struct TriangleCollider {
     size: Vec2,
     floor: Floor,
     type_: TriangleType,
+    collision_mask: u16,
 }
 
 impl TriangleCollider {
     pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, floor: Floor, type_: TriangleType) -> Self {
-        Self { pos: Vec2 { x, z }, size: Vec2 { x: width, z: height }, floor, type_ }
+        Self {
+            pos: Vec2 { x, z },
+            size: Vec2 { x: width, z: height },
+            floor,
+            type_,
+            collision_mask: 0xFFFF,
+        }
+    }
+
+    pub const fn collision_mask(&self) -> u16 {
+        self.collision_mask
+    }
+
+    pub fn with_collision_mask(mut self, collision_mask: u16) -> Self {
+        self.collision_mask = collision_mask;
+        self
     }
 
     pub const fn offsets(&self) -> [(f32, f32); 3] {
@@ -830,13 +887,18 @@ impl GameObject for Collider {
             | Self::Ellipse(EllipseCollider { pos, size, floor, .. })
             | Self::Triangle(TriangleCollider { pos, size, floor, .. })
             => {
-                groups.push((label, vec![
+                let mut params = vec![
                     format!("X: {}", pos.x),
                     format!("Z: {}", pos.z),
                     format!("W: {}", size.x),
                     format!("H: {}", size.z),
                     format!("Floor: {}", floor),
-                ]));
+                ];
+                if self.collision_mask() != 0xFFFF {
+                    params.push(format!("Collision: {:04X}", self.collision_mask()));
+                }
+                
+                groups.push((label, params));
             }
         }
         
@@ -922,6 +984,16 @@ impl GameObject for Collider {
             Self::Ellipse(ellipse) => ellipse.floor,
             Self::Triangle(triangle) => triangle.floor,
             Self::Quad(quad) => quad.floor,
+        }
+    }
+
+    fn collision_mask(&self) -> u16 {
+        match self {
+            Self::Rect(rect) => rect.collision_mask(),
+            Self::Diamond(diamond) => diamond.collision_mask(),
+            Self::Ellipse(ellipse) => ellipse.collision_mask(),
+            Self::Triangle(triangle) => triangle.collision_mask(),
+            Self::Quad(_) => 0xFFFF,
         }
     }
 

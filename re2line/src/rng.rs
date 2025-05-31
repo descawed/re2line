@@ -150,10 +150,6 @@ fn bit_two(seed: u16) -> String {
     bool_text(roll(seed) & 2 == 2)
 }
 
-fn not_bit_two(seed: u16) -> String {
-    bool_text(roll(seed) & 2 == 0)
-}
-
 fn and_three_zero(seed: u16) -> String {
     bool_text(roll(seed) & 3 == 0)
 }

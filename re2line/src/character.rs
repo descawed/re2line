@@ -15,6 +15,7 @@ mod hit;
 pub use hit::*;
 
 const INTERACTION_DISTANCE: Fixed32 = Fixed32(620);
+pub const PLAYER_COLLISION_MASK: u16 = 0x8000;
 
 const ARROW_HEAD_HEIGHT: f32 = 6.0;
 const ARROW_HEAD_WIDTH: f32 = 6.0;
@@ -627,6 +628,14 @@ impl GameObject for Character {
 
     fn floor(&self) -> Floor {
         self.floor
+    }
+
+    fn collision_mask(&self) -> u16 {
+        if self.id.is_player() {
+            PLAYER_COLLISION_MASK
+        } else {
+            0xFFFF
+        }
     }
     
     fn gui_shape(&self, draw_params: &DrawParams, _state: &State) -> Shape {

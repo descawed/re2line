@@ -6,7 +6,8 @@ use enum_map::{enum_map, EnumMap};
 use egui::Color32;
 use serde::{Deserialize, Serialize};
 
-use super::game::{DrawParams, ObjectType};
+use crate::character::PLAYER_COLLISION_MASK;
+use super::game::{DrawParams, GameObject, ObjectType};
 
 const STROKE_WIDTH: f32 = 1.0;
 const STAGE_CHARACTERS: &str = "123456789ABCDEFG";
@@ -107,7 +108,9 @@ pub(super) struct Config {
      #[serde(default = "default_true")]
      pub show_sounds: bool,
      #[serde(default)]
-     pub focus_current_floor: bool,
+     pub focus_current_selected_object: bool,
+     #[serde(default)]
+     pub alternate_collision_colors: bool,
      pub object_settings: EnumMap<ObjectType, ObjectSettings>,
 }
 
@@ -140,6 +143,21 @@ impl Config {
           self.object_settings[object_type].get_draw_params(origin, self.zoom_scale)
      }
      
+     pub fn get_obj_draw_params<O: GameObject>(&self, object: &O, origin: egui::Pos2) -> DrawParams {
+          let object_type = object.object_type();
+          let mut params = self.get_draw_params(object_type, origin);
+          if self.alternate_collision_colors && matches!(object_type, ObjectType::Collider) {
+               let collision_mask = object.collision_mask();
+               if collision_mask == 0 {
+                    params.set_color(Color32::from_gray(0x20));
+               } else if collision_mask & PLAYER_COLLISION_MASK == 0 {
+                    params.set_color(self.object_settings[ObjectType::Enemy].color);
+               }
+          }
+          
+          params
+     }
+     
      pub fn should_show(&self, object_type: ObjectType) -> bool {
           self.object_settings[object_type].show
      }
@@ -152,7 +170,8 @@ impl Default for Config {
                last_rdt: None,
                zoom_scale: 40.0,
                show_sounds: true,
-               focus_current_floor: false,
+               focus_current_selected_object: false,
+               alternate_collision_colors: false,
                object_settings: enum_map! {
                     ObjectType::Floor => ObjectSettings::fill(Color32::from_rgb(0xa4, 0x4d, 0x68)),
                     ObjectType::Collider => ObjectSettings::stroke(Color32::from_rgb(0x63, 0xb3, 0x4d)),
