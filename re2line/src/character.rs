@@ -553,6 +553,8 @@ impl Character {
             describe_licker_ai_state(&self.state)
         } else if self.id == CharacterId::Dog {
             describe_dog_ai_state(&self.state)
+        } else if self.id == CharacterId::Spider {
+            describe_spider_ai_state(&self.state)
         } else {
             "Unknown"
         })
@@ -563,6 +565,7 @@ impl Character {
             CharacterId::LickerRed => &RED_LICKER_AI_ZONES[..],
             CharacterId::LickerBlack => &BLACK_LICKER_AI_ZONES[..],
             CharacterId::Dog => &DOG_AI_ZONES[..],
+            CharacterId::Spider => &SPIDER_AI_ZONES[..],
             _ if self.is_crawling_zombie() => &CRAWLING_ZOMBIE_AI_ZONES[..],
             _ if self.id.is_zombie() => &ZOMBIE_AI_ZONES[..],
             _ => return Vec::new(),

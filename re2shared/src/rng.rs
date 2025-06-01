@@ -71,6 +71,14 @@ pub enum RollType {
     DogAnimationOffset1 = 62,
     DogAnimationOffset2 = 63,
     DogAnimationOffset3 = 64,
+    SpiderTurnTime = 65,
+    SpiderTurnDirection = 66,
+    SpiderMaxFaceTime = 67,
+    SpiderMaxPursueTime = 68,
+    SpiderMaxLegTurnTime = 69,
+    SpiderMaxLegAttackTime = 70,
+    SpiderMaxIdleTime = 71,
+    SpiderPursue50 = 72,
     Partial = 0xFFFE, // a roll that's part of a larger series of rolls and not used on its own
     Invalid = 0xFFFF,
 }

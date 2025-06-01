@@ -271,7 +271,7 @@ impl GameObject for PositionedAiZone {
     }
 }
 
-pub fn describe_player_ai_state(state: &[u8; 4]) -> &'static str {
+pub const fn describe_player_ai_state(state: &[u8; 4]) -> &'static str {
     match state {
         [0x01, 0x00, _, _] => "Idle",
         [0x01, 0x01, _, _] => "Walk",
@@ -286,7 +286,7 @@ pub fn describe_player_ai_state(state: &[u8; 4]) -> &'static str {
     }
 }
 
-pub fn describe_crawling_zombie_ai_state(state: &[u8; 4]) -> &'static str {
+pub const fn describe_crawling_zombie_ai_state(state: &[u8; 4]) -> &'static str {
     match state {
         [0x01, 0x00, _, _] => "Crawl",
         [0x01, 0x01, _, _] => "Bite",
@@ -297,7 +297,7 @@ pub fn describe_crawling_zombie_ai_state(state: &[u8; 4]) -> &'static str {
     }
 }
 
-pub fn describe_zombie_ai_state(state: &[u8; 4]) -> &'static str {
+pub const fn describe_zombie_ai_state(state: &[u8; 4]) -> &'static str {
     match state {
         [0x01, 0x00, 0x03, _] => "Idle wander",
         [0x01, 0x00, _, _] => "Idle",
@@ -316,7 +316,7 @@ pub fn describe_zombie_ai_state(state: &[u8; 4]) -> &'static str {
     }
 }
 
-pub fn describe_licker_ai_state(state: &[u8; 4]) -> &'static str {
+pub const fn describe_licker_ai_state(state: &[u8; 4]) -> &'static str {
     match state {
         [0x01, 0x00, _, _] => "Idle",
         [0x01, 0x02, _, _] => "Recoil",
@@ -336,7 +336,7 @@ pub fn describe_licker_ai_state(state: &[u8; 4]) -> &'static str {
     }
 }
 
-pub fn describe_dog_ai_state(state: &[u8; 4]) -> &'static str {
+pub const fn describe_dog_ai_state(state: &[u8; 4]) -> &'static str {
     match state {
         [0x01, 0x00, _, _] => "Idle",
         [0x01, 0x01, _, _] => "Walk",
@@ -350,6 +350,97 @@ pub fn describe_dog_ai_state(state: &[u8; 4]) -> &'static str {
         _ => "Unknown",
     }
 }
+
+pub const fn describe_spider_ai_state(state: &[u8; 4]) -> &'static str {
+    match state {
+        [0x01, 0x00, _, _] => "Idle",
+        [0x01, 0x01, _, _] => "Pursue fast",
+        [0x01, 0x02, _, _] => "Pursue medium",
+        [0x01, 0x03, _, _] => "Pursue slow",
+        [0x01, 0x04, _, _] => "Turn",
+        [0x01, 0x05, _, _] => "Face target coarse",
+        [0x01, 0x06, _, _] => "Face target fine",
+        [0x01, 0x07, _, _] => "Leg attack",
+        [0x01, 0x08, _, _] => "Poison",
+        [0x01, 0x09, _, _] => "Investigate",
+        [0x02, _, _, _] => "Hit",
+        [0x03, _, _, _] => "Dying",
+        [0x07, _, _, _] => "Dead",
+        _ => "Unknown",
+    }
+}
+
+// FIXME: spiders have different AI behavior depending whether they're on the ground, wall, or ceiling,
+//  but we don't track the variable that tells us this
+// FIXME: don't know enough about projectiles to show hit information for poison spit
+pub const SPIDER_AI_ZONES: [AiZone; 8] = [
+    AiZone::arc(
+        "Face target",
+        "Spider will turn towards its target",
+        BehaviorType::Aggro,
+        Fixed16(0x400),
+        UFixed16(8000),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::Any, StateMask::Any],
+    ).inverted(),
+    AiZone::arc(
+        "Leg attack",
+        "Spider will attack with its front legs",
+        BehaviorType::Attack,
+        Fixed16(0x80),
+        UFixed16(7500),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::Any, StateMask::Any],
+    ),
+    AiZone::arc(
+        "Attack",
+        "Spider will either attack with its front legs (90.625%) or spit poison (9.375%)",
+        BehaviorType::Attack,
+        Fixed16(0x80),
+        UFixed16(6000),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x00), StateMask::Any, StateMask::Any],
+    ),
+    AiZone::circle(
+        "Stop pursuit",
+        "Spider will stop pursuing its target",
+        BehaviorType::ChangeTactic,
+        UFixed16(0x5db),
+        [StateMask::Exactly(0x01), StateMask::Between(0x01, 0x03), StateMask::Any, StateMask::Any],
+    ),
+    AiZone::arc(
+        "Stop facing",
+        "Spider will stop turning towards its target",
+        BehaviorType::ChangeTactic,
+        Fixed16(0x80),
+        UFixed16(10000), // FIXME: there actually is no limit on the distance. how should we handle this in the UI?
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x05), StateMask::Any, StateMask::Any],
+    ),
+    AiZone::arc(
+        "Stop facing",
+        "Spider will stop turning towards its target",
+        BehaviorType::ChangeTactic,
+        Fixed16(0x20),
+        UFixed16(10000), // FIXME: there actually is no limit on the distance. how should we handle this in the UI?
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x06), StateMask::Any, StateMask::Any],
+    ),
+    AiZone::arc(
+        "Leg attack",
+        "Spider's leg attack will be able to hit once you're in this zone",
+        BehaviorType::Attack,
+        Fixed16(0x40),
+        UFixed16(10000), // FIXME: there actually is no limit on the distance. how should we handle this in the UI?
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x07), StateMask::Either(0x02, 0x03), StateMask::Any],
+    ),
+    // FIXME: this is kind of an oversimplification. the angle and distance checks are separate, so in theory,
+    //  if you exited the arc on the same frame that you approached within the distance threshold, you would
+    //  still get hit.
+    AiZone::arc(
+        "Leg attack hit",
+        "Spider's leg attack will hit you",
+        BehaviorType::Hit,
+        Fixed16(0x200),
+        UFixed16(0x5dc),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x07), StateMask::Either(0x04, 0x05), StateMask::Any],
+    ),
+];
 
 pub const DOG_AI_ZONES: [AiZone; 4] = [
     AiZone::arc(

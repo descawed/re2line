@@ -355,6 +355,42 @@ fn handgun_crit(seed: u16) -> String {
     bool_text(roll_double(seed, 0xf) == 0)
 }
 
+fn spider_max_turn_time(seed: u16) -> String {
+    format!("{}", (roll8(seed) + 10) & 0x3f)
+}
+
+fn spider_turn_direction(seed: u16) -> String {
+    String::from(if roll8(seed) & 1 == 0 {
+        "clockwise"
+    } else {
+        "counterclockwise"
+    })
+}
+
+fn spider_max_face_time(seed: u16) -> String {
+    format!("{}", (roll8(seed) & 0x1f) + 0x3c)
+}
+
+fn spider_max_pursue_time(seed: u16) -> String {
+    format!("{}", roll8(seed) & 0x2e)
+}
+
+fn spider_max_leg_turn_time(seed: u16) -> String {
+    format!("{}", (roll8(seed) & 0x1f) + 0x14)
+}
+
+fn spider_max_leg_attack_time(seed: u16) -> String {
+    format!("{}", (roll8(seed) & 0x1f) + 10)
+}
+
+fn spider_max_idle_time(seed: u16) -> String {
+    format!("{}", roll8(seed).overflowing_add(10).0 & 0x1f)
+}
+
+fn spider_pursue50(seed: u16) -> String {
+    bool_text(roll8(seed) & 1 == 0)
+}
+
 #[derive(Debug)]
 pub struct RollDescription {
     description: &'static str,
@@ -456,6 +492,14 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::DogAnimationOffset1 => RollDescription::new("rolled for animation offset", dog_animation_offset1),
         RollType::DogAnimationOffset2 => RollDescription::new("rolled for animation offset", dog_animation_offset2),
         RollType::DogAnimationOffset3 => RollDescription::new("rolled for animation offset", dog_animation_offset3),
+        RollType::SpiderTurnTime => RollDescription::new("rolled for max turn time", spider_max_turn_time),
+        RollType::SpiderTurnDirection => RollDescription::new("rolled for turn direction", spider_turn_direction),
+        RollType::SpiderMaxFaceTime => RollDescription::new("rolled for max facing time", spider_max_face_time),
+        RollType::SpiderMaxPursueTime => RollDescription::new("rolled for max pursuit time", spider_max_pursue_time),
+        RollType::SpiderMaxLegTurnTime => RollDescription::new("rolled for max leg attack turn time", spider_max_leg_turn_time),
+        RollType::SpiderMaxLegAttackTime => RollDescription::new("rolled for max leg attack time", spider_max_leg_attack_time),
+        RollType::SpiderMaxIdleTime => RollDescription::new("rolled for max idle time", spider_max_idle_time),
+        RollType::SpiderPursue50 => RollDescription::new("rolled to pursue (50%)", spider_pursue50),
         RollType::Partial => RollDescription::simple("Partial roll in a larger series"),
         RollType::Invalid => RollDescription::simple("Invalid roll"),
     }

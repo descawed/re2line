@@ -28,7 +28,7 @@ pub struct GameVersion {
     pub script_rng_patch: usize,
     pub script_rng_seed: usize,
     pub sound_flags: usize,
-    pub known_rng_rolls: [(usize, RollType); 104],
+    pub known_rng_rolls: [(usize, RollType); 114],
 }
 
 const GAME_VERSIONS: [GameVersion; 1] = [
@@ -163,6 +163,16 @@ const GAME_VERSIONS: [GameVersion; 1] = [
             (0x0046f0e9, RollType::SpiderHealth2),
             (0x0046f10f, RollType::HealthBonus),
             (0x0046f4f0, RollType::SpiderPoison3In32),
+            (0x0046ff01, RollType::SpiderPoison3In32),
+            (0x0047082c, RollType::SpiderPoison3In32),
+            (0x0046f6f7, RollType::SpiderTurnTime),
+            (0x0046f711, RollType::SpiderTurnDirection),
+            (0x0046f7f6, RollType::SpiderMaxFaceTime),
+            (0x0046f5f2, RollType::SpiderMaxPursueTime),
+            (0x0046f903, RollType::SpiderMaxLegTurnTime),
+            (0x0046f98c, RollType::SpiderMaxLegAttackTime),
+            (0x0046f547, RollType::SpiderMaxIdleTime),
+            (0x0046f58d, RollType::SpiderPursue50),
 
             (0x004d3ad1, RollType::Partial),
             (0x004d3adc, RollType::HandgunCrit),
