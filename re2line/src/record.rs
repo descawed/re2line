@@ -193,7 +193,7 @@ impl State {
                 new_character.set_prev_pos(old_character.center.x, old_character.center.z);
             }
         }
-        
+
         let mut objects = self.objects.clone();
         for diff in &record.object_diffs {
             let index = diff.index as usize;
@@ -203,11 +203,11 @@ impl State {
                     *object = None;
                     break;
                 }
-                
+
                 if object.is_none() {
                     *object = Some(Object::empty());
                 }
-                
+
                 let object = object.as_mut().unwrap();
                 object.set_index(index);
                 match change {
@@ -261,7 +261,7 @@ impl State {
     pub fn characters(&self) -> &[Option<Character>] {
         &self.characters
     }
-    
+
     pub fn objects(&self) -> &[Option<Object>] {
         &self.objects
     }
@@ -289,9 +289,26 @@ impl State {
             is_aim_pressed: self.input_flags & KEY_AIM != 0,
         }
     }
-    
+
     pub const fn frame_index(&self) -> usize {
         self.frame_index
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FrameRng {
+    pub frame_index: usize,
+    pub timestamp: String,
+    pub rng_descriptions: Vec<String>,
+}
+
+impl FrameRng {
+    pub const fn new(frame_index: usize, timestamp: String) -> Self {
+        Self {
+            frame_index,
+            timestamp,
+            rng_descriptions: Vec::new(),
+        }
     }
 }
 
@@ -415,23 +432,22 @@ impl Recording {
         self.index
     }
     
-    pub fn get_rng_descriptions(&self) -> Vec<String> {
-        let mut rng_descriptions = Vec::new();
+    pub fn get_rng_descriptions(&self) -> Vec<FrameRng> {
+        let mut frames = Vec::new();
         let end = self.index.min(self.frames.len() - 1);
         for i in self.range.start..=end {
             let frame_record = &self.frames[i];
             let state = &self.states[i - self.range.start];
             
-            let time = frame_record.time();
-            let prefix = format!("{} ({})", time, i);
+            let mut frame_rng = FrameRng::new(i, frame_record.time());
             for change in &frame_record.game_changes {
                 match change {
                     GameField::RngRoll(address, value) => {
-                        rng_descriptions.push(format!("{} - {:08X} rolled on {:04X}", prefix, address, value));
+                        frame_rng.rng_descriptions.push(format!("{:08X} rolled on {:04X}", address, value));
                     }
                     GameField::KnownRng { roll_type, start_value } => {
                         let description_data = &ROLL_DESCRIPTIONS[*roll_type];
-                        rng_descriptions.push(format!("{} - {}", prefix, description_data.describe(*start_value, None)));
+                        frame_rng.rng_descriptions.push(description_data.describe(*start_value, None));
                     }
                     GameField::CharacterRng { char_index, roll_type, start_value } => {
                         let description_data = &ROLL_DESCRIPTIONS[*roll_type];
@@ -439,14 +455,18 @@ impl Recording {
                             .get(*char_index as usize)
                             .and_then(|c| c.as_ref().map(Character::name))
                             .map(|n| format!("#{} {}", char_index, n));
-                        rng_descriptions.push(format!("{} - {}", prefix, description_data.describe(*start_value, character_name.as_ref().map(String::as_str))));
+                        frame_rng.rng_descriptions.push(description_data.describe(*start_value, character_name.as_ref().map(String::as_str)));
                     }
                     _ => (),
                 }
             }
+            
+            if !frame_rng.rng_descriptions.is_empty() {
+                frames.push(frame_rng);
+            }
         }
         
-        rng_descriptions
+        frames
     }
     
     pub fn get_player_sounds(&self, max_age: usize) -> Vec<PlayerSound> {
@@ -500,7 +520,7 @@ impl Recording {
         
         Some(CharacterPath::new(points, character.id, index, character.floor()))
     }
-    
+
     pub fn timeline(&self) -> Vec<Vec<(String, &State)>> {
         let mut timeline = Vec::new();
         let mut current_run = Vec::new();
@@ -509,15 +529,15 @@ impl Recording {
                 timeline.push(current_run);
                 current_run = Vec::new();
             }
-            
+
             let timestamp = self.frames[state.frame_index].time();
             current_run.push((timestamp, state));
         }
-        
+
         if !current_run.is_empty() {
             timeline.push(current_run);
         }
-        
+
         timeline
     }
 }

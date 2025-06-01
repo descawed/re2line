@@ -689,8 +689,14 @@ impl App {
             };
             
             // show in reverse order so newest items are at the top
-            for roll in recording.get_rng_descriptions().into_iter().rev() {
-                ui.label(roll);
+            for frame in recording.get_rng_descriptions().into_iter().rev() {
+                egui::CollapsingHeader::new(format!("{} ({}) | Rolls: {}", frame.timestamp, frame.frame_index, frame.rng_descriptions.len()))
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        for roll in frame.rng_descriptions.into_iter().rev() {
+                            ui.label(roll);
+                        }
+                    });
             }
         });
     }

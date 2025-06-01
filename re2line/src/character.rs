@@ -302,10 +302,10 @@ impl Object {
         let game_z = Fixed32(z.0 - height.0 as i32);
         let game_width = UFixed16(width.0 << 1).to_32();
         let game_height = UFixed16(height.0 << 1).to_32();
-        
+
         let center = Vec2 { x, z };
         let size = Vec2 { x: Fixed32(width.0 as i32), z: Fixed32(height.0 as i32) };
-        
+
         Self {
             flags,
             center,
@@ -315,11 +315,11 @@ impl Object {
             index: usize::MAX,
         }
     }
-    
+
     pub const fn empty() -> Self {
         Self::new(0, Fixed32(0), Fixed32(0), UFixed16(0), UFixed16(0), Floor::Id(0))
     }
-    
+
     pub fn set_floor(&mut self, floor: Floor) {
         self.floor = floor;
         self.shape.set_floor(floor);
@@ -345,7 +345,7 @@ impl Object {
         let size = Vec2::new(self.size.x << 1, self.size.z << 1);
         self.shape.set_size(size);
     }
-    
+
     pub const fn is_pushable(&self) -> bool {
         self.flags & 2 == 0
     }
@@ -386,7 +386,7 @@ impl GameObject for Object {
             format!("ZR: {}", self.size.z),
             format!("Floor: {}", self.floor),
         ]));
-        
+
         groups
     }
 
@@ -451,7 +451,7 @@ impl Character {
     pub const fn empty(id: CharacterId) -> Self {
         Self::new(id, 0, Fixed16(0), Fixed16(0), UFixed16(0), UFixed16(0), Fixed16(0), Floor::Id(0), Vec2::zero())
     }
-    
+
     pub fn set_floor(&mut self, floor: Floor) {
         self.floor = floor;
         self.shape.set_floor(floor);
@@ -488,19 +488,19 @@ impl Character {
     pub const fn set_index(&mut self, index: usize) {
         self.index = index;
     }
-    
+
     pub const fn part_center(&self) -> Vec2 {
         self.part_center
     }
-    
+
     pub const fn set_part_center(&mut self, part_center: Vec2) {
         self.part_center = part_center;
     }
-    
+
     pub fn model_part_centers(&self) -> &[Vec2] {
         &self.model_part_centers
     }
-    
+
     pub fn set_model_part_center(&mut self, i: usize, model_part_center: Vec2) {
         if self.model_part_centers.len() <= i {
             self.model_part_centers.resize(i + 1, Vec2::zero());
@@ -577,21 +577,21 @@ impl Character {
                 // zone is not active in this state; skip it
                 continue;
             }
-            
+
             let pos = match ai_zone.origin {
                 ZoneOrigin::Base => self.center,
                 ZoneOrigin::Part(i) => {
                     if i != 0 {
                         continue;
                     }
-                    
+
                     self.part_center
                 }
                 ZoneOrigin::ModelPart(i) => {
                     if i >= self.model_part_centers.len() {
                         continue;
                     }
-                    
+
                     self.model_part_centers[i]
                 }
             };
