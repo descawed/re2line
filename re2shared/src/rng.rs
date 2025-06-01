@@ -79,6 +79,12 @@ pub enum RollType {
     SpiderMaxLegAttackTime = 70,
     SpiderMaxIdleTime = 71,
     SpiderPursue50 = 72,
+    G2Position = 73,
+    G2Angle = 74,
+    G2RepositionTime = 75,
+    G2Swipe50 = 76,
+    G2Slash75 = 77,
+    G2Thrust25 = 78,
     Partial = 0xFFFE, // a roll that's part of a larger series of rolls and not used on its own
     Invalid = 0xFFFF,
 }

@@ -44,6 +44,7 @@ impl CharacterState {
     const fn model_parts_needed(&self) -> &'static [usize] {
         match self.id {
             32 => &[4], // dog
+            49 => &[6, 11], // G2
             _ => &[],
         }
     }

@@ -3,6 +3,8 @@ use std::sync::LazyLock;
 use enum_map::{EnumMap, enum_map};
 use re2shared::rng::RollType;
 
+use crate::math::Fixed16;
+
 pub mod sim;
 
 pub const ZOMBIE_ONE_SHOT_STAGGER_THRESHOLD: u8 = 0x17;
@@ -98,6 +100,12 @@ const DOG_HEALTHS2: [i16; 16] = [
     0x52, 0x41, 0x39, 0x3B,
     0x41, 0x39, 0x1E, 0x39,
     0x1E, 0x39, 0x1E, 0x45,
+];
+
+const G2_POSITIONS: [(i16, i16); 3] = [
+    (-25056, -22878),
+    (-20574, -23130),
+    (-16020, -23040),
 ];
 
 pub const fn roll8(seed: u16) -> u8 {
@@ -391,6 +399,24 @@ fn spider_pursue50(seed: u16) -> String {
     bool_text(roll8(seed) & 1 == 0)
 }
 
+fn g2_position(seed: u16) -> String {
+    let pos = G2_POSITIONS[roll8(seed) as usize % 3];
+    format!("{}, {}", pos.0, pos.1)
+}
+
+fn g2_reposition_time(seed: u16) -> String {
+    format!("{}", (roll8(seed) & 0xf) + 0xf)
+}
+
+fn g2_angle(seed: u16) -> String {
+    let angle = Fixed16((roll8(seed) as i16) << 4);
+    format!("{} ({}°)", angle.0, angle.to_degrees())
+}
+
+fn g2_slash75(seed: u16) -> String {
+    bool_text(roll8(seed) & 3 != 0)
+}
+
 #[derive(Debug)]
 pub struct RollDescription {
     description: &'static str,
@@ -500,6 +526,12 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::SpiderMaxLegAttackTime => RollDescription::new("rolled for max leg attack time", spider_max_leg_attack_time),
         RollType::SpiderMaxIdleTime => RollDescription::new("rolled for max idle time", spider_max_idle_time),
         RollType::SpiderPursue50 => RollDescription::new("rolled to pursue (50%)", spider_pursue50),
+        RollType::G2Position => RollDescription::new("rolled for position", g2_position),
+        RollType::G2RepositionTime => RollDescription::new("rolled for reposition time", g2_reposition_time),
+        RollType::G2Angle => RollDescription::new("rolled for angle", g2_angle),
+        RollType::G2Swipe50 => RollDescription::new("rolled for normal attack instead of heavy attack (50%)", not_bit_one),
+        RollType::G2Slash75 => RollDescription::new("rolled to slash (75%)", g2_slash75),
+        RollType::G2Thrust25 => RollDescription::new("rolled for thrusting strike (25%)", and_three_zero),
         RollType::Partial => RollDescription::simple("Partial roll in a larger series"),
         RollType::Invalid => RollDescription::simple("Invalid roll"),
     }

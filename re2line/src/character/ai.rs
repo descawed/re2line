@@ -21,6 +21,7 @@ pub enum StateMask {
     Any,
     Exactly(u8),
     Either(u8, u8),
+    OneOf3(u8, u8, u8),
     Between(u8, u8),
 }
 
@@ -30,6 +31,7 @@ impl StateMask {
             Self::Any => true,
             Self::Exactly(value) => state == *value,
             Self::Either(value1, value2) => state == *value1 || state == *value2,
+            Self::OneOf3(value1, value2, value3) => state == *value1 || state == *value2 || state == *value3,
             Self::Between(value1, value2) => state >= *value1 && state <= *value2,
         }
     }
@@ -64,6 +66,7 @@ pub struct AiZone {
     pub radius: UFixed16,
     pub inverted: bool,
     pub state_mask: [StateMask; 4],
+    pub type_mask: StateMask,
     pub origin: ZoneOrigin,
 }
 
@@ -78,6 +81,7 @@ impl AiZone {
             radius,
             inverted,
             state_mask,
+            type_mask: StateMask::Any,
             origin: ZoneOrigin::Base,
         }
     }
@@ -92,6 +96,7 @@ impl AiZone {
             radius,
             inverted: false,
             state_mask,
+            type_mask: StateMask::Any,
             origin: ZoneOrigin::Base,
         }
     }
@@ -106,8 +111,14 @@ impl AiZone {
             radius,
             inverted: false,
             state_mask,
+            type_mask: StateMask::Any,
             origin: ZoneOrigin::Base,
         }
+    }
+
+    pub const fn with_type_mask(mut self, type_mask: StateMask) -> Self {
+        self.type_mask = type_mask;
+        self
     }
 
     pub const fn with_origin(mut self, origin: ZoneOrigin) -> Self {
@@ -175,13 +186,14 @@ impl AiZone {
         })
     }
 
-    pub fn check_state(&self, state: &[u8; 4]) -> bool {
+    pub fn check_state(&self, state: &[u8; 4], type_: u8) -> bool {
         for (i, mask) in self.state_mask.iter().enumerate() {
             if !mask.matches(state[i]) {
                 return false;
             }
         }
-        true
+        
+        self.type_mask.matches(type_)
     }
 
     /// Is the given point within the AI zone?
@@ -369,6 +381,299 @@ pub const fn describe_spider_ai_state(state: &[u8; 4]) -> &'static str {
         _ => "Unknown",
     }
 }
+
+pub const fn describe_g2_ai_state(state: &[u8; 4]) -> &'static str {
+    match state {
+        [0x01, 0x00, _, _] => "Idle",
+        [0x01, 0x01, _, _] => "Pursue",
+        [0x01, 0x02, _, _] => "Heavy slash",
+        [0x01, 0x03, _, _] => "Taunt",
+        [0x01, 0x04, _, _] => "Attack",
+        [0x01, 0x05, _, _] => "Retreat",
+        [0x01, 0x06, _, _] => "Invincible",
+        [0x01, 0x07, _, _] => "Cutscene",
+        [0x01, 0x08, _, _] => "Thrust",
+        [0x02, 0x05, _, _] => "Staggered",
+        [0x02, _, _, _] => "Hit",
+        [0x03, _, _, _] => "Dying",
+        [0x07, _, _, _] => "Dead",
+        _ => "Unknown",
+    }
+}
+
+pub const G2_AI_ZONES: [AiZone; 35] = [
+    AiZone::circle(
+        "Hit",
+        "Birkin's attack hits you",
+        BehaviorType::Hit,
+        UFixed16(800),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::Either(0x00, 0x01), StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x02)).with_origin(ZoneOrigin::ModelPart(6)),
+    AiZone::circle(
+        "Hit",
+        "Birkin's attack hits you",
+        BehaviorType::Hit,
+        UFixed16(500),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::Either(0x02, 0x03), StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x02)).with_origin(ZoneOrigin::ModelPart(6)),
+    AiZone::arc(
+        "Retreat",
+        "Birkin will retreat a short distance from you",
+        BehaviorType::ChangeTactic,
+        Fixed16(0x400),
+        UFixed16(1500),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x01)),
+    AiZone::arc(
+        "Slash",
+        "Birkin will slash strongly at you with his claw",
+        BehaviorType::Attack,
+        Fixed16(0x270),
+        UFixed16(3000),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x01)),
+    AiZone::arc(
+        "Retreat",
+        "Birkin will retreat a short distance from you",
+        BehaviorType::ChangeTactic,
+        Fixed16(0x400),
+        UFixed16(1500),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x05, 0x19)),
+    AiZone::arc(
+        "Slash",
+        "Birkin will slash strongly at you with his claw",
+        BehaviorType::Attack,
+        Fixed16(0x270),
+        UFixed16(3000),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x19)),
+    AiZone::arc(
+        "Pursue",
+        "Birkin will pursue you",
+        BehaviorType::Aggro,
+        Fixed16(0x400),
+        UFixed16(2500),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x05), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x01)),
+    AiZone::circle(
+        "Hit",
+        "Birkin's attack hits you",
+        BehaviorType::Hit,
+        UFixed16(800),
+        [StateMask::Exactly(0x01), StateMask::Either(0x02, 0x04), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x01)).with_origin(ZoneOrigin::ModelPart(6)),
+    AiZone::arc(
+        "Attack",
+        "Birkin will either do a heavy slash or a regular attack",
+        BehaviorType::Attack,
+        Fixed16(0x400),
+        UFixed16(3000),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x13)),
+    AiZone::arc(
+        "Slash",
+        "Birkin will slash strongly at you with his claw",
+        BehaviorType::Attack,
+        Fixed16(0x400),
+        UFixed16(2500),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x05)),
+    AiZone::arc(
+        "Attack",
+        "Birkin will attack",
+        BehaviorType::Attack,
+        Fixed16(0x4c8),
+        UFixed16(2500),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x05)),
+    AiZone::arc(
+        "Thrust",
+        "Birkin has a 25% chance to thrust with his claw at the sound of a running footstep",
+        BehaviorType::Attack,
+        Fixed16(0x270),
+        UFixed16(3400),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x05)),
+    AiZone::arc(
+        "Retreat",
+        "Birkin will retreat a short distance from you",
+        BehaviorType::ChangeTactic,
+        Fixed16(0x400),
+        UFixed16(1500),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x00, 0x03)),
+    AiZone::arc(
+        "Slash",
+        "Birkin will slash strongly at you with his claw",
+        BehaviorType::Attack,
+        Fixed16(0x400),
+        UFixed16(2500),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x00, 0x03)),
+    AiZone::arc(
+        "Attack",
+        "Birkin will attack",
+        BehaviorType::Attack,
+        Fixed16(0x4c8),
+        UFixed16(2500),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x00, 0x03)),
+    AiZone::arc(
+        "Thrust",
+        "Birkin has a 25% chance to thrust with his claw at the sound of a running footstep",
+        BehaviorType::Attack,
+        Fixed16(0x270),
+        UFixed16(3400),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x01), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x00, 0x03)),
+    AiZone::arc(
+        "Disengagement attack",
+        "Birkin will attack if you attempt to run away",
+        BehaviorType::Attack,
+        Fixed16(0x400),
+        UFixed16(1500),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x03), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x00, 0x03)),
+    AiZone::arc(
+        "Disengagement attack",
+        "Birkin will attack if you attempt to run away",
+        BehaviorType::Attack,
+        Fixed16(0x400),
+        UFixed16(1500),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x07)),
+    // FIXME: these two should have a minimum distance of 2500 and no maximum distance, but we don't
+    //  currently support that
+    AiZone::arc(
+        "Pursue",
+        "Birkin will pursue you",
+        BehaviorType::Aggro,
+        Fixed16(0x400),
+        UFixed16(10000),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x05), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x00, 0x03)),
+    AiZone::arc(
+        "Pursue",
+        "Birkin will pursue you",
+        BehaviorType::Aggro,
+        Fixed16(0x400),
+        UFixed16(10000),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x09)),
+    AiZone::arc(
+        "Attack",
+        "Birkin will either do a heavy slash or a regular attack",
+        BehaviorType::Attack,
+        Fixed16(0x400),
+        UFixed16(3000),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x05), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::OneOf3(0x00, 0x01, 0x03)),
+    AiZone::arc(
+        "Attack",
+        "Birkin will attack at the sound of a running footstep if you are in fine health",
+        BehaviorType::Attack,
+        Fixed16(0x400),
+        UFixed16(2500),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x05), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x00, 0x03)),
+    AiZone::arc(
+        "Attack",
+        "Birkin will attack at the sound of a running footstep if you are in fine health",
+        BehaviorType::Attack,
+        Fixed16(0x400),
+        UFixed16(2500),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x09)),
+    // FIXME: these two zones should be the inverse of this, but not only in the sense of the angle
+    //  the way we currently interpret it
+    AiZone::arc(
+        "Pursue",
+        "Birkin will pursue you if you exit this zone",
+        BehaviorType::Aggro,
+        Fixed16(0x590),
+        UFixed16(3800),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x02), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x00, 0x03)),
+    AiZone::arc(
+        "Pursue",
+        "Birkin will pursue you if you exit this zone",
+        BehaviorType::Aggro,
+        Fixed16(0x590),
+        UFixed16(3800),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x10)),
+    AiZone::circle(
+        "Hit",
+        "Birkin's attack will hit you",
+        BehaviorType::Hit,
+        UFixed16(1200),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x02), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x00, 0x03)).with_origin(ZoneOrigin::ModelPart(6)),
+    AiZone::circle(
+        "Hit",
+        "Birkin's attack will hit you",
+        BehaviorType::Hit,
+        UFixed16(1200),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x10)).with_origin(ZoneOrigin::ModelPart(6)),
+    AiZone::circle(
+        "Slash",
+        "Birkin has a 75% chance to slash at you at the end of his animation",
+        BehaviorType::Attack,
+        UFixed16(3400),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x03), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x00, 0x03)),
+    AiZone::circle(
+        "Slash",
+        "Birkin has a 75% chance to slash at you at the end of his animation",
+        BehaviorType::Attack,
+        UFixed16(3400),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x11)),
+    AiZone::circle(
+        "Hit",
+        "Birkin's attack will hit you",
+        BehaviorType::Hit,
+        UFixed16(800),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x08), StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x00, 0x03)).with_origin(ZoneOrigin::ModelPart(6)),
+    AiZone::circle(
+        "Hit",
+        "Birkin's attack will hit you",
+        BehaviorType::Hit,
+        UFixed16(800),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Any, StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x16)).with_origin(ZoneOrigin::ModelPart(6)),
+    AiZone::circle(
+        "Hit",
+        "Birkin's attack will hit you",
+        BehaviorType::Hit,
+        UFixed16(800),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Exactly(0x06), StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x12)).with_origin(ZoneOrigin::ModelPart(6)),
+    AiZone::circle(
+        "Hit",
+        "Birkin's attack will hit you",
+        BehaviorType::Hit,
+        UFixed16(800),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x04), StateMask::Exactly(0x06), StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x00, 0x03)).with_origin(ZoneOrigin::ModelPart(6)),
+    AiZone::circle(
+        "Hit",
+        "Birkin's attack will hit you",
+        BehaviorType::Hit,
+        UFixed16(800),
+        [StateMask::Exactly(0x01), StateMask::Any, StateMask::Exactly(0x01), StateMask::Any],
+    ).with_type_mask(StateMask::Exactly(0x12)).with_origin(ZoneOrigin::ModelPart(11)),
+    AiZone::circle(
+        "Hit",
+        "Birkin's attack will hit you",
+        BehaviorType::Hit,
+        UFixed16(800),
+        [StateMask::Exactly(0x01), StateMask::Exactly(0x04), StateMask::Exactly(0x01), StateMask::Any],
+    ).with_type_mask(StateMask::Either(0x00, 0x03)).with_origin(ZoneOrigin::ModelPart(11)),
+];
 
 // FIXME: spiders have different AI behavior depending whether they're on the ground, wall, or ceiling,
 //  but we don't track the variable that tells us this

@@ -28,7 +28,7 @@ pub struct GameVersion {
     pub script_rng_patch: usize,
     pub script_rng_seed: usize,
     pub sound_flags: usize,
-    pub known_rng_rolls: [(usize, RollType); 114],
+    pub known_rng_rolls: [(usize, RollType); 120],
 }
 
 const GAME_VERSIONS: [GameVersion; 1] = [
@@ -189,6 +189,13 @@ const GAME_VERSIONS: [GameVersion; 1] = [
             (0x0045c34b, RollType::DogAnimationOffset2),
             (0x0045c35d, RollType::DogAnimationOffset3),
             (0x0045c3b8, RollType::DogAnimationOffset1),
+
+            (0x004928e9, RollType::G2Position),
+            (0x00492915, RollType::G2RepositionTime),
+            (0x0049292b, RollType::G2Angle),
+            (0x004920ba, RollType::G2Swipe50),
+            (0x00490ad3, RollType::G2Thrust25),
+            (0x004914f7, RollType::G2Slash75),
         ],
     },
 ];
