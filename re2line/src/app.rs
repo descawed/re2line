@@ -141,6 +141,16 @@ struct CharacterSettings {
     pub show_path: bool,
 }
 
+impl CharacterSettings {
+    pub const fn config_default(config: &Config) -> Self {
+        Self {
+            show_tooltip: config.default_show_character_tooltips,
+            show_ai: true,
+            show_path: false,
+        }
+    }
+}
+
 impl Default for CharacterSettings {
     fn default() -> Self {
         Self {
@@ -705,6 +715,12 @@ impl App {
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
             ui.checkbox(&mut self.config.focus_current_selected_object, "Focus for current selection");
             ui.checkbox(&mut self.config.alternate_collision_colors, "Alternate collision colors");
+            if ui.checkbox(&mut self.config.default_show_character_tooltips, "Show character tooltips by default").clicked() {
+                // when this setting is changed, update all character settings to the new value
+                for character_settings in self.character_settings.values_mut() {
+                    character_settings.show_tooltip = self.config.default_show_character_tooltips;
+                }
+            }
             ui.checkbox(&mut self.config.show_sounds, "Show sounds");
             ui.separator();
 
@@ -740,13 +756,13 @@ impl App {
     fn get_character_settings(&self, index: usize) -> Option<CharacterSettings> {
         let room_id = self.active_recording.as_ref().and_then(Recording::current_state).map(State::room_id)?;
         let character_id = self.get_character(index)?.id;
-        Some(self.character_settings.get(&(room_id, character_id, index)).copied().unwrap_or_default())
+        Some(self.character_settings.get(&(room_id, character_id, index)).copied().unwrap_or_else(|| CharacterSettings::config_default(&self.config)))
     }
 
     fn get_character_settings_mut(&mut self, index: usize) -> Option<&mut CharacterSettings> {
         let room_id = self.active_recording.as_ref().and_then(Recording::current_state).map(State::room_id)?;
         let character_id = self.get_character(index)?.id;
-        Some(self.character_settings.entry((room_id, character_id, index)).or_default())
+        Some(self.character_settings.entry((room_id, character_id, index)).or_insert_with(|| CharacterSettings::config_default(&self.config)))
     }
 
     fn object_details(&mut self, ui: &mut Ui) {
