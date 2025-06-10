@@ -5,7 +5,14 @@ use crate::collision::Collider;
 use crate::math::{Fixed16, Vec2};
 use crate::record::State;
 
-const TRIGGER_ON_ENTER: u8 = 0x40;
+//const SAT_TRIGGER_BY_PLAYER: u8 = 0x01;
+//const SAT_TRIGGER_BY_NPC: u8 = 0x02;
+//const SAT_TRIGGER_BY_OBJECT: u8 = 0x04;
+//const SAT_TRIGGER_BY_ALLY: u8 = 0x08;
+//const SAT_TRIGGER_ON_ACTION: u8 = 0x10;
+//const SAT_TRIGGER_FRONT: u8 = 0x20;
+const SAT_TRIGGER_CENTER: u8 = 0x40;
+//const SAT_4P: u8 = 0x80;
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, IntoPrimitive, TryFromPrimitive)]
@@ -351,7 +358,7 @@ impl Entity {
     }
 
     pub const fn is_trigger_on_enter(&self) -> bool {
-        self.sat & TRIGGER_ON_ENTER != 0
+        self.sat & SAT_TRIGGER_CENTER != 0
     }
 
     pub fn could_trigger(&self, point: Vec2, floor: Floor) -> bool {
