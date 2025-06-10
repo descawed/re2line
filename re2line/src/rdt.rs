@@ -206,6 +206,31 @@ pub struct Rdt {
 }
 
 impl Rdt {
+    fn read_script(script_size: u64, reader: &mut Cursor<Vec<u8>>) -> Result<Vec<Instruction>> {
+        let mut script = Vec::new();
+        
+        let mut nesting = 0u32;
+        while reader.position() < script_size {
+            let inst = reader.read_le::<Instruction>()?;
+            let is_evt_end = matches!(inst, Instruction::EvtEnd(_));
+            
+            if inst.increases_nesting() {
+                nesting += 1;
+            } else if inst.decreases_nesting() {
+                nesting = nesting.saturating_sub(1);
+            }
+            
+            script.push(inst);
+            // the size calculation may not be reliable, so if we see the end-of-function
+            // instruction, we'll go ahead and bail
+            if is_evt_end && nesting == 0 {
+                break;
+            }
+        }
+        
+        Ok(script)
+    }
+    
     pub fn read<T: Read + Seek>(mut f: T) -> Result<Self> {
         let file_size = f.seek(SeekFrom::End(0))?;
         f.seek(SeekFrom::Start(0))?;
@@ -235,19 +260,8 @@ impl Rdt {
             let script_size = header.init_script_size();
             let mut buf = vec![0u8; script_size];
             f.read_exact(&mut buf)?;
-
-            let mut script = Vec::new();
-            let mut reader = Cursor::new(buf);
-            while reader.position() < script_size as u64 {
-                script.push(reader.read_le::<Instruction>()?);
-                // the size calculation may not be reliable, so if we see the end-of-function
-                // instruction, we'll go ahead and bail
-                if matches!(script.last().unwrap(), Instruction::EvtEnd(_)) {
-                    break;
-                }
-            }
-
-            script
+            
+            Self::read_script(script_size as u64, &mut Cursor::new(buf))?
         };
 
         let exec_script = if header.exec_script_offset == 0 {
@@ -286,18 +300,8 @@ impl Rdt {
                     let next_offset = pair[1];
 
                     reader.seek(SeekFrom::Start(offset))?;
-
-                    let mut function = Vec::new();
-                    while reader.position() < next_offset {
-                        function.push(reader.read_le::<Instruction>()?);
-                        // the size calculation may not be reliable, so if we see the end-of-function
-                        // instruction, we'll go ahead and bail
-                        if matches!(function.last().unwrap(), Instruction::EvtEnd(_)) {
-                            break;
-                        }
-                    }
-
-                    script.push(function);
+                    
+                    script.push(Self::read_script(next_offset, &mut reader)?);
                 }
 
                 script

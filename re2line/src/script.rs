@@ -587,6 +587,14 @@ pub enum Instruction {
 }
 
 impl Instruction {
+    pub const fn increases_nesting(&self) -> bool {
+        matches!(self, Self::IfElCk { .. } | Self::For { .. } | Self::While { .. } | Self::Do { .. } | Self::Switch { .. } | Self::For2 { .. })
+    }
+    
+    pub const fn decreases_nesting(&self) -> bool {
+        matches!(self, Self::EndIf(_) | Self::Next(_) | Self::EdWhile(_) | Self::EWhile(_) | Self::ESwitch(_))
+    }
+    
     pub fn to_entity(&self) -> Option<Entity> {
         Some(match self {
             Self::AotSet { aot, sce, sat, n_floor, x, z, w, h, .. } => Entity::new(
