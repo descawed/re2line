@@ -206,13 +206,18 @@ pub struct Rdt {
 }
 
 impl Rdt {
-    fn read_script(script_size: u64, reader: &mut Cursor<Vec<u8>>) -> Result<Vec<Instruction>> {
+    fn read_script(script_size: u64, reader: &mut Cursor<Vec<u8>>) -> Vec<Instruction> {
         let mut script = Vec::new();
-        
-        // FIXME: some room's scripts fail to parse with the nesting logic
+
         let mut nesting = 0u32;
         while reader.position() < script_size {
-            let inst = reader.read_le::<Instruction>()?;
+            let inst = match reader.read_le::<Instruction>() {
+                Ok(inst) => inst,
+                Err(e) => {
+                    eprintln!("Failed to parse script instruction: {e}");
+                    break;
+                }
+            };
             let is_evt_end = matches!(inst, Instruction::EvtEnd(_));
             
             if inst.increases_nesting() {
@@ -229,7 +234,7 @@ impl Rdt {
             }
         }
         
-        Ok(script)
+        script
     }
     
     pub fn read<T: Read + Seek>(mut f: T) -> Result<Self> {
@@ -262,7 +267,7 @@ impl Rdt {
             let mut buf = vec![0u8; script_size];
             f.read_exact(&mut buf)?;
             
-            Self::read_script(script_size as u64, &mut Cursor::new(buf))?
+            Self::read_script(script_size as u64, &mut Cursor::new(buf))
         };
 
         let exec_script = if header.exec_script_offset == 0 {
@@ -302,7 +307,7 @@ impl Rdt {
 
                     reader.seek(SeekFrom::Start(offset))?;
                     
-                    script.push(Self::read_script(next_offset, &mut reader)?);
+                    script.push(Self::read_script(next_offset, &mut reader));
                 }
 
                 script
