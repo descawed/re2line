@@ -209,6 +209,7 @@ impl Rdt {
     fn read_script(script_size: u64, reader: &mut Cursor<Vec<u8>>) -> Result<Vec<Instruction>> {
         let mut script = Vec::new();
         
+        // FIXME: some room's scripts fail to parse with the nesting logic
         let mut nesting = 0u32;
         while reader.position() < script_size {
             let inst = reader.read_le::<Instruction>()?;
