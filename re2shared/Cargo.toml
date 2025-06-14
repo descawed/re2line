@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-binrw = "0.14.1"
+binrw = "0.15.0"
 enum-map = "2.7.3"
+residat = { git = "https://github.com/descawed/residat.git", branch = "master" }

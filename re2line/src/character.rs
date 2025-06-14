@@ -1,11 +1,10 @@
 use egui::{Color32, Pos2, Shape, Stroke};
 use epaint::{CircleShape, ColorMode, PathShape, PathStroke};
-use num_enum::{IntoPrimitive, TryFromPrimitive};
+use residat::common::{Fixed16, UFixed16, Fixed32, Vec2};
+use residat::re2::{CharacterId, Item};
 
-use crate::aot::Item;
 use crate::app::{DrawParams, Floor, GameObject, ObjectType};
 use crate::collision::{CapsuleType, EllipseCollider, RectCollider};
-use crate::math::{Fixed16, UFixed16, Fixed32, Vec2};
 use crate::record::State;
 
 mod ai;
@@ -34,255 +33,34 @@ pub enum CharacterType {
     Enemy,
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, IntoPrimitive, TryFromPrimitive)]
-#[repr(u8)]
-pub enum CharacterId {
-    Leon = 0,
-    Claire = 1,
-    Unknown2 = 2,
-    Unknown3 = 3,
-    LeonBandaged = 4,
-    ClaireBlackTop = 5,
-    Unknown6 = 6,
-    Unknown7 = 7,
-    LeonTankTop = 8,
-    ClaireBiker = 9,
-    LeonSkullJacket = 10,
-    Chris = 11,
-    Hunk = 12,
-    Tofu = 13,
-    Ada = 14,
-    Sherry = 15,
-    ZombiePoliceHat = 16,
-    Brad = 17,
-    ZombieTornShirt = 18,
-    Misty = 19,
-    Unknown20 = 20,
-    ZombieLabWhite = 21,
-    ZombieLabYellow = 22,
-    NakedZombie = 23,
-    ZombieYellowShirt = 24,
-    Unknown25 = 25,
-    Unknown26 = 26,
-    Unknown27 = 27,
-    Unknown28 = 28,
-    Unknown29 = 29,
-    HeadlessZombieYellowShirt = 30,
-    ZombieRandom = 31,
-    Dog = 32,
-    Crow = 33,
-    LickerRed = 34,
-    Croc = 35,
-    LickerBlack = 36,
-    Spider = 37,
-    SpiderBaby = 38,
-    GYoung = 39,
-    GAdult = 40,
-    Roach = 41,
-    MrX = 42,
-    SuperX = 43,
-    Unknown44 = 44,
-    Hands = 45,
-    Ivy = 46,
-    Tentacle = 47,
-    G1 = 48,
-    G2 = 49,
-    Unknown50 = 50,
-    G3 = 51,
-    G4 = 52,
-    Unknown53 = 53,
-    G5 = 54,
-    G5Tentacle = 55,
-    Unknown56 = 56,
-    PoisonIvy = 57,
-    Moth = 58,
-    Larva = 59,
-    Unknown60 = 60,
-    Unknown61 = 61,
-    FuseArm = 62,
-    FuseHousing = 63,
-    Irons = 64,
-    AdaNpc = 65,
-    IronsTorso = 66,
-    AdaWounded = 67,
-    BenDead = 68,
-    SherryNpc = 69,
-    Ben = 70,
-    Annette = 71,
-    Kendo = 72,
-    Unknown73 = 73,
-    Marvin = 74,
-    MayorsDaughter = 75,
-    Unknown76 = 76,
-    Unknown77 = 77,
-    Unknown78 = 78,
-    SherryVest = 79,
-    LeonNpc = 80,
-    ClaireNpc = 81,
-    Unknown82 = 82,
-    Unknown83 = 83,
-    LeonBandagedNpc = 84,
-    Unknown = 255,
-}
-
-impl CharacterId {
-    pub const fn name(&self) -> &'static str {
-        match self {
-            Self::Leon => "Leon",
-            Self::Claire => "Claire",
-            Self::Unknown2 => "Unknown 2",
-            Self::Unknown3 => "Unknown 3",
-            Self::LeonBandaged => "Leon (bandaged)",
-            Self::ClaireBlackTop => "Claire (black top)",
-            Self::Unknown6 => "Unknown 6",
-            Self::Unknown7 => "Unknown 7",
-            Self::LeonTankTop => "Leon (tank top)",
-            Self::ClaireBiker => "Claire (biker)",
-            Self::LeonSkullJacket => "Leon (skull jacket)",
-            Self::Chris => "Chris",
-            Self::Hunk => "Hunk",
-            Self::Tofu => "Tofu",
-            Self::Ada => "Ada",
-            Self::Sherry => "Sherry",
-            Self::ZombiePoliceHat => "Zombie (police hat)",
-            Self::Brad => "Brad",
-            Self::ZombieTornShirt => "Zombie (torn shirt)",
-            Self::Misty => "Misty",
-            Self::Unknown20 => "Unknown 20",
-            Self::ZombieLabWhite => "Zombie (lab, white)",
-            Self::ZombieLabYellow => "Zombie (lab, yellow)",
-            Self::NakedZombie => "Naked zombie",
-            Self::ZombieYellowShirt => "Zombie (yellow shirt)",
-            Self::Unknown25 => "Unknown 25",
-            Self::Unknown26 => "Unknown 26",
-            Self::Unknown27 => "Unknown 27",
-            Self::Unknown28 => "Unknown 28",
-            Self::Unknown29 => "Unknown 29",
-            Self::HeadlessZombieYellowShirt => "Headless zombie (yellow shirt)",
-            Self::ZombieRandom => "Zombie (random)",
-            Self::Dog => "Dog",
-            Self::Crow => "Crow",
-            Self::LickerRed => "Licker (red)",
-            Self::Croc => "Croc",
-            Self::LickerBlack => "Licker (black)",
-            Self::Spider => "Spider",
-            Self::SpiderBaby => "Baby spider",
-            Self::GYoung => "G Young",
-            Self::GAdult => "G Adult",
-            Self::Roach => "Roach",
-            Self::MrX => "Mr. X",
-            Self::SuperX => "Super X",
-            Self::Unknown44 => "Unknown 44",
-            Self::Hands => "Hands",
-            Self::Ivy => "Ivy",
-            Self::Tentacle => "Tentacle",
-            Self::G1 => "G1",
-            Self::G2 => "G2",
-            Self::Unknown50 => "Unknown 50",
-            Self::G3 => "G3",
-            Self::G4 => "G4",
-            Self::Unknown53 => "Unknown 53",
-            Self::G5 => "G5",
-            Self::G5Tentacle => "G5 Tentacle",
-            Self::Unknown56 => "Unknown 56",
-            Self::PoisonIvy => "Poison Ivy",
-            Self::Moth => "Moth",
-            Self::Larva => "Larva",
-            Self::Unknown60 => "Unknown 60",
-            Self::Unknown61 => "Unknown 61",
-            Self::FuseArm => "Fuse Arm",
-            Self::FuseHousing => "Fuse Housing",
-            Self::Irons => "Irons",
-            Self::AdaNpc => "Ada (NPC)",
-            Self::IronsTorso => "Irons (torso)",
-            Self::AdaWounded => "Ada (wounded)",
-            Self::BenDead => "Ben (dead)",
-            Self::SherryNpc => "Sherry (NPC)",
-            Self::Ben => "Ben",
-            Self::Annette => "Annette",
-            Self::Kendo => "Kendo",
-            Self::Unknown73 => "Unknown 73",
-            Self::Marvin => "Marvin",
-            Self::MayorsDaughter => "Mayor's daughter",
-            Self::Unknown76 => "Unknown 76",
-            Self::Unknown77 => "Unknown 77",
-            Self::Unknown78 => "Unknown 78",
-            Self::SherryVest => "Sherry (vest)",
-            Self::LeonNpc => "Leon (NPC)",
-            Self::ClaireNpc => "Claire (NPC)",
-            Self::Unknown82 => "Unknown 82",
-            Self::Unknown83 => "Unknown 83",
-            Self::LeonBandagedNpc => "Leon (bandaged, NPC)",
-            Self::Unknown => "Unknown",
-        }
-    }
-
-    pub const fn type_(&self) -> CharacterType {
-        match self {
-            Self::Leon
-            | Self::Claire
-            | Self::Unknown2
-            | Self::Unknown3
-            | Self::LeonBandaged
-            | Self::ClaireBlackTop
-            | Self::Unknown6
-            | Self::Unknown7
-            | Self::LeonTankTop
-            | Self::ClaireBiker
-            | Self::LeonSkullJacket
-            | Self::Chris
-            | Self::Hunk
-            | Self::Tofu
-            | Self::Ada
-            | Self::Sherry
-            => CharacterType::Player,
-            Self::AdaNpc | Self::SherryNpc => CharacterType::Ally,
-            Self::FuseArm
-            | Self::FuseHousing
-            | Self::Irons
-            | Self::IronsTorso
-            | Self::AdaWounded
-            | Self::BenDead
-            | Self::Ben
-            | Self::Annette
-            | Self::Kendo
-            | Self::Marvin
-            | Self::MayorsDaughter
-            | Self::LeonNpc
-            | Self::ClaireNpc
-            | Self::LeonBandagedNpc
+impl CharacterType {
+    pub const fn from_character_id(id: CharacterId) -> Self {
+        match id {
+            CharacterId::AdaNpc | CharacterId::SherryNpc => CharacterType::Ally,
+            CharacterId::FuseArm
+            | CharacterId::FuseHousing
+            | CharacterId::Irons
+            | CharacterId::IronsTorso
+            | CharacterId::AdaWounded
+            | CharacterId::BenDead
+            | CharacterId::Ben
+            | CharacterId::Annette
+            | CharacterId::Kendo
+            | CharacterId::Marvin
+            | CharacterId::MayorsDaughter
+            | CharacterId::LeonNpc
+            | CharacterId::ClaireNpc
+            | CharacterId::LeonBandagedNpc
             => CharacterType::Neutral,
+            _ if id.is_player() => CharacterType::Player,
             _ => CharacterType::Enemy,
         }
     }
+}
 
-    pub const fn is_player(&self) -> bool {
-        matches!(self.type_(), CharacterType::Player)
-    }
-
-    pub const fn is_zombie(&self) -> bool {
-        matches!(self,
-            Self::ZombiePoliceHat
-            | Self::ZombieTornShirt
-            | Self::ZombieYellowShirt
-            | Self::ZombieRandom
-            | Self::ZombieLabWhite
-            | Self::ZombieLabYellow
-            | Self::Misty
-            | Self::Unknown20
-            | Self::Unknown25
-            | Self::Unknown26
-            | Self::Unknown27
-            | Self::Unknown28
-            | Self::Unknown29
-            | Self::Brad
-            | Self::NakedZombie
-            | Self::HeadlessZombieYellowShirt
-        )
-    }
-
-    pub const fn is_licker(&self) -> bool {
-        matches!(self, Self::LickerRed | Self::LickerBlack)
+impl From<CharacterId> for CharacterType {
+    fn from(id: CharacterId) -> Self {
+        Self::from_character_id(id)
     }
 }
 
@@ -463,7 +241,7 @@ impl Character {
     }
 
     pub const fn type_(&self) -> CharacterType {
-        self.id.type_()
+        CharacterType::from_character_id(self.id)
     }
 
     pub const fn current_health(&self) -> i16 {
@@ -616,7 +394,7 @@ impl Character {
 
 impl GameObject for Character {
     fn object_type(&self) -> ObjectType {
-        self.id.type_().into()
+        CharacterType::from_character_id(self.id).into()
     }
 
     fn contains_point(&self, point: Vec2) -> bool {

@@ -4,7 +4,6 @@ use std::path::PathBuf;
 mod app;
 mod collision;
 mod rdt;
-mod math;
 mod script;
 mod aot;
 mod character;

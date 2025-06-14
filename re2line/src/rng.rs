@@ -2,8 +2,7 @@ use std::sync::LazyLock;
 
 use enum_map::{EnumMap, enum_map};
 use re2shared::rng::RollType;
-
-use crate::math::Fixed16;
+use residat::common::Fixed16;
 
 pub mod sim;
 

@@ -2,11 +2,11 @@ use std::f32::consts::PI;
 
 use egui::{Color32, Shape, Stroke};
 use epaint::{CircleShape, ColorMode, PathShape, PathStroke};
+use residat::common::*;
+use residat::re2::CharacterId;
 
 use crate::app::{DrawParams, Floor, GameObject, ObjectType};
-use crate::character::CharacterId;
 use crate::draw::*;
-use crate::math::*;
 use crate::record::State;
 
 #[derive(Debug, Clone)]
