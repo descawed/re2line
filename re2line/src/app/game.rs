@@ -3,12 +3,12 @@ use std::fmt::{Display, Formatter};
 use eframe::emath::Pos2;
 use egui::Color32;
 use enum_map::Enum;
+use residat::common::{Fixed32, Vec2};
+use residat::re2::SceType;
 use serde::{Deserialize, Serialize};
 
-use crate::aot::SceType;
 use crate::character::{BehaviorType, CharacterType};
 use crate::draw::{VAlign, text_box};
-use crate::math::{Fixed32, Vec2};
 use crate::record::State;
 
 #[derive(Debug, Clone, Copy)]

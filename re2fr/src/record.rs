@@ -1,5 +1,6 @@
-use re2shared::game::{Character, MATRIX, SVECTOR, VECTOR, NUM_CHARACTERS, NUM_OBJECTS};
 use re2shared::record::*;
+use residat::common::*;
+use residat::re2::{Character, NUM_CHARACTERS, NUM_OBJECTS};
 
 use crate::game::Game;
 
@@ -11,10 +12,10 @@ pub struct CharacterState {
     transform: MATRIX,
     part_translation: VECTOR,
     model_part_transforms: Vec<MATRIX>,
-    motion_angle: i16,
+    motion_angle: Fixed16,
     motion: i16,
-    x_size: u16,
-    z_size: u16,
+    x_size: UFixed16,
+    z_size: UFixed16,
     floor: u8,
     velocity: SVECTOR,
     health: i16,
@@ -29,7 +30,7 @@ impl CharacterState {
             id: char.id,
             transform: char.transform.clone(),
             part_translation: char.parts[0].pos.clone(),
-            model_part_transforms: char.model_parts().into_iter().map(|p| p.composite_transform.clone()).collect(),
+            model_part_transforms: unsafe { char.model_parts() }.into_iter().map(|p| p.composite_transform.clone()).collect(),
             motion_angle: char.motion_angle,
             motion: char.motion,
             x_size: char.parts[0].x_size,
@@ -101,7 +102,7 @@ impl CharacterState {
         }
         
         let model_parts_needed = self.model_parts_needed();
-        for (i, model_part) in char.model_parts().iter().enumerate() {
+        for (i, model_part) in unsafe { char.model_parts() }.iter().enumerate() {
             if self.model_part_transforms[i] != model_part.composite_transform {
                 self.model_part_transforms[i] = model_part.composite_transform.clone();
                 if model_parts_needed.contains(&i) {

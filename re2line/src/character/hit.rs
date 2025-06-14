@@ -1,11 +1,10 @@
 use std::ops::Mul;
 use epaint::{Color32, Shape};
-use re2shared::game::{AimZone, HitBounds, WeaponRange};
+use residat::common::{Fixed16, Fixed32, Vec2};
+use residat::re2::{AimZone, HitBounds, Item, WeaponRange};
 
-use crate::aot::Item;
 use crate::app::{DrawParams, Floor, GameObject, ObjectType};
 use crate::character::CharacterType;
-use crate::math::{Fixed16, Fixed32, Vec2};
 use crate::record::State;
 
 // FIXME: we're not taking the y-axis into account
@@ -27,28 +26,28 @@ const KNIFE: WeaponAimRanges = WeaponAimRanges::new(
     WeaponRange::one(
         AimZone::Mid,
         HitBounds {
-            x: 0x32,
-            z: 0x1F4,
-            x_size_half: 0x146,
-            z_size_quarter: 0x79,
+            x: Fixed16(0x32),
+            z: Fixed16(0x1F4),
+            x_size_half: Fixed16(0x146),
+            z_size_quarter: Fixed16(0x79),
         },
     ),
     WeaponRange::one(
         AimZone::Mid,
         HitBounds {
-            x: 0xFA,
-            z: 0x320,
-            x_size_half: 0x1AA,
-            z_size_quarter: 0x79,
+            x: Fixed16(0xFA),
+            z: Fixed16(0x320),
+            x_size_half: Fixed16(0x1AA),
+            z_size_quarter: Fixed16(0x79),
         },
     ),
     WeaponRange::one(
         AimZone::KnifeHigh,
         HitBounds {
-            x: -500,
-            z: 0x320,
-            x_size_half: 0x146,
-            z_size_quarter: 0x79,
+            x: Fixed16(-500),
+            z: Fixed16(0x320),
+            x_size_half: Fixed16(0x146),
+            z_size_quarter: Fixed16(0x79),
         },
     ),
 );
@@ -195,8 +194,8 @@ pub struct WeaponRangeVisualization {
 impl WeaponRangeVisualization {
     fn convert_bounds(bounds: &HitBounds) -> (Vec2, Vec2) {
         (
-            Vec2::new(Fixed16(bounds.x), Fixed16(bounds.z)),
-            Vec2::new(Fixed16(bounds.x_size_half), Fixed16(bounds.z_size_quarter)),
+            Vec2::new(bounds.x, bounds.z),
+            Vec2::new(bounds.x_size_half, bounds.z_size_quarter),
         )
     }
 

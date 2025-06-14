@@ -1,6 +1,7 @@
 use binrw::binrw;
+use residat::common::{Fixed16, UFixed16, MATRIX, SVECTOR, VECTOR};
+use residat::re2::VSYNCS_PER_SECOND;
 
-use crate::game::{FRAMES_PER_SECOND, MATRIX, SVECTOR, VECTOR};
 use crate::rng::RollType;
 
 pub const RECORD_VERSION: u16 = 2;
@@ -12,9 +13,9 @@ pub enum CharacterField {
     #[brw(magic = 0u8)] State([u8; 4]),
     #[brw(magic = 1u8)] Id(u8),
     #[brw(magic = 2u8)] Transform(MATRIX),
-    #[brw(magic = 3u8)] MotionAngle(i16),
+    #[brw(magic = 3u8)] MotionAngle(Fixed16),
     #[brw(magic = 4u8)] Motion(i16),
-    #[brw(magic = 5u8)] Size(u16, u16),
+    #[brw(magic = 5u8)] Size(UFixed16, UFixed16),
     #[brw(magic = 6u8)] Floor(u8),
     #[brw(magic = 7u8)] Velocity(SVECTOR),
     #[brw(magic = 8u8)] Health(i16),
@@ -127,7 +128,7 @@ impl FrameRecord {
     pub fn time(&self) -> String {
         let minutes = self.igt_seconds / 60;
         let seconds = self.igt_seconds % 60;
-        let frames = ((self.igt_frames as f32 / FRAMES_PER_SECOND as f32) * 100.0) as u32;
+        let frames = ((self.igt_frames as f32 / VSYNCS_PER_SECOND as f32) * 100.0) as u32;
         format!("{:02}:{:02}:{:02}", minutes, seconds, frames)
     }
 }

@@ -1,5 +1,6 @@
+use residat::common::{Fixed32, Vec2};
+
 use crate::app::{DrawParams, Floor, GameObject, ObjectType};
-use crate::math::{Fixed32, Vec2};
 use crate::record::State;
 
 const fn rect_contains_point(pos: Vec2, size: Vec2, point: Vec2) -> bool {

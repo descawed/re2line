@@ -4,12 +4,12 @@ use std::time::Duration;
 
 use anyhow::{Result, bail};
 use binrw::BinReaderExt;
-use re2shared::game::{NUM_CHARACTERS, NUM_OBJECTS};
 use re2shared::record::*;
+use residat::common::*;
+use residat::re2::{CharacterId, NUM_CHARACTERS, NUM_OBJECTS};
 
 use crate::app::{Floor, GameObject, RoomId};
 use crate::character::*;
-use crate::math::*;
 use crate::rng::{RNG_SEQUENCE, ROLL_DESCRIPTIONS};
 
 pub const FRAME_DURATION: Duration = Duration::from_micros(1000000 / 30);
@@ -173,14 +173,14 @@ impl State {
                         let pos = Vec2::new(matrix.t.x, matrix.t.z);
                         character.set_model_part_center(*i as usize, pos);
                     }
-                    CharacterField::MotionAngle(angle) => character.angle = Fixed32(*angle as i32),
+                    CharacterField::MotionAngle(angle) => character.angle = angle.to_32(),
                     CharacterField::Motion(_) => (), // seems like this might not be something useful?
                     CharacterField::Size(width, height) => {
-                        character.set_size(*width as i32, *height as i32);
+                        character.set_size(*width, *height);
                     }
                     CharacterField::Floor(floor) => character.set_floor(Floor::Id(*floor)),
                     CharacterField::Velocity(velocity) => {
-                        character.velocity = Vec2::new(Fixed16(velocity.vx), Fixed16(velocity.vz));
+                        character.velocity = Vec2::new(velocity.vx, velocity.vz);
                     }
                     CharacterField::Health(health) => character.set_health(*health),
                     CharacterField::Removed => unreachable!(),
@@ -216,7 +216,7 @@ impl State {
                             object.set_pos(vector.x, vector.z);
                         }
                     }
-                    CharacterField::Size(width, height) => object.set_size(*width as i32, *height as i32),
+                    CharacterField::Size(width, height) => object.set_size(*width, *height),
                     CharacterField::Floor(floor) => object.set_floor(Floor::Id(*floor)),
                     CharacterField::Flags(flags) => object.flags = *flags,
                     CharacterField::Removed => unreachable!(),

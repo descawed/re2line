@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 use hook86::mem::ByteSearcher;
-use re2shared::game::*;
 use re2shared::rng::RollType;
+use residat::re2::{Character, NUM_CHARACTERS, NUM_OBJECTS, OBJECT_CHARACTER_SIZE};
 
 const RDT_STRING: &[u8] = b"Pl0\\Rdt\\room1000.rdt\0";
 

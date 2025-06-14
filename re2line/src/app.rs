@@ -11,16 +11,16 @@ use egui::{Color32, Context, Key, Ui, ViewportCommand};
 use egui::layers::ShapeIdx;
 use egui::widgets::color_picker::Alpha;
 use epaint::{Stroke, StrokeKind};
-use re2shared::game::{NUM_CHARACTERS, NUM_OBJECTS};
 use re2shared::record::FrameRecord;
+use residat::common::{Fixed32, UFixed16, Vec2};
+use residat::re2::{CharacterId, Rdt, NUM_CHARACTERS, NUM_OBJECTS};
 use rfd::FileDialog;
 
 use crate::aot::Entity;
-use crate::character::{Character, CharacterId, Object, PositionedAiZone, WeaponRangeVisualization};
+use crate::character::{Character, Object, PositionedAiZone, WeaponRangeVisualization};
 use crate::collision::Collider;
 use crate::draw::{VAlign, text_box};
-use crate::math::{Fixed16, Fixed32, UFixed16, Vec2};
-use crate::rdt::Rdt;
+use crate::rdt::RdtExt;
 use crate::record::{PlayerSound, Recording, State, FRAME_DURATION};
 
 mod config;
@@ -162,7 +162,7 @@ impl Default for CharacterSettings {
 }
 
 pub struct App {
-    center: (Fixed16, Fixed16),
+    center: Vec2,
     colliders: Layer<Collider>,
     objects: Layer<Object>,
     characters: Layer<Character>,
@@ -189,7 +189,7 @@ pub struct App {
 impl App {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            center: (Fixed16(0), Fixed16(0)),
+            center: Vec2::zero(),
             colliders: Layer::new("Colliders"),
             objects: Layer::new("Objects"),
             characters: Layer::new("Characters"),
@@ -309,7 +309,7 @@ impl App {
     fn screen_pos_to_game_pos(&self, pos: egui::Pos2, viewport: egui::Rect) -> Vec2 {
         let viewport_center = viewport.center().to_vec2();
         let view_relative = (pos + self.pan - viewport_center) / self.scale();
-        Vec2::new(Fixed32::from_f32(view_relative.x) + self.center.0.to_32(), -(Fixed32::from_f32(view_relative.y) + self.center.1.to_32()))
+        Vec2::new(Fixed32::from_f32(view_relative.x) + self.center.x, -(Fixed32::from_f32(view_relative.y) + self.center.z))
     }
     
     fn set_pointer_game_pos(&mut self, pos: Option<egui::Pos2>, viewport: egui::Rect) {
@@ -385,14 +385,13 @@ impl App {
 
         let window_center = viewport.center();
         egui::Pos2::new(
-            self.center.0 * self.scale() - window_center.x,
-            self.center.1 * self.scale() - window_center.y,
+            self.center.x * self.scale() - window_center.x,
+            self.center.z * self.scale() - window_center.y,
         ) + self.pan
     }
 
     fn set_rdt(&mut self, rdt: Rdt, id: RoomId) {
-        let (x, y) = rdt.get_center();
-        self.center = (x, -y);
+        self.center = rdt.center();
         self.colliders.set_objects(rdt.get_colliders());
         self.entities.set_objects(rdt.get_entities());
         self.floors.set_objects(rdt.get_floors());

@@ -4,9 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.97"
-binrw = "0.14.1"
-derive_more = { version = "2.0.1", features = ["full"] }
+anyhow = "1.0.98"
+binrw = "0.15.0"
 enum-map = { version = "2.7.3", features = ["serde"] }
 dirs = "6.0.0"
 # persisting the window location is broken on Wayland, so I've disabled default features here and then added them back
@@ -14,8 +13,8 @@ dirs = "6.0.0"
 eframe = { version = "0.31.1", default-features = false, features = ["accesskit", "default_fonts", "glow", "persistence", "x11" ] }
 egui = { version = "0.31.1", features = ["persistence"] }
 epaint = "0.31.1"
-num_enum = { version = "0.7.3", features = ["complex-expressions"] }
 re2shared = { path = "../re2shared" }
+residat = { git = "https://github.com/descawed/residat.git", branch = "master" }
 rfd = "0.15.3"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
