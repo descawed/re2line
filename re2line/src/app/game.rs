@@ -162,10 +162,6 @@ impl ObjectType {
     pub const fn is_floor(&self) -> bool {
         matches!(self, Self::Floor)
     }
-    
-    pub const fn is_gui_object(&self) -> bool {
-        matches!(self, Self::CharacterPath)   
-    }
 }
 
 impl From<SceType> for ObjectType {
