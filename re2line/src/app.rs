@@ -389,6 +389,24 @@ impl App {
             -(self.center.z * self.scale()) - window_center.y,
         ) + self.pan
     }
+    
+    fn clear_rdt(&mut self) {
+        self.center = Vec2::zero();
+        self.colliders.clear();
+        self.entities.clear();
+        self.floors.clear();
+        self.pan = egui::Vec2::ZERO;
+        self.selected_object = SelectedObject::None;
+        self.hover_object = SelectedObject::None;
+        self.need_title_update = true;
+        self.current_rdt = None;
+        
+        // also pause any active recording and clear its GUI objects
+        self.is_recording_playing = false;
+        self.characters.clear();
+        self.objects.clear();
+        self.ai_zones.clear();
+    }
 
     fn set_rdt(&mut self, rdt: Rdt, id: RoomId) {
         self.center = rdt.center();
@@ -481,6 +499,9 @@ impl App {
     }
 
     pub fn load_game_folder(&mut self, dir: PathBuf) -> Result<()> {
+        self.leon_rooms.clear();
+        self.claire_rooms.clear();
+        
         for entry in dir.read_dir()? {
             let entry = entry?;
             let lc_name = entry.file_name().to_string_lossy().to_lowercase();
@@ -500,6 +521,17 @@ impl App {
         }
 
         self.config.rdt_folder = Some(dir);
+        
+        if let Some(room_id) = self.config.last_rdt {
+            // reload the room
+            if let Err(e) = self.load_room(room_id) {
+                eprintln!("Failed to load room {}: {}", room_id, e);
+                self.clear_rdt();
+            }
+        } else {
+            self.clear_rdt();
+        }
+        
         Ok(())
     }
 
