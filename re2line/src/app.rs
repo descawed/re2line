@@ -11,9 +11,10 @@ use egui::{Color32, Context, Key, Ui, ViewportCommand};
 use egui::layers::ShapeIdx;
 use egui::widgets::color_picker::Alpha;
 use epaint::{Stroke, StrokeKind};
+use re2script::ScriptFormatter;
 use re2shared::record::FrameRecord;
 use residat::common::{Fixed32, UFixed16, Vec2};
-use residat::re2::{CharacterId, Rdt, NUM_CHARACTERS, NUM_OBJECTS};
+use residat::re2::{CharacterId, Rdt, RdtSection, NUM_CHARACTERS, NUM_OBJECTS};
 use rfd::FileDialog;
 
 use crate::aot::Entity;
@@ -389,7 +390,7 @@ impl App {
             -(self.center.z * self.scale()) - window_center.y,
         ) + self.pan
     }
-    
+
     fn clear_rdt(&mut self) {
         self.center = Vec2::zero();
         self.colliders.clear();
@@ -400,7 +401,7 @@ impl App {
         self.hover_object = SelectedObject::None;
         self.need_title_update = true;
         self.current_rdt = None;
-        
+
         // also pause any active recording and clear its GUI objects
         self.is_recording_playing = false;
         self.characters.clear();
@@ -501,7 +502,7 @@ impl App {
     pub fn load_game_folder(&mut self, dir: PathBuf) -> Result<()> {
         self.leon_rooms.clear();
         self.claire_rooms.clear();
-        
+
         for entry in dir.read_dir()? {
             let entry = entry?;
             let lc_name = entry.file_name().to_string_lossy().to_lowercase();
@@ -521,7 +522,7 @@ impl App {
         }
 
         self.config.rdt_folder = Some(dir);
-        
+
         if let Some(room_id) = self.config.last_rdt {
             // reload the room
             if let Err(e) = self.load_room(room_id) {
@@ -531,9 +532,9 @@ impl App {
         } else {
             self.clear_rdt();
         }
-        
+
         self.need_title_update = true;
-        
+
         Ok(())
     }
 
@@ -575,6 +576,21 @@ impl App {
             self.selected_object = SelectedObject::None;
         }
     }
+    
+    fn decompile_scripts(&self) -> Result<String> {
+        let Some(ref rdt) = self.current_rdt else {
+            bail!("No RDT loaded");
+        };
+        
+        let init_buf = rdt.raw(RdtSection::InitScript);
+        let exec_buf = rdt.raw(RdtSection::ExecScript);
+        
+        let mut formatter = ScriptFormatter::new(true, false, 2, false);
+        let init_func = formatter.parse_function(init_buf);
+        let exec_script = formatter.parse_script(exec_buf)?;
+        
+        Ok(format!("{}\n\n{}", init_func, exec_script))
+    }
 
     fn room_browser(&mut self, ui: &mut Ui) {
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
@@ -592,9 +608,12 @@ impl App {
                 ui.label(format!("RNG position:\t{}", stats.rng_position));
             }
             
-            if let Some(ref rdt) = self.current_rdt {
+            if self.current_rdt.is_some() {
                 if ui.button("Print scripts").clicked() {
-                    rdt.print_scripts();
+                    match self.decompile_scripts() {
+                        Ok(script) => println!("{script}"),
+                        Err(e) => eprintln!("Failed to decompile scripts: {e}"),
+                    }
                 }
             }
 
@@ -1050,7 +1069,7 @@ impl App {
         let shape = text_box(text, pos, VAlign::Center, bg_color, text_color, ui);
         ui.painter().add(egui::Shape::Vec(vec![shape.0, shape.1]));
     }
-    
+
     fn title(&self) -> String {
         match (self.config.rdt_folder.as_ref(), self.config.last_rdt) {
             (Some(folder), Some(id)) => format!("{} - {} - {}", APP_NAME, id, folder.display()),

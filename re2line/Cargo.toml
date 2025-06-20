@@ -13,6 +13,7 @@ dirs = "6.0.0"
 eframe = { version = "0.31.1", default-features = false, features = ["accesskit", "default_fonts", "glow", "persistence", "x11" ] }
 egui = { version = "0.31.1", features = ["persistence"] }
 epaint = "0.31.1"
+re2script = { git = "https://github.com/descawed/re2script.git", branch = "master" }
 re2shared = { path = "../re2shared" }
 residat = { git = "https://github.com/descawed/residat.git", branch = "master" }
 rfd = "0.15.3"
