@@ -309,7 +309,7 @@ impl App {
     fn screen_pos_to_game_pos(&self, pos: egui::Pos2, viewport: egui::Rect) -> Vec2 {
         let viewport_center = viewport.center().to_vec2();
         let view_relative = (pos + self.pan - viewport_center) / self.scale();
-        Vec2::new(Fixed32::from_f32(view_relative.x) + self.center.x, -(Fixed32::from_f32(view_relative.y) + self.center.z))
+        Vec2::new(Fixed32::from_f32(view_relative.x) + self.center.x, -(Fixed32::from_f32(view_relative.y) - self.center.z))
     }
     
     fn set_pointer_game_pos(&mut self, pos: Option<egui::Pos2>, viewport: egui::Rect) {
@@ -386,7 +386,7 @@ impl App {
         let window_center = viewport.center();
         egui::Pos2::new(
             self.center.x * self.scale() - window_center.x,
-            self.center.z * self.scale() - window_center.y,
+            -(self.center.z * self.scale()) - window_center.y,
         ) + self.pan
     }
 
