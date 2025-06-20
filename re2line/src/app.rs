@@ -1048,12 +1048,20 @@ impl App {
         let shape = text_box(text, pos, VAlign::Center, bg_color, text_color, ui);
         ui.painter().add(egui::Shape::Vec(vec![shape.0, shape.1]));
     }
+    
+    fn title(&self) -> String {
+        match (self.config.rdt_folder.as_ref(), self.config.last_rdt) {
+            (Some(folder), Some(id)) => format!("{} - {} - {}", APP_NAME, id, folder.display()),
+            (Some(folder), None) => format!("{} - {}", APP_NAME, folder.display()),
+            _ => APP_NAME.to_string(),
+        }
+    }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
-        if let (true, Some(room_id)) = (self.need_title_update, self.config.last_rdt) {
-            ctx.send_viewport_cmd(ViewportCommand::Title(format!("{} - {}", APP_NAME, room_id)));
+        if self.need_title_update {
+            ctx.send_viewport_cmd(ViewportCommand::Title(self.title()));
             self.need_title_update = false;
         }
 
