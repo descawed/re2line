@@ -517,6 +517,7 @@ impl App {
         self.active_recording = Some(Recording::read(reader)?);
         // reset character display settings for new recording
         self.character_settings.clear();
+        self.change_recording_frame(|r| r.set_index(0));
 
         Ok(())
     }
