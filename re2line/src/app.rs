@@ -1093,18 +1093,21 @@ impl eframe::App for App {
                         if let Err(e) = self.prompt_load_game() {
                             eprintln!("Failed to open RDT: {}", e);
                         }
+                        ui.close_menu();
                     }
 
                     if ui.button("Open recording").clicked() && self.is_game_loaded() {
                         if let Err(e) = self.prompt_load_recording() {
                             eprintln!("Failed to open recording: {}", e);
                         }
+                        ui.close_menu();
                     }
                     
                     ui.separator(); // don't want open button too close to close button
                     
                     if ui.button("Close recording").clicked() && self.active_recording.is_some() {
                         self.close_recording();
+                        ui.close_menu();
                     }
                 });
             });
