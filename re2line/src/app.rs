@@ -532,6 +532,8 @@ impl App {
             self.clear_rdt();
         }
         
+        self.need_title_update = true;
+        
         Ok(())
     }
 
