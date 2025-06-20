@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 [dependencies]
 anyhow = "1.0.98"
 binrw = "0.15.0"
-chrono = "0.4.40"
+chrono = "0.4.41"
 hook86 = { git = "https://github.com/descawed/hook86.git", features = ["crash_logging"] }
 log = "0.4.27"
 re2shared = { path = "../re2shared" }
