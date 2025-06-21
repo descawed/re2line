@@ -1604,7 +1604,11 @@ impl eframe::App for App {
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     for tab in BrowserTab::list() {
-                        if (tab == BrowserTab::Recording && self.active_recording.is_none()) || (tab == BrowserTab::Comparison && self.comparison.is_none()) {
+                        let is_tab_inactive = (tab == BrowserTab::Recording && self.active_recording.is_none())
+                            || (tab == BrowserTab::Comparison && self.comparison.is_none())
+                            || (tab == BrowserTab::Rng && self.active_recording().is_none());
+                        
+                        if is_tab_inactive {
                             continue;
                         }
 
