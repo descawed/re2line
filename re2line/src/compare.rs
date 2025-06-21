@@ -220,6 +220,7 @@ pub struct Comparison {
     loaded_recording: LoadedRecording,
     active_run_index: usize,
     playback_index: usize,
+    include_exclusions_in_statistics: bool,
 }
 
 impl Comparison {
@@ -249,6 +250,7 @@ impl Comparison {
             loaded_recording,
             active_run_index: 0,
             playback_index: 0,
+            include_exclusions_in_statistics: false,       
         })
     }
     
@@ -269,24 +271,28 @@ impl Comparison {
 
     pub fn fastest_time(&self) -> usize {
         // we've sorted the fastest run to be first
-        self.runs.iter().skip_while(|run| !run.is_included()).next().map(Run::len).unwrap_or(0)
+        self.runs.iter().skip_while(|run| !run.is_included() && !self.include_exclusions_in_statistics).next().map(Run::len).unwrap_or(0)
     }
 
     pub fn slowest_time(&self) -> usize {
-        self.runs.iter().rev().skip_while(|run| !run.is_included()).next().map(Run::len).unwrap_or(0)
+        self.runs.iter().rev().skip_while(|run| !run.is_included() && !self.include_exclusions_in_statistics).next().map(Run::len).unwrap_or(0)
     }
 
     pub fn average_time(&self) -> usize {
         let mut total = 0;
         let mut count = 0usize;
         for run in &self.runs {
-            if run.is_included() {
+            if run.is_included() || self.include_exclusions_in_statistics {
                 total += run.len();
                 count += 1;
             }
         }
 
-        total / count
+        if count == 0 {
+            0
+        } else {
+            total / count
+        }
     }
 
     pub const fn recording(&self) -> &Recording {
@@ -303,6 +309,10 @@ impl Comparison {
     
     pub fn runs_desc(&self) -> impl Iterator<Item = &Run> {
         self.runs.iter().rev()
+    }
+    
+    pub fn runs_mut(&mut self) -> &mut [Run] {
+        &mut self.runs   
     }
 
     pub const fn num_runs(&self) -> usize {
@@ -326,5 +336,17 @@ impl Comparison {
     
     pub fn is_playback_complete(&self) -> bool {
         self.playback_index >= self.slowest_time()
+    }
+    
+    pub const fn include_exclusions_in_statistics(&self) -> bool {
+        self.include_exclusions_in_statistics
+    }
+    
+    pub const fn set_include_exclusions_in_statistics(&mut self, ignore: bool) {
+        self.include_exclusions_in_statistics = ignore;   
+    }
+    
+    pub const fn active_run_index(&self) -> usize {
+        self.active_run_index
     }
 }
