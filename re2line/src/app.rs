@@ -18,9 +18,10 @@ use residat::common::{Fixed32, UFixed16, Vec2};
 use residat::re2::{CharacterId, Rdt, RdtSection, NUM_CHARACTERS, NUM_OBJECTS};
 use rfd::FileDialog;
 
-use crate::aot::Entity;
+use crate::aot::{Entity, EntityForm, NUM_AOTS};
 use crate::character::{Character, Object, PositionedAiZone, WeaponRangeVisualization};
 use crate::collision::Collider;
+use crate::compare::{Checkpoint, RoomFilter};
 use crate::draw::{VAlign, text_box};
 use crate::rdt::RdtExt;
 use crate::record::{PlayerSound, Recording, State, FRAME_DURATION};
@@ -187,6 +188,8 @@ pub struct App {
     pointer_game_pos: Option<Vec2>,
     current_rdt: Option<Rdt>,
     error_message: Option<String>,
+    compare_filter: RoomFilter,
+    is_compare_filter_window_open: bool,
 }
 
 impl App {
@@ -215,6 +218,8 @@ impl App {
             pointer_game_pos: None,
             current_rdt: None,
             error_message: None,
+            compare_filter: RoomFilter::empty(),
+            is_compare_filter_window_open: false,
         })
     }
 
@@ -404,6 +409,7 @@ impl App {
         self.hover_object = SelectedObject::None;
         self.need_title_update = true;
         self.current_rdt = None;
+        self.compare_filter = RoomFilter::empty();
 
         // also pause any active recording and clear its GUI objects
         self.is_recording_playing = false;
@@ -423,6 +429,7 @@ impl App {
         self.config.last_rdt = Some(id);
         self.need_title_update = true;
         self.current_rdt = Some(rdt);
+        self.compare_filter = RoomFilter::basic(id);
     }
 
     pub fn try_resume(&mut self) -> Result<()> {
@@ -780,7 +787,7 @@ impl App {
             ui.separator();
 
             for (object_type, object_settings) in &mut self.config.object_settings {
-                ui.label(egui::RichText::new(object_type.name()).strong());
+                ui.label(RichText::new(object_type.name()).strong());
                 ui.checkbox(&mut object_settings.show, "Show");
                 egui::widgets::color_picker::color_picker_color32(ui, &mut object_settings.color, Alpha::OnlyBlend);
                 ui.separator();
@@ -852,7 +859,7 @@ impl App {
                 loop {
                     ui.vertical(|ui| {
                         if is_group_start {
-                            ui.label(egui::RichText::new(group_name.clone()).strong());
+                            ui.label(RichText::new(group_name.clone()).strong());
                             is_group_start = false;
                         } else {
                             ui.label("");
@@ -900,7 +907,7 @@ impl App {
                         // extra display options for characters
                         ui.separator();
                         ui.vertical(|ui| {
-                            ui.label(egui::RichText::new("Display").strong());
+                            ui.label(RichText::new("Display").strong());
                             ui.checkbox(&mut settings.show_tooltip, "Show tooltip");
                             ui.checkbox(&mut settings.show_ai, "Show AI");
                             ui.checkbox(&mut settings.show_path, "Show path");
@@ -1082,6 +1089,8 @@ impl App {
 
     fn show_error(&mut self, error: impl Display) {
         self.error_message = Some(error.to_string());
+        // if a recording is playing, pause it
+        self.is_recording_playing = false;
     }
 
     fn error_modal(&mut self, ctx: &Context) {
@@ -1097,10 +1106,184 @@ impl App {
                 ui.button("OK").clicked()
             }).inner
         });
-        
+
         if response.should_close() || response.inner {
             self.error_message = None;
         }
+    }
+
+    fn connecting_rooms(&self) -> Vec<RoomId> {
+        let mut connecting_rooms = Vec::new();
+        let Some(this_room_id) = self.config.last_rdt else {
+            return connecting_rooms;
+        };
+
+        for entity in self.entities.objects() {
+            let EntityForm::Door { next_stage, next_room, .. } = entity.form() else {
+                continue;
+            };
+
+            let other_room_id = RoomId::new(*next_stage, *next_room, this_room_id.player);
+            if other_room_id != this_room_id && !connecting_rooms.contains(&other_room_id) {
+                connecting_rooms.push(other_room_id);
+            }
+        }
+
+        connecting_rooms
+    }
+
+    fn aot_names(&self) -> [Option<String>; NUM_AOTS] {
+        let mut aot_names = [const { None }; NUM_AOTS];
+
+        let mut door_count = 0usize;
+        let mut item_count = 0usize;
+        let mut other_count = 0usize;
+        for entity in self.entities.objects() {
+            let aot = entity.id() as usize;
+            if aot >= NUM_AOTS {
+                eprintln!("Invalid AOT: {}", entity.id());
+                continue;
+            }
+
+            let name = match entity.object_type() {
+                ObjectType::Door => {
+                    let s = format!("#{aot} Door {door_count}");
+                    door_count += 1;
+                    s
+                }
+                ObjectType::Item => {
+                    let s = format!("#{aot} Item {item_count}");
+                    item_count += 1;
+                    s
+                }
+                _ => {
+                    let s = format!("#{aot} AOT {other_count}");
+                    other_count += 1;
+                    s
+                }
+            };
+
+            let aot_name = &mut aot_names[aot];
+            if let Some(aot_name) = aot_name {
+                if *aot_name != name {
+                    eprintln!("Conflicting name for AOT {}: {} vs {}", aot, name, aot_name);
+                }
+            }
+
+            *aot_name = Some(name);
+        }
+
+        aot_names
+    }
+
+    fn room_filter_dropdown(ui: &mut Ui, label: &str, rooms: &[RoomId], current_room: &mut Option<RoomId>) {
+        let selected_text = match current_room {
+            Some(entrance_id) => entrance_id.to_string(),
+            None => "None".to_string(),
+        };
+
+        egui::ComboBox::from_label(label)
+            .selected_text(selected_text)
+            .show_ui(ui, |ui| {
+                ui.selectable_value(current_room, None, "None");
+                for room_id in rooms {
+                    ui.selectable_value(current_room, Some(*room_id), room_id.to_string());
+                }
+            });
+    }
+
+    fn compare_filter_window(&mut self, ctx: &Context) {
+        let mut is_compare_filter_window_open = self.is_compare_filter_window_open;
+
+        egui::Window::new("Compare Runs")
+            .open(&mut is_compare_filter_window_open)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                ui.label(RichText::new(format!("Room {}", self.compare_filter.room_id)).strong());
+                
+                ui.separator();
+
+                let connecting_rooms = self.connecting_rooms();
+
+                Self::room_filter_dropdown(ui, "Entrance filter", &connecting_rooms, &mut self.compare_filter.entrance_id);
+                Self::room_filter_dropdown(ui, "Exit filter", &connecting_rooms, &mut self.compare_filter.exit_id);
+
+                ui.separator();
+
+                ui.label(RichText::new("Required triggers").strong());
+
+                ui.separator();
+                
+                if !self.compare_filter.checkpoints.is_empty() {
+                    let aot_names = self.aot_names();
+                    let end_index = self.compare_filter.checkpoints.len().saturating_sub(1);
+                    let mut edit = None;
+                    for (i, checkpoint) in self.compare_filter.checkpoints.iter_mut().enumerate() {
+                        let Checkpoint::Aot(aot) = checkpoint;
+                        let aot = *aot as usize;
+                        let Some(name) = aot_names.get(aot).and_then(Option::as_ref) else {
+                            eprintln!("Checkpoint {} has invalid AOT {}", i, aot);
+                            continue;
+                        };
+
+                        ui.horizontal(|ui| {
+                            let delete_button = egui::Button::new("⊗").fill(Color32::RED);
+                            if ui.add(delete_button).clicked() {
+                                edit = Some((i, 0isize));
+                            }
+
+                            ui.separator();
+
+                            if ui.add_enabled(i > 0, egui::Button::new("⏶")).clicked() {
+                                edit = Some((i, -1isize));
+                            }
+
+                            if ui.add_enabled(i < end_index, egui::Button::new("⏷")).clicked() {
+                                edit = Some((i, 1isize));
+                            }
+
+                            egui::ComboBox::from_label(format!("Trigger {}", i + 1))
+                                .selected_text(name)
+                                .show_ui(ui, |ui| {
+                                    for (aot, name) in aot_names.iter().enumerate() {
+                                        let Some(name) = name else {
+                                            continue;
+                                        };
+
+                                        ui.selectable_value(checkpoint, Checkpoint::Aot(aot as u8), name);
+                                    }
+                                });
+                        });
+                    }
+
+                    if let Some((i, delta)) = edit {
+                        if delta == 0 {
+                            self.compare_filter.checkpoints.remove(i);
+                        } else if let Some(neighbor) = i.checked_add_signed(delta) {
+                            self.compare_filter.checkpoints.swap(i, neighbor);
+                        }
+                    }
+                } else {
+                    ui.label("None");
+                }
+
+                ui.separator();
+
+                if ui.button("Add trigger").clicked() {
+                    self.compare_filter.checkpoints.push(Checkpoint::Aot(0));
+                }
+
+                ui.separator();
+
+                ui.vertical_centered(|ui| {
+                    ui.add_space(5.0);
+                    // TODO: recording selection
+                    ui.button("Confirm and select recordings");
+                    ui.add_space(5.0);
+                });
+            });
+
+        self.is_compare_filter_window_open = is_compare_filter_window_open;
     }
 }
 
@@ -1132,6 +1315,17 @@ impl eframe::App for App {
                     
                     if ui.button("Close recording").clicked() && self.active_recording.is_some() {
                         self.close_recording();
+                        ui.close_menu();
+                    }
+                });
+
+                ui.menu_button("Tools", |ui| {
+                    if ui.button("Compare runs").clicked() {
+                        let room_id = self.config.last_rdt.unwrap_or_else(RoomId::zero);
+                        if self.compare_filter.room_id != room_id {
+                            self.compare_filter = RoomFilter::basic(room_id);
+                        }
+                        self.is_compare_filter_window_open = true;
                         ui.close_menu();
                     }
                 });
@@ -1468,9 +1662,10 @@ impl eframe::App for App {
                 }
             }
         });
-        
-        // display error modal if necessary
+
+        // display modals if necessary
         self.error_modal(ctx);
+        self.compare_filter_window(ctx);
 
         let repaint_duration = if self.active_recording.is_some() && self.is_recording_playing {
             let now = Instant::now();
