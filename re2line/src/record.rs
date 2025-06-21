@@ -300,7 +300,7 @@ impl State {
     pub const fn input_state(&self) -> InputState {
         InputState::from_flags(self.input_flags)
     }
-    
+
     pub const fn input_state_this_frame(&self) -> InputState {
         InputState::from_flags(self.input_flags_this_frame)
     }
@@ -308,7 +308,7 @@ impl State {
     pub const fn frame_index(&self) -> usize {
         self.frame_index
     }
-    
+
     pub const fn is_new_game_start(&self) -> bool {
         self.is_new_game_start
     }
@@ -407,7 +407,7 @@ impl Recording {
         let room_index = self.index - self.range.start;
         self.states.get(room_index)
     }
-    
+
     pub fn peek_next_room(&self) -> Option<&State> {
         for checkpoint in &self.checkpoints {
             if self.index < checkpoint.frame_index {
@@ -417,7 +417,7 @@ impl Recording {
 
         None
     }
-    
+
     pub fn next_room(&mut self) -> Option<&State> {
         let mut next_index = None;
         for checkpoint in &self.checkpoints {
@@ -426,7 +426,7 @@ impl Recording {
                 break;
             }
         }
-        
+
         self.set_index(next_index.unwrap_or(self.frames.len()))
     }
 
@@ -447,7 +447,7 @@ impl Recording {
         if index > self.frames.len() {
             self.index = self.frames.len();
         }
-        
+
         if !self.range.contains(&index) {
             let mut last_state = None;
             let mut end_index = None;

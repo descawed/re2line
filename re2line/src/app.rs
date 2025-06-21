@@ -21,7 +21,7 @@ use rfd::FileDialog;
 use crate::aot::{Entity, EntityForm, NUM_AOTS};
 use crate::character::{Character, Object, PositionedAiZone, WeaponRangeVisualization};
 use crate::collision::Collider;
-use crate::compare::{Checkpoint, RoomFilter};
+use crate::compare::{Checkpoint, Comparison, RoomFilter, Run};
 use crate::draw::{VAlign, text_box};
 use crate::rdt::RdtExt;
 use crate::record::{PlayerSound, Recording, State, FRAME_DURATION};
@@ -119,11 +119,12 @@ enum BrowserTab {
     Settings,
     Rng,
     Recording,
+    Comparison,
 }
 
 impl BrowserTab {
-    const fn list() -> [BrowserTab; 5] {
-        [BrowserTab::Game, BrowserTab::Room, BrowserTab::Recording, BrowserTab::Rng, BrowserTab::Settings]
+    const fn list() -> [BrowserTab; 6] {
+        [BrowserTab::Game, BrowserTab::Room, BrowserTab::Comparison, BrowserTab::Recording, BrowserTab::Rng, BrowserTab::Settings]
     }
 
     const fn name(&self) -> &'static str {
@@ -133,6 +134,7 @@ impl BrowserTab {
             Self::Settings => "Settings",
             Self::Rng => "RNG",
             Self::Recording => "Recording",
+            Self::Comparison => "Comparison",
         }
     }
 }
@@ -190,6 +192,7 @@ pub struct App {
     error_message: Option<String>,
     compare_filter: RoomFilter,
     is_compare_filter_window_open: bool,
+    comparison: Option<Comparison>,
 }
 
 impl App {
@@ -220,6 +223,7 @@ impl App {
             error_message: None,
             compare_filter: RoomFilter::empty(),
             is_compare_filter_window_open: false,
+            comparison: None,
         })
     }
 
@@ -228,7 +232,7 @@ impl App {
     }
 
     fn toggle_play_recording(&mut self) {
-        if self.active_recording.is_none() {
+        if self.active_recording().is_none() {
             return;
         }
 
@@ -368,7 +372,7 @@ impl App {
                     self.toggle_play_recording();
                 }
 
-                if self.active_recording.is_some() {
+                if self.active_recording().is_some() {
                     if self.is_recording_playing {
                         // skip forward or back in chunks
                         if i.key_pressed(Key::ArrowRight) {
@@ -567,7 +571,7 @@ impl App {
     }
 
     fn prompt_load_recording(&mut self) -> Result<()> {
-        let Some(path) = FileDialog::new().pick_file() else {
+        let Some(path) = FileDialog::new().add_filter("RE2 recordings", &["bin"]).pick_file() else {
             return Ok(());
         };
 
@@ -584,6 +588,18 @@ impl App {
         if matches!(self.selected_object, SelectedObject::Character(_) | SelectedObject::Object(_)) {
             self.selected_object = SelectedObject::None;
         }
+
+        if self.tab == BrowserTab::Recording {
+            self.tab = BrowserTab::Room;
+        }
+    }
+
+    fn active_recording(&self) -> Option<&Recording> {
+        self.active_recording.as_ref().or_else(|| self.comparison.as_ref().map(Comparison::recording))
+    }
+
+    fn active_recording_mut(&mut self) -> Option<&mut Recording> {
+        self.active_recording.as_mut().or_else(|| self.comparison.as_mut().map(Comparison::recording_mut))
     }
     
     fn decompile_scripts(&self) -> Result<String> {
@@ -676,7 +692,7 @@ impl App {
                 }
             });
 
-            if self.active_recording.is_some() {
+            if self.active_recording().is_some() {
                 ui.collapsing("Objects", |ui| {
                     for object in self.objects.objects() {
                         let i = object.index();
@@ -728,6 +744,49 @@ impl App {
             });
         });
     }
+
+    fn frames_to_time(frames: usize) -> String {
+        let duration = FRAME_DURATION * frames as u32;
+        let seconds = duration.as_secs_f32();
+        let minutes = (seconds / 60.0) as i32;
+        let seconds = seconds % 60.0;
+        format!("{:02}:{:05.2}", minutes, seconds)
+    }
+
+    fn comparison_browser(&mut self, ui: &mut Ui) {
+        egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
+            let Some(ref mut comparison) = self.comparison else {
+                return;
+            };
+            
+            let fastest_time = comparison.fastest_time();
+            let slowest_time = comparison.slowest_time();
+            let average_time = comparison.average_time();
+
+            ui.label(format!("Runs: {}", comparison.num_runs()));
+            ui.label(format!("Fastest: {} ({})", Self::frames_to_time(fastest_time), fastest_time));
+            ui.label(format!("Slowest: {} ({})", Self::frames_to_time(slowest_time), slowest_time));
+            ui.label(format!("Average: {} ({})", Self::frames_to_time(average_time), average_time));
+            
+            ui.separator();
+            
+            let mut selected_run = None;
+            for (i, run) in comparison.runs().into_iter().enumerate() {
+                let is_active = comparison.is_active_run(run);
+                if ui.selectable_label(is_active, run.identifier()).clicked() && !is_active {
+                    selected_run = Some(i);
+                }
+                ui.label(format!("  Time: {} ({})", Self::frames_to_time(run.len()), run.len()));
+            }
+            
+            if let Some(i) = selected_run {
+                match comparison.set_active_run(i) {
+                    Ok(_) => self.update_from_state(),
+                    Err(e) => self.show_error(format!("Failed to load run: {e}")),
+                }
+            }
+        });
+    }
     
     fn recording_browser(&mut self, ui: &mut Ui) {
         let mut selected_frame = None;
@@ -756,7 +815,7 @@ impl App {
     
     fn rng_browser(&mut self, ui: &mut Ui) {
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
-            let Some(ref recording) = self.active_recording else {
+            let Some(recording) = self.active_recording() else {
                 return;
             };
             
@@ -816,13 +875,13 @@ impl App {
     }
 
     fn get_character_settings(&self, index: usize) -> Option<CharacterSettings> {
-        let room_id = self.active_recording.as_ref().and_then(Recording::current_state).map(State::room_id)?;
+        let room_id = self.active_recording().and_then(Recording::current_state).map(State::room_id)?;
         let character_id = self.get_character(index)?.id;
         Some(self.character_settings.get(&(room_id, character_id, index)).copied().unwrap_or_else(|| CharacterSettings::config_default(&self.config)))
     }
 
     fn get_character_settings_mut(&mut self, index: usize) -> Option<&mut CharacterSettings> {
-        let room_id = self.active_recording.as_ref().and_then(Recording::current_state).map(State::room_id)?;
+        let room_id = self.active_recording().and_then(Recording::current_state).map(State::room_id)?;
         let character_id = self.get_character(index)?.id;
         Some(self.character_settings.entry((room_id, character_id, index)).or_insert_with(|| CharacterSettings::config_default(&self.config)))
     }
@@ -919,81 +978,119 @@ impl App {
             });
         });
     }
+    
+    fn update_from_state(&mut self) {
+        let Some(next_state) = self.active_recording().and_then(Recording::current_state) else {
+            return;
+        };
+        let new_room_id = next_state.room_id();
+
+        let mut ai_zones = Vec::with_capacity(NUM_CHARACTERS);
+        let mut characters = Vec::with_capacity(NUM_CHARACTERS);
+
+        for (i, character) in next_state.characters().iter().enumerate() {
+            let Some(character) = character.as_ref() else {
+                continue;
+            };
+
+            let mut character = character.clone();
+            character.set_index(i);
+
+            let character_ai_zones = character.ai_zones();
+
+            characters.push(character);
+            ai_zones.extend(character_ai_zones);
+        }
+
+        let mut objects = Vec::with_capacity(NUM_OBJECTS);
+        for (i, object) in next_state.objects().iter().enumerate() {
+            let Some(object) = object.as_ref() else {
+                continue;
+            };
+
+            // we don't care about displaying arbitrary 3D objects
+            if !object.is_pushable() {
+                continue;
+            }
+
+            let mut object = object.clone();
+            object.set_index(i);
+            objects.push(object);
+        }
+
+        self.characters.set_objects(characters);
+        self.ai_zones.set_objects(ai_zones);
+        self.objects.set_objects(objects);
+
+        if self.config.last_rdt != Some(new_room_id) {
+            if let Err(e) = self.load_room(new_room_id) {
+                self.show_error(format!("Failed to load room {new_room_id}: {e}"));
+            }
+        }
+    }
+    
+    fn clamp_recording_for_comparison(&self, index: usize) -> usize {
+        if let Some(range) = self.comparison.as_ref().map(Comparison::active_run).map(Run::range) {
+            if index < range.start {
+                range.start
+            } else if index >= range.end {
+                range.end - 1
+            } else {
+                index
+            }
+        } else {
+            index
+        }
+    }
 
     fn change_recording_frame<F>(&mut self, func: F)
     where F: FnOnce(&mut Recording) -> Option<&State>
     {
         self.last_play_tick = Instant::now();
-        if let Some(next_state) = self.active_recording.as_mut().and_then(func) {
-            let new_room_id = next_state.room_id();
-
-            let mut ai_zones = Vec::with_capacity(NUM_CHARACTERS);
-            let mut characters = Vec::with_capacity(NUM_CHARACTERS);
-
-            for (i, character) in next_state.characters().iter().enumerate() {
-                let Some(character) = character.as_ref() else {
-                    continue;
-                };
-
-                let mut character = character.clone();
-                character.set_index(i);
-
-                let character_ai_zones = character.ai_zones();
-
-                characters.push(character);
-                ai_zones.extend(character_ai_zones);
-            }
-
-            self.characters.set_objects(characters);
-            self.ai_zones.set_objects(ai_zones);
-            
-            let mut objects = Vec::with_capacity(NUM_OBJECTS);
-            for (i, object) in next_state.objects().iter().enumerate() {
-                let Some(object) = object.as_ref() else {
-                    continue;
-                };
-                
-                // we don't care about displaying arbitrary 3D objects
-                if !object.is_pushable() {
-                    continue;
-                }
-                
-                let mut object = object.clone();
-                object.set_index(i);
-                objects.push(object);
-            }
-            
-            self.objects.set_objects(objects);
-
-            if self.config.last_rdt != Some(new_room_id) {
-                if let Err(e) = self.load_room(new_room_id) {
-                    self.show_error(format!("Failed to load room {new_room_id}: {e}"));
-                }
-            }
-        } else {
+        if self.active_recording_mut().and_then(func).is_none() {
             // pause once we reach the end of the recording
             self.is_recording_playing = false;
+        } else {
+            self.update_from_state();
         }
     }
 
-    fn prev_recording_frame(&mut self) {
+    fn prev_recording_frame(&mut self) -> bool {
+        if let Some(range) = self.comparison.as_ref().map(Comparison::active_run).map(Run::range) {
+            let index = self.active_recording().and_then(Recording::current_state).map(State::frame_index).unwrap();
+            if index == range.start {
+                return false;
+            }
+        }
+        
         self.change_recording_frame(Recording::prev);
+        true
     }
 
-    fn next_recording_frame(&mut self) {
+    fn next_recording_frame(&mut self) -> bool {
+        if let Some(range) = self.comparison.as_ref().map(Comparison::active_run).map(Run::range) {
+            let index = self.active_recording().and_then(Recording::current_state).map(State::frame_index).unwrap();
+            if index + 1 == range.end {
+                return false;
+            }
+        }
+        
         self.change_recording_frame(Recording::next);
+        true
     }
 
     fn set_recording_frame(&mut self, frame: usize) {
+        let frame = self.clamp_recording_for_comparison(frame);
         self.change_recording_frame(|recording| recording.set_index(frame));
     }
     
     fn move_recording_frame(&mut self, delta: isize) {
-        let Some(index) = self.active_recording.as_ref().map(Recording::index) else {
+        let Some(index) = self.active_recording().map(Recording::index) else {
             return;
         };
         
         let new_index = (index as isize + delta).max(0) as usize;
+        let new_index = self.clamp_recording_for_comparison(new_index);
         self.set_recording_frame(new_index);
     }
     
@@ -1192,6 +1289,28 @@ impl App {
             });
     }
 
+    fn start_comparison(&mut self, comparison: Comparison) {
+        self.comparison = Some(comparison);
+        self.update_from_state();
+    }
+
+    fn select_comparison_recordings(&mut self) -> Result<()> {
+        let Some(recording_paths) = FileDialog::new().add_filter("RE2 recordings", &["bin"]).pick_files() else {
+            // user canceled the dialog, so just bail
+            return Ok(());
+        };
+
+        let entities = self.entities.objects();
+        let comparison = Comparison::load_runs(recording_paths, &self.compare_filter, entities)?;
+
+        // close any active individual recording
+        self.close_recording();
+
+        self.start_comparison(comparison);
+
+        Ok(())
+    }
+
     fn compare_filter_window(&mut self, ctx: &Context) {
         let mut is_compare_filter_window_open = self.is_compare_filter_window_open;
 
@@ -1200,7 +1319,7 @@ impl App {
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
                 ui.label(RichText::new(format!("Room {}", self.compare_filter.room_id)).strong());
-                
+
                 ui.separator();
 
                 let connecting_rooms = self.connecting_rooms();
@@ -1213,7 +1332,7 @@ impl App {
                 ui.label(RichText::new("Required triggers").strong());
 
                 ui.separator();
-                
+
                 if !self.compare_filter.checkpoints.is_empty() {
                     let aot_names = self.aot_names();
                     let end_index = self.compare_filter.checkpoints.len().saturating_sub(1);
@@ -1277,13 +1396,19 @@ impl App {
 
                 ui.vertical_centered(|ui| {
                     ui.add_space(5.0);
-                    // TODO: recording selection
-                    ui.button("Confirm and select recordings");
+                    if ui.button("Confirm and select recordings").clicked() {
+                        self.is_compare_filter_window_open = false;
+                        if let Err(e) = self.select_comparison_recordings() {
+                            self.show_error(format!("Failed to open comparison recordings: {}", e));
+                        }
+                    }
                     ui.add_space(5.0);
                 });
             });
 
-        self.is_compare_filter_window_open = is_compare_filter_window_open;
+        if self.is_compare_filter_window_open {
+            self.is_compare_filter_window_open = is_compare_filter_window_open;
+        }
     }
 }
 
@@ -1313,7 +1438,7 @@ impl eframe::App for App {
                     
                     ui.separator(); // don't want open button too close to close button
                     
-                    if ui.button("Close recording").clicked() && self.active_recording.is_some() {
+                    if ui.add_enabled(self.active_recording.is_some(), egui::Button::new("Close recording")).clicked() {
                         self.close_recording();
                         ui.close_menu();
                     }
@@ -1336,6 +1461,10 @@ impl eframe::App for App {
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     for tab in BrowserTab::list() {
+                        if (tab == BrowserTab::Recording && self.active_recording.is_none()) || (tab == BrowserTab::Comparison && self.comparison.is_none()) {
+                            continue;
+                        }
+
                         if ui.selectable_label(self.tab == tab, tab.name()).clicked() {
                             self.tab = tab;
                         }
@@ -1348,6 +1477,7 @@ impl eframe::App for App {
                     BrowserTab::Settings => self.settings_browser(ui),
                     BrowserTab::Rng => self.rng_browser(ui),
                     BrowserTab::Recording => self.recording_browser(ui),
+                    BrowserTab::Comparison => self.comparison_browser(ui),
                 }
             });
         });
@@ -1357,14 +1487,15 @@ impl eframe::App for App {
             ui.vertical(|ui| {
                 let mut need_toggle = false;
                 let mut new_frame_index = None;
-                if let Some(recording) = &mut self.active_recording {
-                    ui.horizontal(|ui| {
-                        let play_pause = if self.is_recording_playing {
-                            "⏸"
-                        } else {
-                            "▶"
-                        };
 
+                let play_pause = if self.is_recording_playing {
+                    "⏸"
+                } else {
+                    "▶"
+                };
+
+                if let Some(recording) = self.active_recording_mut() {
+                    ui.horizontal(|ui| {
                         need_toggle = ui.button(play_pause).clicked();
 
                         let mut pos = recording.index();
@@ -1404,7 +1535,7 @@ impl eframe::App for App {
             
             let view_center = self.calculate_origin(ctx);
             let empty_state = State::empty();
-            let state = self.active_recording.as_ref().and_then(|recording| recording.current_state()).unwrap_or(&empty_state);
+            let state = self.active_recording().and_then(Recording::current_state).unwrap_or(&empty_state);
 
             for (i, floor) in self.floors.visible_objects(&self.config) {
                 let mut floor_draw_params = self.config.get_obj_draw_params(floor, view_center);
@@ -1526,7 +1657,7 @@ impl eframe::App for App {
                 ui.draw_game_tooltip(character, &char_draw_params, state, i);
             }
 
-            if let Some(recording) = &self.active_recording {
+            if let Some(recording) = self.active_recording() {
                 if self.config.show_sounds {
                     // TODO: make sound text box colors configurable
                     let sound_draw_params = DrawParams {
@@ -1633,33 +1764,31 @@ impl eframe::App for App {
             }
 
             // show player inputs in top right
-            if let Some(recording) = &self.active_recording {
-                if let Some(state) = recording.current_state() {
-                    let input_state = state.input_state();
-                    let viewport = ctx.input(egui::InputState::screen_rect);
-                    let input_origin = viewport.right_top();
+            if let Some(state) = self.active_recording().and_then(Recording::current_state) {
+                let input_state = state.input_state();
+                let viewport = ctx.input(egui::InputState::screen_rect);
+                let input_origin = viewport.right_top();
 
-                    let forward_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 2.0, INPUT_SIZE + INPUT_MARGIN * 2.0);
-                    Self::draw_key(ui, "Fwd", forward_pos, input_state.is_forward_pressed);
+                let forward_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 2.0, INPUT_SIZE + INPUT_MARGIN * 2.0);
+                Self::draw_key(ui, "Fwd", forward_pos, input_state.is_forward_pressed);
 
-                    let right_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET, INPUT_SIZE * 2.0 + INPUT_MARGIN * 3.0);
-                    Self::draw_key(ui, "Rgt", right_pos, input_state.is_right_pressed);
+                let right_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET, INPUT_SIZE * 2.0 + INPUT_MARGIN * 3.0);
+                Self::draw_key(ui, "Rgt", right_pos, input_state.is_right_pressed);
 
-                    let back_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 2.0, INPUT_SIZE * 2.0 + INPUT_MARGIN * 3.0);
-                    Self::draw_key(ui, "Bck", back_pos, input_state.is_backward_pressed);
+                let back_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 2.0, INPUT_SIZE * 2.0 + INPUT_MARGIN * 3.0);
+                Self::draw_key(ui, "Bck", back_pos, input_state.is_backward_pressed);
 
-                    let left_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 3.0, INPUT_SIZE * 2.0 + INPUT_MARGIN * 3.0);
-                    Self::draw_key(ui, "Lft", left_pos, input_state.is_left_pressed);
-                    
-                    let action_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 3.0, INPUT_SIZE * 3.0 + INPUT_MARGIN * 4.0);
-                    Self::draw_key(ui, "Act", action_pos, input_state.is_action_pressed);
-                    
-                    let run_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 2.0, INPUT_SIZE * 3.0 + INPUT_MARGIN * 4.0);
-                    Self::draw_key(ui, "Run", run_pos, input_state.is_run_cancel_pressed);
-                    
-                    let aim_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET, INPUT_SIZE * 3.0 + INPUT_MARGIN * 4.0);
-                    Self::draw_key(ui, "Aim", aim_pos, input_state.is_aim_pressed);
-                }
+                let left_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 3.0, INPUT_SIZE * 2.0 + INPUT_MARGIN * 3.0);
+                Self::draw_key(ui, "Lft", left_pos, input_state.is_left_pressed);
+
+                let action_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 3.0, INPUT_SIZE * 3.0 + INPUT_MARGIN * 4.0);
+                Self::draw_key(ui, "Act", action_pos, input_state.is_action_pressed);
+
+                let run_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 2.0, INPUT_SIZE * 3.0 + INPUT_MARGIN * 4.0);
+                Self::draw_key(ui, "Run", run_pos, input_state.is_run_cancel_pressed);
+
+                let aim_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET, INPUT_SIZE * 3.0 + INPUT_MARGIN * 4.0);
+                Self::draw_key(ui, "Aim", aim_pos, input_state.is_aim_pressed);
             }
         });
 
@@ -1667,11 +1796,14 @@ impl eframe::App for App {
         self.error_modal(ctx);
         self.compare_filter_window(ctx);
 
-        let repaint_duration = if self.active_recording.is_some() && self.is_recording_playing {
+        let repaint_duration = if self.active_recording().is_some() && self.is_recording_playing {
             let now = Instant::now();
             let duration = now - self.last_play_tick;
             if duration >= FRAME_DURATION {
-                self.next_recording_frame();
+                if !self.next_recording_frame() {
+                    // if we get clamped due to reaching the end of the comparison section, pause playback
+                    self.is_recording_playing = false;
+                }
                 FRAME_DURATION
             } else {
                 // schedule a re-draw for the next frame
