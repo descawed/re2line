@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::io::BufReader;
@@ -7,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Result};
 use eframe::{Frame, Storage};
-use egui::{Color32, Context, Key, Ui, ViewportCommand};
+use egui::{Color32, Context, Key, RichText, Ui, ViewportCommand};
 use egui::layers::ShapeIdx;
 use egui::widgets::color_picker::Alpha;
 use epaint::{Stroke, StrokeKind};
@@ -185,6 +186,7 @@ pub struct App {
     character_settings: HashMap<(RoomId, CharacterId, usize), CharacterSettings>,
     pointer_game_pos: Option<Vec2>,
     current_rdt: Option<Rdt>,
+    error_message: Option<String>,
 }
 
 impl App {
@@ -212,6 +214,7 @@ impl App {
             character_settings: HashMap::new(),
             pointer_game_pos: None,
             current_rdt: None,
+            error_message: None,
         })
     }
 
@@ -526,7 +529,7 @@ impl App {
         if let Some(room_id) = self.config.last_rdt {
             // reload the room
             if let Err(e) = self.load_room(room_id) {
-                eprintln!("Failed to load room {}: {}", room_id, e);
+                self.show_error(format!("Failed to load room {room_id}: {e}"));
                 self.clear_rdt();
             }
         } else {
@@ -703,7 +706,7 @@ impl App {
 
         if let Some((path, id)) = room_to_load {
             if let Err(e) = self.load_rdt(id, path) {
-                eprintln!("Failed to load room {}: {}", id, e);
+                self.show_error(format!("Failed to load room {id}: {e}"));
             }
         }
     }
@@ -957,7 +960,7 @@ impl App {
 
             if self.config.last_rdt != Some(new_room_id) {
                 if let Err(e) = self.load_room(new_room_id) {
-                    eprintln!("Failed to load room {}: {}", new_room_id, e);
+                    self.show_error(format!("Failed to load room {new_room_id}: {e}"));
                 }
             }
         } else {
@@ -1076,6 +1079,29 @@ impl App {
             _ => APP_NAME.to_string(),
         }
     }
+
+    fn show_error(&mut self, error: impl Display) {
+        self.error_message = Some(error.to_string());
+    }
+
+    fn error_modal(&mut self, ctx: &Context) {
+        let Some(ref error_message) = self.error_message else {
+            return;
+        };
+
+        let response = egui::Modal::new(egui::Id::new("Error Modal")).show(ctx, |ui| {
+            ui.label(RichText::new("Error").strong());
+            ui.separator();
+            ui.vertical_centered(|ui| {
+                ui.label(error_message);
+                ui.button("OK").clicked()
+            }).inner
+        });
+        
+        if response.should_close() || response.inner {
+            self.error_message = None;
+        }
+    }
 }
 
 impl eframe::App for App {
@@ -1090,14 +1116,14 @@ impl eframe::App for App {
                 ui.menu_button("File", |ui| {
                     if ui.button("Open game folder").clicked() {
                         if let Err(e) = self.prompt_load_game() {
-                            eprintln!("Failed to open RDT: {}", e);
+                            self.show_error(format!("Failed to open RDT: {e}"));
                         }
                         ui.close_menu();
                     }
 
                     if ui.button("Open recording").clicked() && self.is_game_loaded() {
                         if let Err(e) = self.prompt_load_recording() {
-                            eprintln!("Failed to open recording: {}", e);
+                            self.show_error(format!("Failed to open recording: {e}"));
                         }
                         ui.close_menu();
                     }
@@ -1442,6 +1468,9 @@ impl eframe::App for App {
                 }
             }
         });
+        
+        // display error modal if necessary
+        self.error_modal(ctx);
 
         let repaint_duration = if self.active_recording.is_some() && self.is_recording_playing {
             let now = Instant::now();
