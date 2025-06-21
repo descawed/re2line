@@ -548,8 +548,7 @@ impl App {
 
     fn load_recording(&mut self, path: impl AsRef<Path>) -> Result<()> {
         let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        self.active_recording = Some(Recording::read(reader)?);
+        self.active_recording = Some(Recording::read(file)?);
         // reset character display settings for new recording
         self.character_settings.clear();
         self.change_recording_frame(|r| r.set_index(0));

@@ -1,4 +1,4 @@
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Cursor, Read, Seek};
 use std::ops::Range;
 use std::time::Duration;
 
@@ -323,8 +323,13 @@ pub struct Recording {
 
 impl Recording {
     pub fn read(mut f: impl Read + Seek + BinReaderExt) -> Result<Self> {
-        let size = f.seek(SeekFrom::End(0))?;
-        f.seek(SeekFrom::Start(0))?;
+        // reading the entire file into memory and then parsing it is SIGNIFICANTLY faster than
+        // parsing directly from disk
+        let mut buf = Vec::new();
+        f.read_to_end(&mut buf)?;
+
+        let size = buf.len() as u64;
+        let mut f = Cursor::new(buf);
 
         let header: RecordHeader = f.read_le()?;
         if header.version == 0 || header.version > RECORD_VERSION {
@@ -335,7 +340,7 @@ impl Recording {
         let mut frames: Vec<FrameRecord> = Vec::new();
         let mut checkpoints: Vec<State> = Vec::new();
         let mut max_room_size = 0usize;
-        while f.seek(SeekFrom::Current(0))? < size {
+        while f.stream_position()? < size {
             let frame = match header.version {
                 1 => {
                     let frame_v1: FrameRecordV1 = f.read_le()?;
