@@ -854,7 +854,7 @@ impl App {
                     for (timestamp, state) in run {
                         let frame_index = state.frame_index();
                         let label = format!("{} - {} ({})", state.room_id(), timestamp, frame_index);
-                        if ui.selectable_label(frame_index == recording.index(), label).clicked() {
+                        if ui.selectable_label(recording.room_range().contains(&frame_index), label).clicked() {
                             selected_frame = Some(frame_index);
                         }
                     }

@@ -478,8 +478,12 @@ impl Recording {
         self.current_state()
     }
 
-    pub fn index(&self) -> usize {
+    pub const fn index(&self) -> usize {
         self.index
+    }
+
+    pub const fn room_range(&self) -> &Range<usize> {
+        &self.range
     }
     
     pub fn get_rng_descriptions(&self) -> Vec<FrameRng> {
