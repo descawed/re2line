@@ -126,7 +126,9 @@ impl RoomFilter {
             if next_checkpoint.is_none() {
                 // we've fulfilled all the checkpoint criteria; extract the run
                 recording.set_index(end_index - 1);
-                if let Some(route) = recording.get_path_for_character(0) {
+                if let Some(mut route) = recording.get_path_for_character(0) {
+                    route.limit = 0;
+                    route.dynamic_color = false;
                     runs.push(Run {
                         source_path: Rc::clone(&recording_path),
                         frame_index: start_index,
@@ -217,6 +219,7 @@ pub struct Comparison {
     runs: Vec<Run>,
     loaded_recording: LoadedRecording,
     active_run_index: usize,
+    playback_index: usize,
 }
 
 impl Comparison {
@@ -244,7 +247,8 @@ impl Comparison {
         Ok(Self {
             runs,
             loaded_recording,
-            active_run_index: 0,       
+            active_run_index: 0,
+            playback_index: 0,
         })
     }
     
@@ -255,6 +259,7 @@ impl Comparison {
     pub fn set_active_run(&mut self, index: usize) -> Result<()> {
         self.loaded_recording.load_for_run(self.runs.get(index).ok_or_else(|| anyhow!("Invalid run index {index}"))?)?;
         self.active_run_index = index;
+        self.set_playback_index(0);
         Ok(())
     }
     
@@ -295,8 +300,31 @@ impl Comparison {
     pub fn runs(&self) -> &[Run] {
         &self.runs
     }
+    
+    pub fn runs_desc(&self) -> impl Iterator<Item = &Run> {
+        self.runs.iter().rev()
+    }
 
     pub const fn num_runs(&self) -> usize {
         self.runs.len()
+    }
+    
+    pub fn retreat_playback(&mut self) {
+        self.set_playback_index(self.playback_index.saturating_sub(1));
+    }
+    
+    pub fn advance_playback(&mut self) {
+        self.set_playback_index(self.playback_index + 1);   
+    }
+    
+    pub fn set_playback_index(&mut self, index: usize) {
+        self.playback_index = index;
+        for run in &mut self.runs {
+            run.route.limit = self.playback_index;
+        }
+    }
+    
+    pub fn is_playback_complete(&self) -> bool {
+        self.playback_index >= self.slowest_time()
     }
 }

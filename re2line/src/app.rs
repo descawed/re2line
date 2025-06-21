@@ -21,7 +21,7 @@ use rfd::FileDialog;
 use crate::aot::{Entity, EntityForm, NUM_AOTS};
 use crate::character::{Character, Object, PositionedAiZone, WeaponRangeVisualization};
 use crate::collision::Collider;
-use crate::compare::{Checkpoint, Comparison, RoomFilter, Run};
+use crate::compare::{Checkpoint, Comparison, RoomFilter};
 use crate::draw::{VAlign, text_box};
 use crate::rdt::RdtExt;
 use crate::record::{PlayerSound, Recording, State, FRAME_DURATION};
@@ -50,6 +50,9 @@ const TEXT_BOX_LIGHT: Color32 = Color32::from_rgb(0xe0, 0xe0, 0xe0);
 const UNFOCUSED_FADE: f32 = 0.25;
 
 const TOOLTIP_HOVER_SECONDS: f32 = 1.0;
+
+const COMPARISON_PATH_WIDTH: f32 = 0.0125;
+const COMPARISON_PATH_EMPHASIS_WIDTH: f32 = 0.025;
 
 trait UiExt {
     fn draw_game_object<O: GameObject>(&self, object: &O, params: &DrawParams, state: &State) -> ShapeIdx;
@@ -758,7 +761,7 @@ impl App {
             let Some(ref mut comparison) = self.comparison else {
                 return;
             };
-            
+
             let fastest_time = comparison.fastest_time();
             let slowest_time = comparison.slowest_time();
             let average_time = comparison.average_time();
@@ -767,9 +770,9 @@ impl App {
             ui.label(format!("Fastest: {} ({})", Self::frames_to_time(fastest_time), fastest_time));
             ui.label(format!("Slowest: {} ({})", Self::frames_to_time(slowest_time), slowest_time));
             ui.label(format!("Average: {} ({})", Self::frames_to_time(average_time), average_time));
-            
+
             ui.separator();
-            
+
             let mut selected_run = None;
             for (i, run) in comparison.runs().into_iter().enumerate() {
                 let is_active = comparison.is_active_run(run);
@@ -778,7 +781,7 @@ impl App {
                 }
                 ui.label(format!("  Time: {} ({})", Self::frames_to_time(run.len()), run.len()));
             }
-            
+
             if let Some(i) = selected_run {
                 match comparison.set_active_run(i) {
                     Ok(_) => self.update_from_state(),
@@ -978,7 +981,7 @@ impl App {
             });
         });
     }
-    
+
     fn update_from_state(&mut self) {
         let Some(next_state) = self.active_recording().and_then(Recording::current_state) else {
             return;
@@ -1028,20 +1031,6 @@ impl App {
             }
         }
     }
-    
-    fn clamp_recording_for_comparison(&self, index: usize) -> usize {
-        if let Some(range) = self.comparison.as_ref().map(Comparison::active_run).map(Run::range) {
-            if index < range.start {
-                range.start
-            } else if index >= range.end {
-                range.end - 1
-            } else {
-                index
-            }
-        } else {
-            index
-        }
-    }
 
     fn change_recording_frame<F>(&mut self, func: F)
     where F: FnOnce(&mut Recording) -> Option<&State>
@@ -1056,32 +1045,47 @@ impl App {
     }
 
     fn prev_recording_frame(&mut self) -> bool {
-        if let Some(range) = self.comparison.as_ref().map(Comparison::active_run).map(Run::range) {
-            let index = self.active_recording().and_then(Recording::current_state).map(State::frame_index).unwrap();
-            if index == range.start {
+        if let Some(comparison) = self.comparison.as_mut() {
+            let range = comparison.active_run().range();
+            let index = comparison.recording().index();
+            if index <= range.start {
+                comparison.set_playback_index(0);
                 return false;
             }
+
+            comparison.retreat_playback();
         }
-        
+
         self.change_recording_frame(Recording::prev);
         true
     }
 
     fn next_recording_frame(&mut self) -> bool {
-        if let Some(range) = self.comparison.as_ref().map(Comparison::active_run).map(Run::range) {
-            let index = self.active_recording().and_then(Recording::current_state).map(State::frame_index).unwrap();
-            if index + 1 == range.end {
-                return false;
+        if let Some(comparison) = self.comparison.as_mut() {
+            let range = comparison.active_run().range();
+            let next_index = comparison.recording().index() + 1;
+            comparison.advance_playback();
+            if next_index >= range.end {
+                return !comparison.is_playback_complete();
             }
         }
-        
+
         self.change_recording_frame(Recording::next);
         true
     }
 
-    fn set_recording_frame(&mut self, frame: usize) {
-        let frame = self.clamp_recording_for_comparison(frame);
-        self.change_recording_frame(|recording| recording.set_index(frame));
+    fn set_recording_frame(&mut self, mut index: usize) {
+        if let Some(comparison) = self.comparison.as_mut() {
+            let range = comparison.active_run().range();
+            comparison.set_playback_index(index.saturating_sub(range.start));
+            if index < range.start {
+                index = range.start;
+            } else if index >= range.end {
+                index = range.end - 1;
+            }
+        }
+
+        self.change_recording_frame(|recording| recording.set_index(index));
     }
     
     fn move_recording_frame(&mut self, delta: isize) {
@@ -1090,7 +1094,6 @@ impl App {
         };
         
         let new_index = (index as isize + delta).max(0) as usize;
-        let new_index = self.clamp_recording_for_comparison(new_index);
         self.set_recording_frame(new_index);
     }
     
@@ -1618,12 +1621,67 @@ impl eframe::App for App {
                 if !self.get_character_settings(character.index()).map(|s| s.show_path).unwrap_or(false) {
                     continue;
                 }
+
+                if character.index() == 0 && self.comparison.is_some() {
+                    // don't draw the normal path for the player if we're drawing comparison paths
+                    continue;
+                }
                 
-                if let Some(path) = self.active_recording.as_ref().and_then(|r| r.get_path_for_character(character.index())) {
+                if let Some(path) = self.active_recording().and_then(|r| r.get_path_for_character(character.index())) {
                     let mut path_draw_params = self.config.get_obj_draw_params(&path, view_center);
                     path_draw_params.stroke.width = character.size.x * self.config.zoom_scale * 2.0;
                     ui.draw_game_object(&path, &path_draw_params, state);
                 }
+            }
+
+            // draw comparison paths if we're doing a comparison
+            if let Some(comparison) = &self.comparison {
+                let fastest_time = comparison.fastest_time();
+                let time_range = (comparison.slowest_time() - fastest_time).max(1) as f32;
+
+                // we iterate in reverse order so faster runs are drawn on top
+                for run in comparison.runs_desc() {
+                    // active run is drawn last so it's always on top
+                    if !run.is_included() || comparison.is_active_run(run) {
+                        continue;
+                    }
+
+                    let path = run.route();
+                    let mut path_draw_params = self.config.get_obj_draw_params(path, view_center);
+
+                    let time = run.len();
+                    if time == fastest_time {
+                        // fastest run is gold and has a slightly thicker line
+                        path_draw_params.stroke.color = Color32::from_rgb(0xFF, 0xD7, 0x00);
+                        path_draw_params.stroke.width = COMPARISON_PATH_EMPHASIS_WIDTH * self.config.zoom_scale;
+                    } else {
+                        // other runs are color-coded from green to red and opaque to transparent
+                        // based on how fast they are
+                        let ratio = (time - fastest_time) as f32 / time_range;
+                        let red = (ratio * 255.0) as u8;
+                        let green = 255 - red;
+                        let alpha = (green >> 1) + 0x80;
+                        path_draw_params.stroke.color = Color32::from_rgba_unmultiplied(red, green, 0, alpha);
+                        path_draw_params.stroke.width = COMPARISON_PATH_WIDTH * self.config.zoom_scale;
+                    }
+                    
+                    ui.draw_game_object(path, &path_draw_params, state);
+                }
+                
+                // draw active run last
+                let run = comparison.active_run();
+                let path = run.route();
+                let mut path_draw_params = self.config.get_obj_draw_params(path, view_center);
+
+                path_draw_params.stroke.color = if run.len() == fastest_time {
+                    // fastest run is gold and has a slightly thicker line
+                    Color32::from_rgb(0xFF, 0xD7, 0x00)
+                } else {
+                    // if the user has selected a run other than the fastest run, draw it in blue
+                    Color32::from_rgb(0x00, 0x96, 0xFF)
+                };
+                path_draw_params.stroke.width = COMPARISON_PATH_EMPHASIS_WIDTH * self.config.zoom_scale;
+                ui.draw_game_object(path, &path_draw_params, state);
             }
             
             // draw player's equipped weapon ranges if enabled
@@ -1800,8 +1858,9 @@ impl eframe::App for App {
             let now = Instant::now();
             let duration = now - self.last_play_tick;
             if duration >= FRAME_DURATION {
-                if !self.next_recording_frame() {
-                    // if we get clamped due to reaching the end of the comparison section, pause playback
+                if !self.next_recording_frame(){
+                    // if we get clamped due to reaching the end of the comparison section and
+                    // the other comparison paths are not playing, pause playback
                     self.is_recording_playing = false;
                 }
                 FRAME_DURATION
