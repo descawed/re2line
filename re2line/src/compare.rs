@@ -9,7 +9,7 @@ use crate::app::{GameObject, RoomId};
 use crate::character::CharacterPath;
 use crate::record::{Recording, State};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Checkpoint {
     Aot(u8),
 }
@@ -45,20 +45,28 @@ impl Checkpoint {
 
 #[derive(Debug, Clone)]
 pub struct RoomFilter {
-    room_id: RoomId,
-    entrance_id: RoomId,
-    exit_id: RoomId,
-    checkpoints: Vec<Checkpoint>,
+    pub room_id: RoomId,
+    pub entrance_id: Option<RoomId>,
+    pub exit_id: Option<RoomId>,
+    pub checkpoints: Vec<Checkpoint>,
 }
 
 impl RoomFilter {
-    pub const fn new(room_id: RoomId, entrance_id: RoomId, exit_id: RoomId, checkpoints: Vec<Checkpoint>) -> Self {
+    pub const fn new(room_id: RoomId, entrance_id: Option<RoomId>, exit_id: Option<RoomId>, checkpoints: Vec<Checkpoint>) -> Self {
         Self {
             room_id,
             entrance_id,
             exit_id,
             checkpoints,
         }
+    }
+    
+    pub const fn basic(room_id: RoomId) -> Self {
+        Self::new(room_id, None, None, Vec::new())
+    }
+    
+    pub const fn empty() -> Self {
+        Self::basic(RoomId::zero())   
     }
     
     fn get_runs(&self, recording_path: Rc<PathBuf>, recording: &mut Recording, entities: &[Entity], runs: &mut Vec<Run>) {
@@ -77,7 +85,7 @@ impl RoomFilter {
                     // be fulfilled, because there's no way other way to have reached this room
                     self.entrance_id
                 } else {
-                    last_room_id
+                    Some(last_room_id)
                 };
 
                 last_room_id = state.room_id();
@@ -92,7 +100,7 @@ impl RoomFilter {
                         // if this is the last room of the run, we always consider the exit criteria to be fulfilled
                         self.exit_id
                     } else {
-                        next_state.room_id()   
+                        Some(next_state.room_id())   
                     }
                 } else {
                     // if this is the last room of the run, we always consider the exit criteria to be fulfilled
@@ -100,7 +108,7 @@ impl RoomFilter {
                     self.exit_id
                 };
                 
-                if state.room_id() != self.room_id || entrance_id != self.entrance_id || exit_id != self.exit_id {
+                if state.room_id() != self.room_id || (self.entrance_id.is_some() && entrance_id != self.entrance_id) || (self.exit_id.is_some() && exit_id != self.exit_id) {
                     // this room doesn't match our criteria, so we can skip it
                     recording.next_room();
                     continue;

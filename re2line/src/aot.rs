@@ -9,6 +9,8 @@ use crate::app::{DrawParams, Floor, GameObject, ObjectType, RoomId};
 use crate::collision::Collider;
 use crate::record::State;
 
+pub const NUM_AOTS: usize = 32;
+
 #[derive(Debug)]
 pub enum EntityForm {
     Door {
