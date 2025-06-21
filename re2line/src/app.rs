@@ -148,6 +148,7 @@ struct CharacterSettings {
     pub show_tooltip: bool,
     pub show_ai: bool,
     pub show_path: bool,
+    pub show_rng_rolls: bool,
 }
 
 impl CharacterSettings {
@@ -157,6 +158,7 @@ impl CharacterSettings {
             show_tooltip: config.default_show_character_tooltips,
             show_ai: true,
             show_path: false,
+            show_rng_rolls: true,
         }
     }
 
@@ -171,6 +173,10 @@ impl CharacterSettings {
     pub const fn show_path(&self) -> bool {
         self.show && self.show_path
     }
+    
+    pub const fn show_rng_rolls(&self) -> bool {
+        self.show_rng_rolls
+    }
 }
 
 impl Default for CharacterSettings {
@@ -180,6 +186,7 @@ impl Default for CharacterSettings {
             show_tooltip: true,
             show_ai: true,
             show_path: false,
+            show_rng_rolls: true,
         }
     }
 }
@@ -883,31 +890,69 @@ impl App {
     }
     
     fn rng_browser(&mut self, ui: &mut Ui) {
-        let mut show_character_rng = self.config.show_character_rng;
-        let mut show_known_non_character_rng = self.config.show_known_non_character_rng;
-        let mut show_unknown_rng = self.config.show_unknown_rng;
-        
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
-            let Some(recording) = self.active_recording() else {
+            let Some(rng_descriptions) = self.active_recording().map(Recording::get_rng_descriptions) else {
                 return;
             };
             
-            ui.checkbox(&mut show_character_rng, "Show character rolls");
-            ui.checkbox(&mut show_known_non_character_rng, "Show known non-character rolls");
-            ui.checkbox(&mut show_unknown_rng, "Show unknown rolls");
+            ui.checkbox(&mut self.config.show_character_rng, "Show character rolls");
+            ui.checkbox(&mut self.config.show_known_non_character_rng, "Show known non-character rolls");
+            ui.checkbox(&mut self.config.show_unknown_rng, "Show unknown rolls");
+            
+            if self.config.show_character_rng {
+                ui.collapsing("Characters", |ui| {
+                    let mut set_all = None;
+                    
+                    ui.horizontal(|ui| {
+                        if ui.button("Select all").clicked() {
+                            set_all = Some(true);
+                        }
+                        
+                        if ui.button("Select none").clicked() {
+                            set_all = Some(false);
+                        }
+                    });
+                    
+                    if let Some(set_all) = set_all {
+                        let indexes = self.characters.objects().iter().map(Character::index).collect::<Vec<_>>();
+                        for i in indexes {
+                            let Some(settings) = self.get_character_settings_mut(i) else {
+                                continue;
+                            };
+                            settings.show_rng_rolls = set_all;
+                        }
+                    }
+                    
+                    let mut checkboxes = Vec::with_capacity(self.characters.len());
+                    for character in self.characters.objects() {
+                        let i = character.index();
+                        let name = character.name();
+                        checkboxes.push((i, format!("#{i}: {name}")));
+                    }
+                    
+                    for (i, name) in checkboxes {
+                        let Some(settings) = self.get_character_settings_mut(i) else {
+                            continue;
+                        };
+                        ui.checkbox(&mut settings.show_rng_rolls, name);
+                    }
+                });
+            }
             
             ui.separator();
             
             // show in reverse order so newest items are at the top
-            for frame in recording.get_rng_descriptions().into_iter().rev() {
+            for frame in rng_descriptions.into_iter().rev() {
                 egui::CollapsingHeader::new(format!("{} ({}) | Rolls: {}", frame.timestamp, frame.frame_index, frame.rng_descriptions.len()))
                     .default_open(true)
                     .show(ui, |ui| {
                         for roll in frame.rng_descriptions.into_iter().rev() {
                             let show = match roll.category {
-                                RollCategory::Character(_) => show_character_rng,
-                                RollCategory::NonCharacter => show_known_non_character_rng,
-                                RollCategory::Unknown => show_unknown_rng,
+                                RollCategory::Character(i) => { 
+                                    self.config.show_character_rng && self.get_character_settings(i as usize).map(|s| s.show_rng_rolls).unwrap_or(true)
+                                }
+                                RollCategory::NonCharacter => self.config.show_known_non_character_rng,
+                                RollCategory::Unknown => self.config.show_unknown_rng,
                             };
                             
                             if !show {
@@ -919,10 +964,6 @@ impl App {
                     });
             }
         });
-        
-        self.config.show_character_rng = show_character_rng;
-        self.config.show_known_non_character_rng = show_known_non_character_rng;
-        self.config.show_unknown_rng = show_unknown_rng;
     }
 
     fn settings_browser(&mut self, ui: &mut Ui) {
