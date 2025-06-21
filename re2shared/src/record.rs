@@ -9,52 +9,54 @@ pub const MAX_CHARACTER_CHANGES: usize = 20; // this is kind of arbitrary now be
 
 #[binrw]
 #[derive(Debug, Clone)]
+#[br(return_unexpected_error)]
 pub enum CharacterField {
-    #[brw(magic = 0u8)] State([u8; 4]),
-    #[brw(magic = 1u8)] Id(u8),
     #[brw(magic = 2u8)] Transform(MATRIX),
-    #[brw(magic = 3u8)] MotionAngle(Fixed16),
-    #[brw(magic = 4u8)] Motion(i16),
-    #[brw(magic = 5u8)] Size(UFixed16, UFixed16),
-    #[brw(magic = 6u8)] Floor(u8),
-    #[brw(magic = 7u8)] Velocity(SVECTOR),
-    #[brw(magic = 8u8)] Health(i16),
-    #[brw(magic = 9u8)] Removed,
-    #[brw(magic = 10u8)] Type(u8),
-    #[brw(magic = 11u8)] Flags(u32),
     #[brw(magic = 12u8)] PartTranslation(u8, VECTOR),
+    #[brw(magic = 7u8)] Velocity(SVECTOR),
+    #[brw(magic = 3u8)] MotionAngle(Fixed16),
+    #[brw(magic = 0u8)] State([u8; 4]),
     #[brw(magic = 13u8)] ModelPartTransform(u8, MATRIX),
+    #[brw(magic = 11u8)] Flags(u32),
+    #[brw(magic = 5u8)] Size(UFixed16, UFixed16),
+    #[brw(magic = 8u8)] Health(i16),
+    #[brw(magic = 6u8)] Floor(u8),
+    #[brw(magic = 10u8)] Type(u8),
+    #[brw(magic = 1u8)] Id(u8),
+    #[brw(magic = 4u8)] Motion(i16),
+    #[brw(magic = 9u8)] Removed,
 }
 
 #[binrw]
 #[derive(Debug, Clone)]
+#[br(return_unexpected_error)]
 pub enum GameField {
+    #[brw(magic = 10u8)]
+    RngRoll(u32, u16),
     #[brw(magic = 0u8)] KeysDown(u32),
     #[brw(magic = 1u8)] KeysDownThisFrame(u32),
-    #[brw(magic = 2u8)] StageIndex(u8),
-    #[brw(magic = 3u8)] RoomIndex(u8),
-    #[brw(magic = 4u8)] Rng(u16),
-    #[brw(magic = 5u8)] StageOffset(u8),
-    #[brw(magic = 6u8)] Scenario(u8),
     #[brw(magic = 7u8)]
     CharacterRng {
         char_index: u8,
         roll_type: RollType,
         start_value: u16,
     },
+    #[brw(magic = 11u8)]
+    SoundFlags(u8),
+    #[brw(magic = 4u8)] Rng(u16),
     #[brw(magic = 8u8)]
     KnownRng {
         roll_type: RollType,
         start_value: u16,
     },
-    #[brw(magic = 9u8)]
-    ScriptRng(u16),
-    #[brw(magic = 10u8)]
-    RngRoll(u32, u16),
-    #[brw(magic = 11u8)]
-    SoundFlags(u8),
+    #[brw(magic = 3u8)] RoomIndex(u8),
     #[brw(magic = 12u8)]
     NewGame,
+    #[brw(magic = 2u8)] StageIndex(u8),
+    #[brw(magic = 6u8)] Scenario(u8),
+    #[brw(magic = 5u8)] StageOffset(u8),
+    #[brw(magic = 9u8)]
+    ScriptRng(u16),
 }
 
 #[binrw]
