@@ -2,7 +2,7 @@ use std::io::{Cursor, Read, Seek};
 use std::ops::Range;
 use std::time::Duration;
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use binrw::BinReaderExt;
 use re2shared::record::*;
 use residat::common::*;
@@ -86,6 +86,20 @@ pub struct InputState {
     pub is_aim_pressed: bool,
 }
 
+impl InputState {
+    pub const fn from_flags(flags: u32) -> Self {
+        Self {
+            is_forward_pressed: (flags & KEY_FORWARD) != 0,
+            is_backward_pressed: (flags & KEY_BACK) != 0,
+            is_left_pressed: (flags & KEY_LEFT) != 0,
+            is_right_pressed: (flags & KEY_RIGHT) != 0,
+            is_action_pressed: (flags & KEY_ACTION) != 0,
+            is_run_cancel_pressed: (flags & KEY_RUN_CANCEL) != 0,
+            is_aim_pressed: (flags & KEY_AIM) != 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct State {
     frame_index: usize,
@@ -96,6 +110,7 @@ pub struct State {
     objects: [Option<Object>; NUM_OBJECTS],
     rng_value: u16,
     input_flags: u32,
+    input_flags_this_frame: u32,
     is_new_game_start: bool,
 }
 
@@ -112,6 +127,7 @@ impl State {
             objects: [const { None }; NUM_OBJECTS],
             rng_value: 0,
             input_flags: 0,
+            input_flags_this_frame: 0,
             is_new_game_start: false,
         }
     }
@@ -121,6 +137,7 @@ impl State {
         let mut sounds = self.sounds;
         let mut rng_value = self.rng_value;
         let mut input_flags = self.input_flags;
+        let mut input_flags_this_frame = self.input_flags_this_frame;
         let mut is_new_game_start = false;
         for change in &record.game_changes {
             match change {
@@ -130,6 +147,7 @@ impl State {
                 GameField::SoundFlags(flags) => sounds = SoundEnvironment::new(*flags),
                 GameField::Rng(rng) => rng_value = *rng,
                 GameField::KeysDown(flags) => input_flags = *flags,
+                GameField::KeysDownThisFrame(flags) => input_flags_this_frame = *flags,
                 GameField::NewGame => is_new_game_start = true,
                 _ => (),
             }
@@ -250,6 +268,7 @@ impl State {
             objects,
             rng_value,
             input_flags,
+            input_flags_this_frame,
             is_new_game_start,
         }
     }
@@ -279,19 +298,19 @@ impl State {
     }
     
     pub const fn input_state(&self) -> InputState {
-        InputState {
-            is_forward_pressed: self.input_flags & KEY_FORWARD != 0,
-            is_backward_pressed: self.input_flags & KEY_BACK != 0,
-            is_left_pressed: self.input_flags & KEY_LEFT != 0,
-            is_right_pressed: self.input_flags & KEY_RIGHT != 0,
-            is_action_pressed: self.input_flags & KEY_ACTION != 0,
-            is_run_cancel_pressed: self.input_flags & KEY_RUN_CANCEL != 0,
-            is_aim_pressed: self.input_flags & KEY_AIM != 0,
-        }
+        InputState::from_flags(self.input_flags)
+    }
+    
+    pub const fn input_state_this_frame(&self) -> InputState {
+        InputState::from_flags(self.input_flags_this_frame)
     }
 
     pub const fn frame_index(&self) -> usize {
         self.frame_index
+    }
+    
+    pub const fn is_new_game_start(&self) -> bool {
+        self.is_new_game_start
     }
 }
 
@@ -388,6 +407,28 @@ impl Recording {
         let room_index = self.index - self.range.start;
         self.states.get(room_index)
     }
+    
+    pub fn peek_next_room(&self) -> Option<&State> {
+        for checkpoint in &self.checkpoints {
+            if self.index < checkpoint.frame_index {
+                return Some(checkpoint);
+            }
+        }
+
+        None
+    }
+    
+    pub fn next_room(&mut self) -> Option<&State> {
+        let mut next_index = None;
+        for checkpoint in &self.checkpoints {
+            if self.index < checkpoint.frame_index {
+                next_index = Some(checkpoint.frame_index);
+                break;
+            }
+        }
+        
+        self.set_index(next_index.unwrap_or(self.frames.len()))
+    }
 
     pub fn next(&mut self) -> Option<&State> {
         self.set_index(self.index + 1)
@@ -403,6 +444,10 @@ impl Recording {
 
     pub fn set_index(&mut self, index: usize) -> Option<&State> {
         self.index = index;
+        if index > self.frames.len() {
+            self.index = self.frames.len();
+        }
+        
         if !self.range.contains(&index) {
             let mut last_state = None;
             let mut end_index = None;

@@ -1,5 +1,9 @@
 use residat::common::{Fixed16, Vec2};
-use residat::re2::{Item, SceType, SAT_TRIGGER_CENTER};
+use residat::re2::{
+    Item, SceType,
+    SAT_TRIGGER_CENTER, SAT_TRIGGER_ON_ACTION,
+    SAT_TRIGGER_BY_PLAYER, SAT_TRIGGER_BY_ALLY, SAT_TRIGGER_BY_NPC, SAT_TRIGGER_BY_OBJECT,
+};
 
 use crate::app::{DrawParams, Floor, GameObject, ObjectType, RoomId};
 use crate::collision::Collider;
@@ -51,21 +55,61 @@ impl Entity {
     pub const fn is_trigger_on_enter(&self) -> bool {
         self.sat & SAT_TRIGGER_CENTER != 0
     }
+    
+    pub const fn is_trigger_on_action(&self) -> bool {
+        self.sat & SAT_TRIGGER_ON_ACTION != 0
+    }
+    
+    pub const fn can_object_type_trigger(&self, object_type: ObjectType) -> bool {
+        match object_type {
+            ObjectType::Player => self.sat & SAT_TRIGGER_BY_PLAYER != 0,
+            ObjectType::Ally => self.sat & SAT_TRIGGER_BY_ALLY != 0,
+            ObjectType::Enemy | ObjectType::Neutral => self.sat & SAT_TRIGGER_BY_NPC != 0,
+            ObjectType::Object => self.sat & SAT_TRIGGER_BY_OBJECT != 0,
+            _ => false,
+        }
+    }
 
     pub fn could_trigger(&self, point: Vec2, floor: Floor) -> bool {
         self.sce.is_trigger() && self.floor.matches(floor) && self.collider.contains_point(point)
     }
+    
+    pub fn is_triggered(&self, object_type: ObjectType, center_point: Vec2, interaction_point: Vec2, floor: Floor, is_action_pressed: bool) -> bool {
+        if !self.can_object_type_trigger(object_type) {
+            return false;
+        }
 
-    pub fn form(&self) -> &EntityForm {
+        if self.is_trigger_on_action() && !is_action_pressed {
+            return false;
+        }
+
+        let point = if self.is_trigger_on_enter() {
+            center_point
+        } else {
+            interaction_point
+        };
+        
+        if !self.could_trigger(point, floor) {
+            return false;
+        }
+        
+        true
+    }
+
+    pub const fn form(&self) -> &EntityForm {
         &self.form
     }
 
-    pub fn floor(&self) -> Floor {
+    pub const fn floor(&self) -> Floor {
         self.floor
     }
 
-    pub fn sce(&self) -> SceType {
+    pub const fn sce(&self) -> SceType {
         self.sce
+    }
+    
+    pub const fn id(&self) -> u8 {
+        self.id
     }
 }
 
