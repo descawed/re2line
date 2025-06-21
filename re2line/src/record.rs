@@ -314,11 +314,42 @@ impl State {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RollCategory {
+    Character(u8),
+    NonCharacter,
+    Unknown,
+}
+
+#[derive(Debug, Clone)]
+pub struct RngDescription {
+    pub description: String,
+    pub category: RollCategory,
+}
+
+impl RngDescription {
+    pub const fn new(description: String, category: RollCategory) -> Self {
+        Self { description, category }
+    }
+
+    pub const fn character(description: String, character_index: u8) -> Self {
+        Self::new(description, RollCategory::Character(character_index))
+    }
+    
+    pub const fn non_character(description: String) -> Self {
+        Self::new(description, RollCategory::NonCharacter)
+    }
+    
+    pub const fn unknown(description: String) -> Self {
+        Self::new(description, RollCategory::Unknown)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FrameRng {
     pub frame_index: usize,
     pub timestamp: String,
-    pub rng_descriptions: Vec<String>,
+    pub rng_descriptions: Vec<RngDescription>,
 }
 
 impl FrameRng {
@@ -497,11 +528,11 @@ impl Recording {
             for change in &frame_record.game_changes {
                 match change {
                     GameField::RngRoll(address, value) => {
-                        frame_rng.rng_descriptions.push(format!("{:08X} rolled on {:04X}", address, value));
+                        frame_rng.rng_descriptions.push(RngDescription::unknown(format!("{:08X} rolled on {:04X}", address, value)));
                     }
                     GameField::KnownRng { roll_type, start_value } => {
                         let description_data = &ROLL_DESCRIPTIONS[*roll_type];
-                        frame_rng.rng_descriptions.push(description_data.describe(*start_value, None));
+                        frame_rng.rng_descriptions.push(RngDescription::non_character(description_data.describe(*start_value, None)));
                     }
                     GameField::CharacterRng { char_index, roll_type, start_value } => {
                         let description_data = &ROLL_DESCRIPTIONS[*roll_type];
@@ -509,7 +540,7 @@ impl Recording {
                             .get(*char_index as usize)
                             .and_then(|c| c.as_ref().map(Character::name))
                             .map(|n| format!("#{} {}", char_index, n));
-                        frame_rng.rng_descriptions.push(description_data.describe(*start_value, character_name.as_ref().map(String::as_str)));
+                        frame_rng.rng_descriptions.push(RngDescription::character(description_data.describe(*start_value, character_name.as_ref().map(String::as_str)), *char_index));
                     }
                     _ => (),
                 }

@@ -117,6 +117,12 @@ pub(super) struct Config {
      pub alternate_collision_colors: bool,
      #[serde(default = "default_true")]
      pub default_show_character_tooltips: bool,
+     #[serde(default = "default_true")]
+     pub show_character_rng: bool,
+     #[serde(default = "default_true")]
+     pub show_known_non_character_rng: bool,
+     #[serde(default = "default_true")]
+     pub show_unknown_rng: bool,
      pub object_settings: EnumMap<ObjectType, ObjectSettings>,
 }
 
@@ -179,6 +185,9 @@ impl Default for Config {
                focus_current_selected_object: false,
                alternate_collision_colors: false,
                default_show_character_tooltips: true,
+               show_character_rng: true,
+               show_known_non_character_rng: true,
+               show_unknown_rng: true,
                object_settings: enum_map! {
                     ObjectType::Floor => ObjectSettings::fill(Color32::from_rgb(0xa4, 0x4d, 0x68)),
                     ObjectType::Collider => ObjectSettings::stroke(Color32::from_rgb(0x63, 0xb3, 0x4d)),

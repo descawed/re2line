@@ -24,7 +24,7 @@ use crate::collision::Collider;
 use crate::compare::{Checkpoint, Comparison, RoomFilter};
 use crate::draw::{VAlign, text_box};
 use crate::rdt::RdtExt;
-use crate::record::{PlayerSound, Recording, State, FRAME_DURATION};
+use crate::record::{PlayerSound, Recording, RollCategory, State, FRAME_DURATION};
 
 mod config;
 mod game;
@@ -883,10 +883,20 @@ impl App {
     }
     
     fn rng_browser(&mut self, ui: &mut Ui) {
+        let mut show_character_rng = self.config.show_character_rng;
+        let mut show_known_non_character_rng = self.config.show_known_non_character_rng;
+        let mut show_unknown_rng = self.config.show_unknown_rng;
+        
         egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
             let Some(recording) = self.active_recording() else {
                 return;
             };
+            
+            ui.checkbox(&mut show_character_rng, "Show character rolls");
+            ui.checkbox(&mut show_known_non_character_rng, "Show known non-character rolls");
+            ui.checkbox(&mut show_unknown_rng, "Show unknown rolls");
+            
+            ui.separator();
             
             // show in reverse order so newest items are at the top
             for frame in recording.get_rng_descriptions().into_iter().rev() {
@@ -894,11 +904,25 @@ impl App {
                     .default_open(true)
                     .show(ui, |ui| {
                         for roll in frame.rng_descriptions.into_iter().rev() {
-                            ui.label(roll);
+                            let show = match roll.category {
+                                RollCategory::Character(_) => show_character_rng,
+                                RollCategory::NonCharacter => show_known_non_character_rng,
+                                RollCategory::Unknown => show_unknown_rng,
+                            };
+                            
+                            if !show {
+                                continue;
+                            }
+                            
+                            ui.label(roll.description);
                         }
                     });
             }
         });
+        
+        self.config.show_character_rng = show_character_rng;
+        self.config.show_known_non_character_rng = show_known_non_character_rng;
+        self.config.show_unknown_rng = show_unknown_rng;
     }
 
     fn settings_browser(&mut self, ui: &mut Ui) {
