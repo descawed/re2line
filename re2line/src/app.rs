@@ -225,12 +225,12 @@ impl App {
     pub fn new() -> Result<Self> {
         Ok(Self {
             center: Vec2::zero(),
-            colliders: Layer::new("Colliders"),
-            objects: Layer::new("Objects"),
-            characters: Layer::new("Characters"),
-            ai_zones: Layer::new("AI Zones"),
-            entities: Layer::new("AOTs"),
-            floors: Layer::new("Floors"),
+            colliders: Layer::new(),
+            objects: Layer::new(),
+            characters: Layer::new(),
+            ai_zones: Layer::new(),
+            entities: Layer::new(),
+            floors: Layer::new(),
             pan: egui::Vec2::ZERO,
             selected_object: SelectedObject::None,
             hover_object: SelectedObject::None,
