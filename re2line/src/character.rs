@@ -528,11 +528,13 @@ pub struct CharacterPath {
     pub character_id: CharacterId,
     pub character_index: usize,
     pub floor: Floor,
+    pub limit: usize,
+    pub dynamic_color: bool,
 }
 
 impl CharacterPath {
     pub const fn new(points: Vec<Vec2>, character_id: CharacterId, character_index: usize, floor: Floor) -> Self {
-        Self { points, character_id, character_index, floor }
+        Self { points, character_id, character_index, floor, limit: usize::MAX, dynamic_color: true }
     }
     
     pub fn len(&self) -> Fixed32 {
@@ -545,6 +547,11 @@ impl CharacterPath {
     
     pub const fn frames(&self) -> usize {
         self.points.len()
+    }
+    
+    pub fn initial_segment(&self) -> &[Vec2] {
+        let limit = self.limit.min(self.points.len());
+        &self.points[0..limit]
     }
 }
 
@@ -584,7 +591,7 @@ impl GameObject for CharacterPath {
         let max_speed = self.max_speed().to_f32();
         let mut shapes = Vec::new();
         
-        for segment in self.points.windows(2) {
+        for segment in self.initial_segment().windows(2) {
             let start = segment[0];
             let end = segment[1];
             let speed = (end - start).len().to_f32();
@@ -593,12 +600,16 @@ impl GameObject for CharacterPath {
                 continue;
             }
             
-            let t = speed / max_speed;
-            let color = SLOW_COLOR.lerp_to_gamma(FAST_COLOR, t).gamma_multiply_u8(params.color().a());
             let gui_start = params.transform_point(start);
             let gui_end = params.transform_point(end);
+            
             let mut stroke = params.stroke.clone();
-            stroke.color = color;
+            if self.dynamic_color {
+                let t = speed / max_speed;
+                let color = SLOW_COLOR.lerp_to_gamma(FAST_COLOR, t).gamma_multiply_u8(params.color().a());
+                stroke.color = color;
+            }
+            
             shapes.push(Shape::line_segment([gui_start, gui_end], stroke));
         }
         
