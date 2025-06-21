@@ -67,6 +67,11 @@ impl CharacterState {
         ];
         
         for &i in self.model_parts_needed() {
+            if i >= self.model_part_transforms.len() {
+                log::warn!("Missing model part transform {} for character {} (num transforms: {})", i, self.id, self.model_part_transforms.len());
+                continue;
+            }
+            
             delta.push(CharacterField::ModelPartTransform(i as u8, self.model_part_transforms[i].clone()));
         }
         
@@ -103,6 +108,12 @@ impl CharacterState {
         
         let model_parts_needed = self.model_parts_needed();
         for (i, model_part) in unsafe { char.model_parts() }.iter().enumerate() {
+            if i >= self.model_part_transforms.len() {
+                log::warn!("Unexpected model part transform {} for character {} (num transforms expected: {})", i, self.id, self.model_part_transforms.len());
+                // we'll warn once but then just expand the transform array to account for the extra part(s)
+                self.model_part_transforms.resize(i + 1, MATRIX::zero());
+            }
+            
             if self.model_part_transforms[i] != model_part.composite_transform {
                 self.model_part_transforms[i] = model_part.composite_transform.clone();
                 if model_parts_needed.contains(&i) {
