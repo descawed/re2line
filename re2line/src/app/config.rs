@@ -23,6 +23,10 @@ impl RoomId {
      pub const fn new(stage: u8, room: u8, player: u8) -> Self {
           Self { stage, room, player }
      }
+     
+     pub const fn zero() -> Self {
+          Self { stage: 0, room: 0, player: 0 }
+     }
 }
 
 impl std::fmt::Display for RoomId {

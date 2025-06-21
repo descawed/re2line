@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 mod app;
 mod collision;
+mod compare;
 mod rdt;
 mod script;
 mod aot;

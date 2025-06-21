@@ -531,7 +531,7 @@ pub struct CharacterPath {
 }
 
 impl CharacterPath {
-    pub fn new(points: Vec<Vec2>, character_id: CharacterId, character_index: usize, floor: Floor) -> Self {
+    pub const fn new(points: Vec<Vec2>, character_id: CharacterId, character_index: usize, floor: Floor) -> Self {
         Self { points, character_id, character_index, floor }
     }
     
@@ -541,6 +541,10 @@ impl CharacterPath {
     
     pub fn max_speed(&self) -> Fixed32 {
         self.points.windows(2).fold(Fixed32(0), |acc, p| acc.max((p[1] - p[0]).len()))
+    }
+    
+    pub const fn frames(&self) -> usize {
+        self.points.len()
     }
 }
 
