@@ -7,6 +7,8 @@ use crate::rng::RollType;
 pub const RECORD_VERSION: u16 = 2;
 pub const MAX_CHARACTER_CHANGES: usize = 20; // this is kind of arbitrary now because there can be multiple PartTransforms and ModelPartTransforms
 
+// these enum variants are out of order because it's more efficient for binrw to have the most
+// common variants first
 #[binrw]
 #[derive(Debug, Clone)]
 #[br(return_unexpected_error)]
