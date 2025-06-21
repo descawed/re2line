@@ -196,6 +196,7 @@ pub struct App {
     compare_filter: RoomFilter,
     is_compare_filter_window_open: bool,
     comparison: Option<Comparison>,
+    show_comparison_paths: bool,
 }
 
 impl App {
@@ -227,6 +228,7 @@ impl App {
             compare_filter: RoomFilter::empty(),
             is_compare_filter_window_open: false,
             comparison: None,
+            show_comparison_paths: true,
         })
     }
 
@@ -770,15 +772,41 @@ impl App {
             ui.label(format!("Fastest: {} ({})", Self::frames_to_time(fastest_time), fastest_time));
             ui.label(format!("Slowest: {} ({})", Self::frames_to_time(slowest_time), slowest_time));
             ui.label(format!("Average: {} ({})", Self::frames_to_time(average_time), average_time));
+            
+            ui.add_space(2.5);
+            
+            let mut include_exclusions_in_statistics = comparison.include_exclusions_in_statistics();
+            ui.checkbox(&mut include_exclusions_in_statistics, "Include exclusions in statistics");
+            comparison.set_include_exclusions_in_statistics(include_exclusions_in_statistics);
+            
+            ui.checkbox(&mut self.show_comparison_paths, "Show paths");
+            
+            if ui.button("Select all").clicked() {
+                for run in comparison.runs_mut() {
+                    run.set_included(true);
+                }
+            }
+            
+            if ui.button("Select none").clicked() {
+                for run in comparison.runs_mut() {
+                    run.set_included(false);
+                }
+            }
 
             ui.separator();
 
             let mut selected_run = None;
-            for (i, run) in comparison.runs().into_iter().enumerate() {
-                let is_active = comparison.is_active_run(run);
+            let active_run_index = comparison.active_run_index();
+            for (i, run) in comparison.runs_mut().into_iter().enumerate() {
+                let is_active = i == active_run_index;
                 if ui.selectable_label(is_active, run.identifier()).clicked() && !is_active {
                     selected_run = Some(i);
                 }
+                
+                let mut included = run.is_included();
+                ui.checkbox(&mut included, "Include");
+                run.set_included(included);
+                
                 ui.label(format!("  Time: {} ({})", Self::frames_to_time(run.len()), run.len()));
             }
 
@@ -1635,7 +1663,7 @@ impl eframe::App for App {
             }
 
             // draw comparison paths if we're doing a comparison
-            if let Some(comparison) = &self.comparison {
+            if let (Some(comparison), true) = (&self.comparison, self.show_comparison_paths) {
                 let fastest_time = comparison.fastest_time();
                 let time_range = (comparison.slowest_time() - fastest_time).max(1) as f32;
 
