@@ -568,6 +568,11 @@ impl App {
     fn load_recording(&mut self, path: impl AsRef<Path>) -> Result<()> {
         let file = File::open(path)?;
         self.active_recording = Some(Recording::read(file)?);
+        // remove any active comparison
+        self.comparison = None;
+        if self.tab == BrowserTab::Comparison {
+            self.tab = BrowserTab::Recording;
+        }
         // reset character display settings for new recording
         self.character_settings.clear();
         self.change_recording_frame(|r| r.set_index(0));
