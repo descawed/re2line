@@ -949,7 +949,7 @@ impl App {
                         for roll in frame.rng_descriptions.into_iter().rev() {
                             let show = match roll.category {
                                 RollCategory::Character(i) => { 
-                                    self.config.show_character_rng && self.get_character_settings(i as usize).map(|s| s.show_rng_rolls).unwrap_or(true)
+                                    self.config.show_character_rng && self.get_character_settings(i as usize).map(|s| s.show_rng_rolls()).unwrap_or(true)
                                 }
                                 RollCategory::NonCharacter => self.config.show_known_non_character_rng,
                                 RollCategory::Unknown => self.config.show_unknown_rng,
