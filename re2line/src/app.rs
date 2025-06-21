@@ -603,6 +603,22 @@ impl App {
             self.tab = BrowserTab::Room;
         }
     }
+    
+    fn close_comparison(&mut self) {
+        self.comparison = None;
+        self.is_recording_playing = false;
+        self.objects.clear();
+        self.character_settings.clear();
+        self.ai_zones.clear();
+        self.characters.clear();
+        if matches!(self.selected_object, SelectedObject::Character(_) | SelectedObject::Object(_)) {
+            self.selected_object = SelectedObject::None;
+        }
+        
+        if self.tab == BrowserTab::Comparison {
+            self.tab = BrowserTab::Room;
+        }
+    }
 
     fn active_recording(&self) -> Option<&Recording> {
         self.active_recording.as_ref().or_else(|| self.comparison.as_ref().map(Comparison::recording))
@@ -777,26 +793,28 @@ impl App {
             ui.label(format!("Fastest: {} ({})", Self::frames_to_time(fastest_time), fastest_time));
             ui.label(format!("Slowest: {} ({})", Self::frames_to_time(slowest_time), slowest_time));
             ui.label(format!("Average: {} ({})", Self::frames_to_time(average_time), average_time));
-            
+
             ui.add_space(2.5);
-            
+
             let mut include_exclusions_in_statistics = comparison.include_exclusions_in_statistics();
             ui.checkbox(&mut include_exclusions_in_statistics, "Include exclusions in statistics");
             comparison.set_include_exclusions_in_statistics(include_exclusions_in_statistics);
-            
+
             ui.checkbox(&mut self.show_comparison_paths, "Show paths");
-            
-            if ui.button("Select all").clicked() {
-                for run in comparison.runs_mut() {
-                    run.set_included(true);
+
+            ui.horizontal(|ui| {
+                if ui.button("Select all").clicked() {
+                    for run in comparison.runs_mut() {
+                        run.set_included(true);
+                    }
                 }
-            }
-            
-            if ui.button("Select none").clicked() {
-                for run in comparison.runs_mut() {
-                    run.set_included(false);
+
+                if ui.button("Select none").clicked() {
+                    for run in comparison.runs_mut() {
+                        run.set_included(false);
+                    }
                 }
-            }
+            });
 
             ui.separator();
 
@@ -807,11 +825,11 @@ impl App {
                 if ui.selectable_label(is_active, run.identifier()).clicked() && !is_active {
                     selected_run = Some(i);
                 }
-                
+
                 let mut included = run.is_included();
                 ui.checkbox(&mut included, "Include");
                 run.set_included(included);
-                
+
                 ui.label(format!("  Time: {} ({})", Self::frames_to_time(run.len()), run.len()));
             }
 
@@ -1474,7 +1492,12 @@ impl eframe::App for App {
                     
                     ui.separator(); // don't want open button too close to close button
                     
-                    if ui.add_enabled(self.active_recording.is_some(), egui::Button::new("Close recording")).clicked() {
+                    if self.comparison.is_some() {
+                        if ui.button("Close comparison").clicked() {
+                            self.close_comparison();
+                            ui.close_menu();
+                        }
+                    } else if ui.add_enabled(self.active_recording.is_some(), egui::Button::new("Close recording")).clicked() {
                         self.close_recording();
                         ui.close_menu();
                     }
@@ -1697,10 +1720,10 @@ impl eframe::App for App {
                         path_draw_params.stroke.color = Color32::from_rgba_unmultiplied(red, green, 0, alpha);
                         path_draw_params.stroke.width = COMPARISON_PATH_WIDTH * self.config.zoom_scale;
                     }
-                    
+
                     ui.draw_game_object(path, &path_draw_params, state);
                 }
-                
+
                 // draw active run last
                 let run = comparison.active_run();
                 let path = run.route();
