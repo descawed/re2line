@@ -144,6 +144,7 @@ impl BrowserTab {
 
 #[derive(Debug, Copy, Clone)]
 struct CharacterSettings {
+    pub show: bool,
     pub show_tooltip: bool,
     pub show_ai: bool,
     pub show_path: bool,
@@ -152,16 +153,30 @@ struct CharacterSettings {
 impl CharacterSettings {
     pub const fn config_default(config: &Config) -> Self {
         Self {
+            show: true,
             show_tooltip: config.default_show_character_tooltips,
             show_ai: true,
             show_path: false,
         }
+    }
+
+    pub const fn show_tooltip(&self) -> bool {
+        self.show && self.show_tooltip
+    }
+
+    pub const fn show_ai(&self) -> bool {
+        self.show && self.show_ai
+    }
+
+    pub const fn show_path(&self) -> bool {
+        self.show && self.show_path
     }
 }
 
 impl Default for CharacterSettings {
     fn default() -> Self {
         Self {
+            show: true,
             show_tooltip: true,
             show_ai: true,
             show_path: false,
@@ -270,7 +285,7 @@ impl App {
 
         match (self.get_character(ai_zone.character_index), self.get_character_settings(ai_zone.character_index)) {
             (Some(character), Some(settings)) => {
-                self.config.should_show(character.object_type()) && settings.show_ai
+                self.config.should_show(character.object_type()) && settings.show_ai()
             }
             _ => false,
         }
@@ -1021,8 +1036,12 @@ impl App {
                         ui.separator();
                         ui.vertical(|ui| {
                             ui.label(RichText::new("Display").strong());
+                            ui.checkbox(&mut settings.show, "Show character");
                             ui.checkbox(&mut settings.show_tooltip, "Show tooltip");
                             ui.checkbox(&mut settings.show_ai, "Show AI");
+                        });
+                        ui.vertical(|ui| {
+                            ui.label("");
                             ui.checkbox(&mut settings.show_path, "Show path");
                         });
                     }
@@ -1641,7 +1660,7 @@ impl eframe::App for App {
                     continue;
                 };
                 // if the character the AI zones belong to isn't shown here, we shouldn't show the AI zones either
-                if !self.config.should_show(character.object_type()) || !settings.show_ai {
+                if !self.config.should_show(character.object_type()) || !settings.show_ai() {
                     continue;
                 }
 
@@ -1658,14 +1677,14 @@ impl eframe::App for App {
             // be on top
             if let SelectedObject::Character(i) = self.selected_object {
                 if let (Some(character), Some(settings)) = (state.characters()[i].as_ref(), self.get_character_settings(i)) {
-                    if self.config.should_show(character.object_type()) && settings.show_ai {
-                        for (i, ai_zone) in self.ai_zones.visible_objects(&self.config) {
+                    if self.config.should_show(character.object_type()) && settings.show_ai() {
+                        for (j, ai_zone) in self.ai_zones.visible_objects(&self.config) {
                             if ai_zone.character_index != i {
                                 continue;
                             }
 
                             let mut ai_draw_params = self.config.get_obj_draw_params(ai_zone, view_center);
-                            self.adjust_draw_for_selection(&mut ai_draw_params, ai_zone, i);
+                            self.adjust_draw_for_selection(&mut ai_draw_params, ai_zone, j);
                             ui.draw_game_object(ai_zone, &ai_draw_params, state);
                         }
                     }
@@ -1674,7 +1693,7 @@ impl eframe::App for App {
             
             // also draw paths before characters so the paths are under the characters
             for (_, character) in self.characters.visible_objects(&self.config) {
-                if !self.get_character_settings(character.index()).map(|s| s.show_path).unwrap_or(false) {
+                if !self.get_character_settings(character.index()).map(|s| s.show_path()).unwrap_or(false) {
                     continue;
                 }
 
@@ -1752,7 +1771,7 @@ impl eframe::App for App {
 
             for (_, character) in self.characters.visible_objects(&self.config) {
                 let mut char_draw_params = self.config.get_obj_draw_params(character, view_center);
-                if self.adjust_draw_for_selection(&mut char_draw_params, character, character.index()) {
+                if self.adjust_draw_for_selection(&mut char_draw_params, character, character.index()) || !self.get_character_settings(character.index()).map(|s| s.show).unwrap_or(false) {
                     continue;
                 }
 
@@ -1762,7 +1781,7 @@ impl eframe::App for App {
             // draw character tooltips on top of the characters themselves
             for (_, character) in self.characters.visible_objects(&self.config) {
                 let i = character.index();
-                if self.selected_object.matches(character, i) || !self.get_character_settings(i).map(|s| s.show_tooltip).unwrap_or(false) {
+                if self.selected_object.matches(character, i) || !self.get_character_settings(i).map(|s| s.show_tooltip()).unwrap_or(false) {
                     continue;
                 }
 
@@ -1815,10 +1834,12 @@ impl eframe::App for App {
                 }
                 SelectedObject::Character(i) => {
                     if let (Some(character), Some(settings)) = (self.get_character(i), self.get_character_settings(i)) {
-                        let char_draw_params = self.config.get_obj_draw_params(character, view_center);
-                        ui.draw_game_object(character, &char_draw_params, state);
-                        if settings.show_tooltip {
-                            ui.draw_game_tooltip(character, &char_draw_params, state, i);
+                        if settings.show {
+                            let char_draw_params = self.config.get_obj_draw_params(character, view_center);
+                            ui.draw_game_object(character, &char_draw_params, state);
+                            if settings.show_tooltip() {
+                                ui.draw_game_tooltip(character, &char_draw_params, state, i);
+                            }
                         }
                     }
                 }
@@ -1867,7 +1888,7 @@ impl eframe::App for App {
                     SelectedObject::Character(i) => {
                         if let (Some(character), Some(settings)) = (self.get_character(i), self.get_character_settings(i)) {
                             // if the character's tooltip setting is on, we've already drawn their tooltip
-                            if !settings.show_tooltip {
+                            if !settings.show_tooltip() {
                                 let mut char_draw_params = self.config.get_obj_draw_params(character, view_center);
                                 char_draw_params.set_draw_origin(hover_pos);
                                 ui.draw_game_tooltip(character, &char_draw_params, state, i);
