@@ -129,6 +129,8 @@ const fn roll_double(seed: u16, mask: u8) -> u8 {
     (second >> (first & 3)) & mask
 }
 
+const BOOL_OPTIONS: [&'static str; 2] = ["success", "failure"];
+
 fn bool_text(value: bool) -> String {
     String::from(if value {
         "success"
@@ -147,9 +149,47 @@ fn zombie_stagger_threshold(seed: u16, base: u8) -> String {
     format!("{} ({})", threshold, description)
 }
 
+const ZOMBIE_STAGGER_OPTIONS: [&'static str; 16] = [
+    "16 (one-shot stagger)",
+    "17 (one-shot stagger)",
+    "18 (one-shot stagger)",
+    "19 (one-shot stagger)",
+    "20 (one-shot stagger)",
+    "21 (one-shot stagger)",
+    "22 (one-shot stagger)",
+    "23 (one-shot stagger)",
+    "24 (two-shot stagger)",
+    "25 (two-shot stagger)",
+    "26 (two-shot stagger)",
+    "27 (two-shot stagger)",
+    "28 (two-shot stagger)",
+    "29 (two-shot stagger)",
+    "30 (two-shot stagger)",
+    "31 (two-shot stagger)",
+];
+
 fn zombie_stagger(seed: u16) -> String {
     zombie_stagger_threshold(seed, 0x10)
 }
+
+const ZOMBIE_STAGGER_HARD_OPTIONS: [&'static str; 16] = [
+    "32 (two-shot stagger)",
+    "33 (two-shot stagger)",
+    "34 (two-shot stagger)",
+    "35 (two-shot stagger)",
+    "36 (two-shot stagger)",
+    "37 (two-shot stagger)",
+    "38 (two-shot stagger)",
+    "39 (two-shot stagger)",
+    "40 (two-shot stagger)",
+    "41 (two-shot stagger)",
+    "42 (two-shot stagger)",
+    "43 (two-shot stagger)",
+    "44 (two-shot stagger)",
+    "45 (two-shot stagger)",
+    "46 (two-shot stagger)",
+    "47 (two-shot stagger)",
+];
 
 fn zombie_stagger_hard(seed: u16) -> String {
     zombie_stagger_threshold(seed, 0x20)
@@ -197,9 +237,47 @@ fn health<T: Into<usize>>(index: T, values: &[i16]) -> String {
     format!("{} (index {})", values[index], index)
 }
 
+const ZOMBIE_HEALTH_OPTIONS: [&'static str; 16] = [
+    "70 (index 0)",
+    "84 (index 1)",
+    "118 (index 2)",
+    "65 (index 3)",
+    "50 (index 4)",
+    "85 (index 5)",
+    "48 (index 6)",
+    "65 (index 7)",
+    "40 (index 8)",
+    "73 (index 9)",
+    "69 (index 10)",
+    "56 (index 11)",
+    "70 (index 12)",
+    "55 (index 13)",
+    "72 (index 14)",
+    "55 (index 15)",
+];
+
 fn zombie_health(seed: u16) -> String {
     health(roll_double(seed, 0xf), &ZOMBIE_HEALTHS1)
 }
+
+const ZOMBIE_HEALTH_ALT_OPTIONS: [&'static str; 16] = [
+    "39 (index 0)",
+    "13 (index 1)",
+    "27 (index 2)",
+    "39 (index 3)",
+    "54 (index 4)",
+    "27 (index 5)",
+    "39 (index 6)",
+    "85 (index 7)",
+    "27 (index 8)",
+    "39 (index 9)",
+    "27 (index 10)",
+    "27 (index 11)",
+    "39 (index 12)",
+    "27 (index 13)",
+    "39 (index 14)",
+    "27 (index 15)",
+];
 
 fn zombie_health_alt(seed: u16) -> String {
     health(roll_double(seed, 0xf), &ZOMBIE_HEALTHS2)
@@ -209,9 +287,47 @@ fn zombie_health2(seed: u16) -> String {
     health(roll8(seed) & 0xf, &ZOMBIE_HEALTHS1)
 }
 
+const DOG_HEALTH1_OPTIONS: [&'static str; 16] = [
+    "119 (index 0)",
+    "85 (index 1)",
+    "85 (index 2)",
+    "85 (index 3)",
+    "119 (index 4)",
+    "70 (index 5)",
+    "85 (index 6)",
+    "85 (index 7)",
+    "70 (index 8)",
+    "85 (index 9)",
+    "59 (index 10)",
+    "70 (index 11)",
+    "59 (index 12)",
+    "85 (index 13)",
+    "59 (index 14)",
+    "70 (index 15)",
+];
+
 fn dog_health(seed: u16) -> String {
     health(roll8(seed) & 0xf, &DOG_HEALTHS1)
 }
+
+const DOG_HEALTH2_OPTIONS: [&'static str; 16] = [
+    "57 (index 0)",
+    "57 (index 1)",
+    "82 (index 2)",
+    "65 (index 3)",
+    "82 (index 4)",
+    "65 (index 5)",
+    "57 (index 6)",
+    "59 (index 7)",
+    "65 (index 8)",
+    "57 (index 9)",
+    "30 (index 10)",
+    "57 (index 11)",
+    "30 (index 12)",
+    "57 (index 13)",
+    "30 (index 14)",
+    "69 (index 15)",
+];
 
 fn dog_health2(seed: u16) -> String {
     health(roll8(seed) & 0xf, &DOG_HEALTHS2)
@@ -233,6 +349,8 @@ fn zombie_arm_raise_timer(seed: u16) -> String {
     format!("{}", ((roll8(seed) as usize) >> 3) + 100)
 }
 
+const ZOMBIE_MOAN_OPTIONS: [&'static str; 2] = ["short", "long"];
+
 fn zombie_moan_choice(seed: u16) -> String {
     String::from(if roll8(seed) & 1 == 0 {
         "short"
@@ -246,13 +364,53 @@ fn zombie_eating_animation(seed: u16) -> String {
     format!("{} (index {})", ZOMBIE_EAT_ANIMATIONS[index], index)
 }
 
+const IVY_HEALTH1_OPTIONS: [&'static str; 16] = [
+    "97 (index 0)",
+    "119 (index 1)",
+    "97 (index 2)",
+    "90 (index 3)",
+    "97 (index 4)",
+    "90 (index 5)",
+    "119 (index 6)",
+    "97 (index 7)",
+    "90 (index 8)",
+    "90 (index 9)",
+    "89 (index 10)",
+    "119 (index 11)",
+    "69 (index 12)",
+    "90 (index 13)",
+    "89 (index 14)",
+    "119 (index 15)",
+];
+
 fn ivy_health1(seed: u16) -> String {
     health(roll8(seed) & 0xf, &IVY_HEALTHS1)
 }
 
+const IVY_HEALTH2_OPTIONS: [&'static str; 16] = [
+    "89 (index 0)",
+    "69 (index 1)",
+    "89 (index 2)",
+    "79 (index 3)",
+    "99 (index 4)",
+    "69 (index 5)",
+    "79 (index 6)",
+    "59 (index 7)",
+    "69 (index 8)",
+    "59 (index 9)",
+    "59 (index 10)",
+    "69 (index 11)",
+    "59 (index 12)",
+    "59 (index 13)",
+    "59 (index 14)",
+    "69 (index 15)",
+];
+
 fn ivy_health2(seed: u16) -> String {
     health(roll8(seed) & 0xf, &IVY_HEALTHS2)
 }
+
+const HEALTH_BONUS_OPTIONS: [&'static str; 4] = ["0", "1", "2", "3"];
 
 fn health_bonus(seed: u16) -> String {
     format!("{}", roll8(seed) & 3)
@@ -288,9 +446,47 @@ fn dog_animation_offset3(seed: u16) -> String {
     format!("{}", roll8(seed) & 0x1f)
 }
 
+const SPIDER_HEALTH1_OPTIONS: [&'static str; 16] = [
+    "99 (index 0)",
+    "99 (index 1)",
+    "99 (index 2)",
+    "99 (index 3)",
+    "119 (index 4)",
+    "99 (index 5)",
+    "99 (index 6)",
+    "119 (index 7)",
+    "99 (index 8)",
+    "99 (index 9)",
+    "99 (index 10)",
+    "119 (index 11)",
+    "99 (index 12)",
+    "89 (index 13)",
+    "99 (index 14)",
+    "99 (index 15)",
+];
+
 fn spider_health1(seed: u16) -> String {
     health(roll8(seed) & 0xf, &SPIDER_HEALTHS1)
 }
+
+const SPIDER_HEALTH2_OPTIONS: [&'static str; 16] = [
+    "79 (index 0)",
+    "89 (index 1)",
+    "99 (index 2)",
+    "79 (index 3)",
+    "49 (index 4)",
+    "89 (index 5)",
+    "79 (index 6)",
+    "69 (index 7)",
+    "89 (index 8)",
+    "69 (index 9)",
+    "89 (index 10)",
+    "89 (index 11)",
+    "99 (index 12)",
+    "69 (index 13)",
+    "49 (index 14)",
+    "79 (index 15)",
+];
 
 fn spider_health2(seed: u16) -> String {
     health(roll8(seed) & 0xf, &SPIDER_HEALTHS2)
@@ -311,6 +507,8 @@ fn zombie_knockdown_speed(seed: u16) -> String {
 fn zombie_knockdown87(seed: u16) -> String {
     bool_text(roll_double(seed, 7) != 0)
 }
+
+const ZOMBIE_SPEED_OPTIONS: [&'static str; 2] = ["fast", "slow"];
 
 fn zombie_speed(seed: u16) -> String {
     let index = roll_double(seed, 7) as usize;
@@ -350,6 +548,8 @@ fn licker_jump62(seed: u16) -> String {
     bool_text(roll8(seed) & 7 < 5)
 }
 
+const LICKER_ATTACK_OPTIONS: [&'static str; 2] = ["jump", "lick"];
+
 fn licker_jump_or_lick(seed: u16) -> String {
     String::from(if roll8(seed) & 7 < 6 {
         "jump"
@@ -365,6 +565,8 @@ fn handgun_crit(seed: u16) -> String {
 fn spider_max_turn_time(seed: u16) -> String {
     format!("{}", (roll8(seed) + 10) & 0x3f)
 }
+
+const SPIDER_TURN_DIRECTIONS: [&'static str; 2] = ["clockwise", "counterclockwise"];
 
 fn spider_turn_direction(seed: u16) -> String {
     String::from(if roll8(seed) & 1 == 0 {
@@ -420,6 +622,7 @@ fn g2_slash75(seed: u16) -> String {
 pub struct RollDescription {
     description: &'static str,
     result_formatter: Option<fn(u16) -> String>,
+    result_options: Vec<&'static str>,
 }
 
 impl RollDescription {
@@ -427,6 +630,7 @@ impl RollDescription {
         RollDescription {
             description: description_template,
             result_formatter: None,
+            result_options: Vec::new(),
         }
     }
 
@@ -434,7 +638,26 @@ impl RollDescription {
         RollDescription {
             description: description_template,
             result_formatter: Some(result_formatter),
+            result_options: Vec::new(),
         }
+    }
+
+    pub fn with_options(mut self, options: &[&'static str]) -> Self {
+        self.result_options = options.to_vec();
+        self
+    }
+
+    pub fn with_bool_options(mut self) -> Self {
+        self.result_options = BOOL_OPTIONS.to_vec();
+        self
+    }
+    
+    pub const fn has_known_outcomes(&self) -> bool {
+        self.result_formatter.is_some()
+    }
+    
+    pub fn outcome(&self, seed: u16) -> Option<String> {
+        self.result_formatter.as_ref().map(|formatter| formatter(seed))
     }
     
     pub fn describe(&self, seed: u16, subject: Option<&str>) -> String {
@@ -450,87 +673,91 @@ impl RollDescription {
             description
         }
     }
+    
+    pub fn options(&self) -> &[&'static str] {
+        &self.result_options
+    }
 }
 
 pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = LazyLock::new(|| {
     enum_map! {
         RollType::Script => RollDescription::simple("Script rolled RNG"),
-        RollType::ZombieStaggerThreshold => RollDescription::new("rolled for stagger threshold (16-31)", zombie_stagger),
-        RollType::ZombieStaggerThresholdHard => RollDescription::new("rolled for stagger threshold (32-47)", zombie_stagger_hard),
-        RollType::ZombieStaggerThresholdReroll => RollDescription::new("rolled to re-roll stagger threshold (33%)", zombie_stagger_reroll),
+        RollType::ZombieStaggerThreshold => RollDescription::new("rolled for stagger threshold (16-31)", zombie_stagger).with_options(&ZOMBIE_STAGGER_OPTIONS),
+        RollType::ZombieStaggerThresholdHard => RollDescription::new("rolled for stagger threshold (32-47)", zombie_stagger_hard).with_options(&ZOMBIE_STAGGER_HARD_OPTIONS),
+        RollType::ZombieStaggerThresholdReroll => RollDescription::new("rolled to re-roll stagger threshold (33%)", zombie_stagger_reroll).with_bool_options(),
         RollType::ZombieAppearance => RollDescription::new("rolled for random appearance", zombie_appearance),
         RollType::ZombieAppearance2 => RollDescription::new("rolled for random appearance", zombie_appearance2),
-        RollType::AltZombieAppearance => RollDescription::new("rolled for random appearance (50%)", bit_one),
-        RollType::AltZombieAppearance2 => RollDescription::new("rolled for random appearance (50%)", not_bit_one),
-        RollType::ZombieHealth => RollDescription::new("rolled for health", zombie_health),
-        RollType::ZombieHealthAlt => RollDescription::new("rolled for health", zombie_health_alt),
-        RollType::ZombieHealth2 => RollDescription::new("rolled for health", zombie_health2),
-        RollType::ZombieLunge50 => RollDescription::new("rolled to lunge (50%)", not_bit_one),
-        RollType::ZombieLunge50NotZero => RollDescription::new("rolled to lunge (50%)", bit_one),
-        RollType::ZombieLunge25 => RollDescription::new("rolled to lunge (25%)", and_three_zero),
+        RollType::AltZombieAppearance => RollDescription::new("rolled for random appearance (50%)", bit_one).with_bool_options(),
+        RollType::AltZombieAppearance2 => RollDescription::new("rolled for random appearance (50%)", not_bit_one).with_bool_options(),
+        RollType::ZombieHealth => RollDescription::new("rolled for health", zombie_health).with_options(&ZOMBIE_HEALTH_OPTIONS),
+        RollType::ZombieHealthAlt => RollDescription::new("rolled for health", zombie_health_alt).with_options(&ZOMBIE_HEALTH_ALT_OPTIONS),
+        RollType::ZombieHealth2 => RollDescription::new("rolled for health", zombie_health2).with_options(&ZOMBIE_HEALTH_OPTIONS),
+        RollType::ZombieLunge50 => RollDescription::new("rolled to lunge (50%)", not_bit_one).with_bool_options(),
+        RollType::ZombieLunge50NotZero => RollDescription::new("rolled to lunge (50%)", bit_one).with_bool_options(),
+        RollType::ZombieLunge25 => RollDescription::new("rolled to lunge (25%)", and_three_zero).with_bool_options(),
         RollType::DestinationBlock => RollDescription::simple("rolled for destination block"),
-        RollType::ZombieRaiseArms => RollDescription::new("rolled to raise arms (25% + player must be within 5000 units)", and_three_zero),
-        RollType::ZombieKnockdown25 => RollDescription::new("rolled to fall down (25%)", and_three_zero),
-        RollType::ZombieKnockdown93 => RollDescription::new("rolled to fall down (93.75%)", zombie_knockdown93),
+        RollType::ZombieRaiseArms => RollDescription::new("rolled to raise arms (25% + player must be within 5000 units)", and_three_zero).with_bool_options(),
+        RollType::ZombieKnockdown25 => RollDescription::new("rolled to fall down (25%)", and_three_zero).with_bool_options(),
+        RollType::ZombieKnockdown93 => RollDescription::new("rolled to fall down (93.75%)", zombie_knockdown93).with_bool_options(),
         RollType::ZombieKnockdownSpeed => RollDescription::new("rolled for knockdown speed", zombie_knockdown_speed),
-        RollType::ZombieKnockdown87 => RollDescription::new("rolled to fall down (87.5%)", zombie_knockdown87),
-        RollType::ZombieSpeed => RollDescription::new("rolled for speed", zombie_speed),
-        RollType::ZombieSpeed2 => RollDescription::new("rolled for speed", zombie_speed2),
+        RollType::ZombieKnockdown87 => RollDescription::new("rolled to fall down (87.5%)", zombie_knockdown87).with_bool_options(),
+        RollType::ZombieSpeed => RollDescription::new("rolled for speed", zombie_speed).with_options(&ZOMBIE_SPEED_OPTIONS),
+        RollType::ZombieSpeed2 => RollDescription::new("rolled for speed", zombie_speed2).with_options(&ZOMBIE_SPEED_OPTIONS),
         RollType::ZombieAnimationOffset => RollDescription::new("rolled for animation offset", zombie_animation_offset),
         RollType::ZombieAnimationOffset16 => RollDescription::new("rolled for animation offset", zombie_animation_offset16),
-        RollType::ZombieShortMoan => RollDescription::new("rolled for short moan (3.125%)", one_in_32),
-        RollType::ZombieLongMoan => RollDescription::new("rolled for long moan (3.125%)", one_in_32),
-        RollType::ZombieMoanChoice => RollDescription::new("rolled for moan type (50/50)", zombie_moan_choice),
+        RollType::ZombieShortMoan => RollDescription::new("rolled for short moan (3.125%)", one_in_32).with_bool_options(),
+        RollType::ZombieLongMoan => RollDescription::new("rolled for long moan (3.125%)", one_in_32).with_bool_options(),
+        RollType::ZombieMoanChoice => RollDescription::new("rolled for moan type (50/50)", zombie_moan_choice).with_options(&ZOMBIE_MOAN_OPTIONS),
         RollType::ZombieArmRaiseTimer => RollDescription::new("rolled for arm raise timer", zombie_arm_raise_timer),
         RollType::ZombieEatingAnimation => RollDescription::new("rolled for eating animation", zombie_eating_animation),
-        RollType::ZombieTryMoan => RollDescription::new("rolled to try moan (50%)", not_bit_one),
-        RollType::ZombieLongMoan50 => RollDescription::new("rolled for long moan (50%)", bit_one),
-        RollType::ZombieShortMoan50 => RollDescription::new("rolled for short moan (50%)", bit_one),
+        RollType::ZombieTryMoan => RollDescription::new("rolled to try moan (50%)", not_bit_one).with_bool_options(),
+        RollType::ZombieLongMoan50 => RollDescription::new("rolled for long moan (50%)", bit_one).with_bool_options(),
+        RollType::ZombieShortMoan50 => RollDescription::new("rolled for short moan (50%)", bit_one).with_bool_options(),
         RollType::ZombieEatBloodSpray => RollDescription::new("rolled for blood spray", zombie_blood_spray),
         RollType::LickerHealth => RollDescription::new("rolled for health", licker_health),
-        RollType::LickerJump25 => RollDescription::new("rolled to jump (25%)", licker_jump25),
-        RollType::LickerJump37 => RollDescription::new("rolled to jump (37.5%)", licker_jump37),
-        RollType::LickerJump62 => RollDescription::new("rolled to jump (62.5%)", licker_jump62),
-        RollType::LickerLick50 => RollDescription::new("rolled to lick (50%)", and_two_zero),
-        RollType::LickerConsiderAttack => RollDescription::new("rolled to consider attacking (75%)", and_three_not_zero),
-        RollType::LickerSlash25 => RollDescription::new("rolled to slash (25%)", and_three_zero),
-        RollType::LickerSlash50 => RollDescription::new("rolled to slash (50%)", not_bit_one),
-        RollType::LickerThreatened50 => RollDescription::new("rolled to transition to threatened (50%)", bit_one),
-        RollType::LickerLickOrJump50 => RollDescription::new("rolled to attack (lick/jump) or not (50%)", bit_two),
-        RollType::LickerJump75Lick25 => RollDescription::new("rolled to jump (75%) or lick (25%)", licker_jump_or_lick),
-        RollType::LickerRecoil25 => RollDescription::new("rolled to recoil (25%)", and_three_zero),
-        RollType::LickerJump50LowHealth => RollDescription::new("rolled to jump (50% + player must have <= 100 HP)", bit_one),
-        RollType::LickerDrool => RollDescription::new("rolled to drool (3.125%)", one_in_32),
-        RollType::IvyHealth1 => RollDescription::new("rolled for health", ivy_health1),
-        RollType::IvyHealth2 => RollDescription::new("rolled for health", ivy_health2),
-        RollType::HealthBonus => RollDescription::new("rolled for health bonus", health_bonus),
+        RollType::LickerJump25 => RollDescription::new("rolled to jump (25%)", licker_jump25).with_bool_options(),
+        RollType::LickerJump37 => RollDescription::new("rolled to jump (37.5%)", licker_jump37).with_bool_options(),
+        RollType::LickerJump62 => RollDescription::new("rolled to jump (62.5%)", licker_jump62).with_bool_options(),
+        RollType::LickerLick50 => RollDescription::new("rolled to lick (50%)", and_two_zero).with_bool_options(),
+        RollType::LickerConsiderAttack => RollDescription::new("rolled to consider attacking (75%)", and_three_not_zero).with_bool_options(),
+        RollType::LickerSlash25 => RollDescription::new("rolled to slash (25%)", and_three_zero).with_bool_options(),
+        RollType::LickerSlash50 => RollDescription::new("rolled to slash (50%)", not_bit_one).with_bool_options(),
+        RollType::LickerThreatened50 => RollDescription::new("rolled to transition to threatened (50%)", bit_one).with_bool_options(),
+        RollType::LickerLickOrJump50 => RollDescription::new("rolled to attack (lick/jump) or not (50%)", bit_two).with_bool_options(),
+        RollType::LickerJump75Lick25 => RollDescription::new("rolled to jump (75%) or lick (25%)", licker_jump_or_lick).with_options(&LICKER_ATTACK_OPTIONS),
+        RollType::LickerRecoil25 => RollDescription::new("rolled to recoil (25%)", and_three_zero).with_bool_options(),
+        RollType::LickerJump50LowHealth => RollDescription::new("rolled to jump (50% + player must have <= 100 HP)", bit_one).with_bool_options(),
+        RollType::LickerDrool => RollDescription::new("rolled to drool (3.125%)", one_in_32).with_bool_options(),
+        RollType::IvyHealth1 => RollDescription::new("rolled for health", ivy_health1).with_options(&IVY_HEALTH1_OPTIONS),
+        RollType::IvyHealth2 => RollDescription::new("rolled for health", ivy_health2).with_options(&IVY_HEALTH2_OPTIONS),
+        RollType::HealthBonus => RollDescription::new("rolled for health bonus", health_bonus).with_options(&HEALTH_BONUS_OPTIONS),
         RollType::IvyTentacleSet => RollDescription::new("rolled for tentacle set", ivy_tentacle_set),
         RollType::IvyAmbushTentacle => RollDescription::new("rolled to select ambush tentacle", ivy_ambush),
         RollType::TentacleAnimationOffset => RollDescription::new("rolled for animation offset", tentacle_animation_offset),
         RollType::TentacleAttachAngle => RollDescription::new("rolled for attachment angle", tentacle_attach_angle),
-        RollType::SpiderHealth1 => RollDescription::new("rolled for health", spider_health1),
-        RollType::SpiderHealth2 => RollDescription::new("rolled for health", spider_health2),
-        RollType::SpiderPoison3In32 => RollDescription::new("rolled to poison (9.375%)", spider_poison_3_in_32),
-        RollType::HandgunCrit => RollDescription::new("Handgun rolled to crit (6.25%)", handgun_crit),
-        RollType::DogHealth1 => RollDescription::new("rolled for health", dog_health),
-        RollType::DogHealth2 => RollDescription::new("rolled for health", dog_health2),
+        RollType::SpiderHealth1 => RollDescription::new("rolled for health", spider_health1).with_options(&SPIDER_HEALTH1_OPTIONS),
+        RollType::SpiderHealth2 => RollDescription::new("rolled for health", spider_health2).with_options(&SPIDER_HEALTH2_OPTIONS),
+        RollType::SpiderPoison3In32 => RollDescription::new("rolled to poison (9.375%)", spider_poison_3_in_32).with_bool_options(),
+        RollType::HandgunCrit => RollDescription::new("Handgun rolled to crit (6.25%)", handgun_crit).with_bool_options(),
+        RollType::DogHealth1 => RollDescription::new("rolled for health", dog_health).with_options(&DOG_HEALTH1_OPTIONS),
+        RollType::DogHealth2 => RollDescription::new("rolled for health", dog_health2).with_options(&DOG_HEALTH2_OPTIONS),
         RollType::DogAnimationOffset1 => RollDescription::new("rolled for animation offset", dog_animation_offset1),
         RollType::DogAnimationOffset2 => RollDescription::new("rolled for animation offset", dog_animation_offset2),
         RollType::DogAnimationOffset3 => RollDescription::new("rolled for animation offset", dog_animation_offset3),
         RollType::SpiderTurnTime => RollDescription::new("rolled for max turn time", spider_max_turn_time),
-        RollType::SpiderTurnDirection => RollDescription::new("rolled for turn direction", spider_turn_direction),
+        RollType::SpiderTurnDirection => RollDescription::new("rolled for turn direction", spider_turn_direction).with_options(&SPIDER_TURN_DIRECTIONS),
         RollType::SpiderMaxFaceTime => RollDescription::new("rolled for max facing time", spider_max_face_time),
         RollType::SpiderMaxPursueTime => RollDescription::new("rolled for max pursuit time", spider_max_pursue_time),
         RollType::SpiderMaxLegTurnTime => RollDescription::new("rolled for max leg attack turn time", spider_max_leg_turn_time),
         RollType::SpiderMaxLegAttackTime => RollDescription::new("rolled for max leg attack time", spider_max_leg_attack_time),
         RollType::SpiderMaxIdleTime => RollDescription::new("rolled for max idle time", spider_max_idle_time),
-        RollType::SpiderPursue50 => RollDescription::new("rolled to pursue (50%)", spider_pursue50),
+        RollType::SpiderPursue50 => RollDescription::new("rolled to pursue (50%)", spider_pursue50).with_bool_options(),
         RollType::G2Position => RollDescription::new("rolled for position", g2_position),
         RollType::G2RepositionTime => RollDescription::new("rolled for reposition time", g2_reposition_time),
         RollType::G2Angle => RollDescription::new("rolled for angle", g2_angle),
-        RollType::G2Swipe50 => RollDescription::new("rolled for normal attack instead of heavy attack (50%)", not_bit_one),
-        RollType::G2Slash75 => RollDescription::new("rolled to slash (75%)", g2_slash75),
-        RollType::G2Thrust25 => RollDescription::new("rolled for thrusting strike (25%)", and_three_zero),
+        RollType::G2Swipe50 => RollDescription::new("rolled for normal attack instead of heavy attack (50%)", not_bit_one).with_bool_options(),
+        RollType::G2Slash75 => RollDescription::new("rolled to slash (75%)", g2_slash75).with_bool_options(),
+        RollType::G2Thrust25 => RollDescription::new("rolled for thrusting strike (25%)", and_three_zero).with_bool_options(),
         RollType::Partial => RollDescription::simple("Partial roll in a larger series"),
         RollType::Invalid => RollDescription::simple("Invalid roll"),
     }

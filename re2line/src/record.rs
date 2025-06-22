@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek};
 use std::ops::Range;
 use std::time::Duration;
@@ -5,12 +6,13 @@ use std::time::Duration;
 use anyhow::{bail, Result};
 use binrw::BinReaderExt;
 use re2shared::record::*;
+use re2shared::rng::RollType;
 use residat::common::*;
 use residat::re2::{CharacterId, NUM_CHARACTERS, NUM_OBJECTS};
 
 use crate::app::{Floor, GameObject, RoomId};
 use crate::character::*;
-use crate::rng::{RNG_SEQUENCE, ROLL_DESCRIPTIONS};
+use crate::rng::{RNG_SEQUENCE, ROLL_DESCRIPTIONS, RollDescription};
 
 pub const FRAME_DURATION: Duration = Duration::from_micros(1000000 / 30);
 
@@ -325,23 +327,109 @@ pub enum RollCategory {
 pub struct RngDescription {
     pub description: String,
     pub category: RollCategory,
+    pub roll_type: Option<RollType>,
+    pub start_value: u16,
 }
 
 impl RngDescription {
-    pub const fn new(description: String, category: RollCategory) -> Self {
-        Self { description, category }
+    pub const fn new(description: String, category: RollCategory, roll_type: Option<RollType>, start_value: u16) -> Self {
+        Self { description, category, roll_type, start_value: start_value & 0x7fff }
     }
 
-    pub const fn character(description: String, character_index: u8) -> Self {
-        Self::new(description, RollCategory::Character(character_index))
+    pub const fn character(description: String, character_index: u8, roll_type: RollType, start_value: u16) -> Self {
+        Self::new(description, RollCategory::Character(character_index), Some(roll_type), start_value)
     }
     
-    pub const fn non_character(description: String) -> Self {
-        Self::new(description, RollCategory::NonCharacter)
+    pub const fn non_character(description: String, roll_type: RollType, start_value: u16) -> Self {
+        Self::new(description, RollCategory::NonCharacter, Some(roll_type), start_value)
     }
     
-    pub const fn unknown(description: String) -> Self {
-        Self::new(description, RollCategory::Unknown)
+    pub const fn unknown(description: String, start_value: u16) -> Self {
+        Self::new(description, RollCategory::Unknown, None, start_value)
+    }
+
+    pub fn rng_index(&self) -> usize {
+        RNG_SEQUENCE.iter().position(|v| *v == self.start_value).unwrap()
+    }
+
+    fn adjacent_unique_value(&self, delta: isize) -> Option<(usize, isize, String)> {
+        let rng_index = self.rng_index();
+        let roll_description = &ROLL_DESCRIPTIONS[self.roll_type?];
+        let value = roll_description.outcome(self.start_value)?;
+
+        let num_rng_values = RNG_SEQUENCE.len() as isize;
+        let mut next_index = (rng_index as isize + delta).rem_euclid(num_rng_values) as usize;
+        let mut distance = delta;
+        while next_index != rng_index  {
+            let next_value = roll_description.outcome(RNG_SEQUENCE[next_index])?;
+            if next_value != value {
+                return Some((next_index, distance, next_value));
+            }
+            next_index = (next_index as isize + delta).rem_euclid(num_rng_values) as usize;
+            distance += delta;
+        }
+
+        None
+    }
+
+    pub fn next_unique_value(&self) -> Option<(usize, isize, String)> {
+        self.adjacent_unique_value(1)
+    }
+
+    pub fn prev_unique_value(&self) -> Option<(usize, isize, String)> {
+        self.adjacent_unique_value(-1)
+    }
+
+    fn distribution_subset(&self, roll_description: &RollDescription, range_min: usize, range_max: usize, distribution: &mut HashMap<String, usize>) {
+        for seed in &RNG_SEQUENCE[range_min..range_max] {
+            let value = roll_description.outcome(*seed).unwrap();
+            let count = distribution.entry(value).or_insert(0);
+            *count += 1;
+        }
+    }
+
+    pub fn distribution(&self, range_min: isize, range_max: isize) -> Vec<(String, usize)> {
+        let mut distribution = HashMap::new();
+        if self.category == RollCategory::Unknown {
+            return Vec::new();
+        }
+
+        let roll_description = &ROLL_DESCRIPTIONS[self.roll_type.unwrap()];
+        let rng_index = self.rng_index();
+
+        let min = if range_min < -(rng_index as isize) {
+            let wrap_around = range_min.abs() - rng_index as isize;
+            let wrap_start = (RNG_SEQUENCE.len() as isize - wrap_around) as usize;
+            self.distribution_subset(roll_description, wrap_start, RNG_SEQUENCE.len(), &mut distribution);
+
+            0isize
+        } else {
+            rng_index as isize + range_min
+        };
+
+        let mut max = (rng_index as isize + range_max) as usize + 1;
+        if max > RNG_SEQUENCE.len() {
+            let wrap_end = max - RNG_SEQUENCE.len();
+            self.distribution_subset(roll_description, 0, wrap_end, &mut distribution);
+
+            max = RNG_SEQUENCE.len();
+        }
+
+        self.distribution_subset(roll_description, min as usize, max, &mut distribution);
+
+        let mut distribution = distribution.into_iter().collect::<Vec<_>>();
+        distribution.sort_by_key(|v| (v.1, v.0.clone()));
+        distribution.reverse();
+
+        distribution
+    }
+
+    pub fn options(&self) -> &[&'static str] {
+        if self.category == RollCategory::Unknown {
+            return &[];
+        }
+
+        ROLL_DESCRIPTIONS[self.roll_type.unwrap()].options()
     }
 }
 
@@ -528,11 +616,11 @@ impl Recording {
             for change in &frame_record.game_changes {
                 match change {
                     GameField::RngRoll(address, value) => {
-                        frame_rng.rng_descriptions.push(RngDescription::unknown(format!("{:08X} rolled on {:04X}", address, value)));
+                        frame_rng.rng_descriptions.push(RngDescription::unknown(format!("{:08X} rolled on {:04X}", address, value), *value));
                     }
                     GameField::KnownRng { roll_type, start_value } => {
                         let description_data = &ROLL_DESCRIPTIONS[*roll_type];
-                        frame_rng.rng_descriptions.push(RngDescription::non_character(description_data.describe(*start_value, None)));
+                        frame_rng.rng_descriptions.push(RngDescription::non_character(description_data.describe(*start_value, None), *roll_type, *start_value));
                     }
                     GameField::CharacterRng { char_index, roll_type, start_value } => {
                         let description_data = &ROLL_DESCRIPTIONS[*roll_type];
@@ -540,7 +628,9 @@ impl Recording {
                             .get(*char_index as usize)
                             .and_then(|c| c.as_ref().map(Character::name))
                             .map(|n| format!("#{} {}", char_index, n));
-                        frame_rng.rng_descriptions.push(RngDescription::character(description_data.describe(*start_value, character_name.as_ref().map(String::as_str)), *char_index));
+                        frame_rng.rng_descriptions.push(
+                            RngDescription::character(description_data.describe(*start_value, character_name.as_ref().map(String::as_str)), *char_index, *roll_type, *start_value)
+                        );
                     }
                     _ => (),
                 }
