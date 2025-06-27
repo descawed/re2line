@@ -1,52 +1,56 @@
 use residat::common::{Fixed32, Vec2};
 
-use crate::app::{DrawParams, Floor, GameObject, ObjectType};
+use crate::app::{DrawParams, Floor, GameObject, ObjectType, WorldPos};
 use crate::record::State;
 
-// TODO: handle floor during motion clipping
 #[derive(Debug, Clone)]
 pub struct Motion {
-    pub from: Vec2,
+    pub origin: WorldPos,
     pub to: Vec2,
     pub offset: Vec2,
-    pub size: Vec2,
 }
 
 impl Motion {
-    pub const fn new(from: Vec2, to: Vec2, offset: Vec2, size: Vec2) -> Self {
+    pub const fn new(origin: WorldPos, to: Vec2, offset: Vec2) -> Self {
         Self {
-            from,
+            origin,
             to,
             offset,
-            size,
         }
     }
 
-    pub const fn point(point: Vec2) -> Self {
+    pub const fn point(point: Vec2, floor: Floor) -> Self {
         Self {
-            from: point,
+            origin: WorldPos::point(point, floor),
             to: point,
             offset: Vec2::zero(),
-            size: Vec2::zero(),
         }
     }
 
-    pub const fn point_with_motion(point: Vec2) -> Self {
+    pub const fn point_with_motion(point: Vec2, floor: Floor) -> Self {
         Self {
-            from: Vec2 { x: point.x.dec(), z: point.z },
+            origin: WorldPos::point(Vec2 { x: point.x.dec(), z: point.z }, floor),
             to: point,
             offset: Vec2::zero(),
-            size: Vec2::zero(),
         }
+    }
+
+    pub const fn from(&self) -> Vec2 {
+        self.origin.pos
+    }
+
+    pub const fn size(&self) -> Vec2 {
+        self.origin.size
     }
 
     pub fn angle(&self) -> Fixed32 {
-        self.from.angle_between(&self.to)
+        self.from().angle_between(&self.to)
     }
 
     pub fn size_in_direction_of(&self, pos: Vec2, size: Vec2) -> Fixed32 {
         let radius = size >> 1;
-        let offset_to = self.to + self.size;
+        let our_size = self.size();
+        let offset_to = self.to + our_size;
         let angle = ((radius.z + pos.z) - offset_to.z).atan2((radius.x - offset_to.x) + pos.x);
         let rel_angle = angle - self.angle();
 
@@ -59,20 +63,25 @@ impl Motion {
             norm_angle = Fixed32(0x800) - norm_angle;
         }
 
-        if self.size.z < self.size.x {
-            norm_angle.cos() * (self.size.x - self.size.z) + self.size.z
+        if our_size.z < our_size.x {
+            norm_angle.cos() * (our_size.x - our_size.z) + our_size.z
         } else {
-            norm_angle.sin() * (self.size.z - self.size.x) + self.size.x
+            norm_angle.sin() * (our_size.z - our_size.x) + our_size.x
         }
     }
 
-    pub fn is_destination_in_rect(&self, pos: Vec2, size: Vec2) -> bool {
+    pub fn is_destination_in_collision_bounds(&self, pos: &WorldPos) -> bool {
+        if !self.origin.can_collide_with(&pos) {
+            return false;
+        }
+
         // it's accurate to the game that we use this same size for both axes
-        let motion_size = self.size.x << 1;
+        let motion_size = self.size().x << 1;
+        let size = pos.size;
         let x_size = (size.x + motion_size).0 as u32;
         let z_size = (size.z + motion_size).0 as u32;
 
-        let rel = (self.to + self.size) - pos;
+        let rel = (self.to + self.size()) - pos.pos;
         let wrapped_x = rel.x.0 as u32;
         let wrapped_z = rel.z.0 as u32;
 
@@ -83,7 +92,7 @@ impl Motion {
 const RECT_THRESHOLD: Fixed32 = Fixed32(0x191);
 
 fn push_to_rect_nearest_edge(motion: &Motion, x_edge_offset: Fixed32, z_edge_offset: Fixed32) -> Vec2 {
-    let rel = motion.to - motion.from;
+    let rel = motion.to - motion.from();
     let x_edge_abs = x_edge_offset.abs();
     let z_edge_abs = z_edge_offset.abs();
 
@@ -113,14 +122,14 @@ fn push_to_rect_nearest_edge(motion: &Motion, x_edge_offset: Fixed32, z_edge_off
         return motion.to + Vec2::new(Fixed32(0), z_edge_offset);
     }
 
-    motion.from
+    motion.from()
 }
 
 fn push_out_of_rect(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
     let directional_size = motion.size_in_direction_of(pos, size);
 
-    let mut max_x_outside = (size.x - motion.to.x) + pos.x.inc() + motion.size.x;
-    let min_x_outside = (pos.x - motion.to.x - motion.size.x).dec();
+    let mut max_x_outside = (size.x - motion.to.x) + pos.x.inc() + motion.size().x;
+    let min_x_outside = (pos.x - motion.to.x - motion.size().x).dec();
     if max_x_outside > -min_x_outside {
         max_x_outside = min_x_outside;
     }
@@ -134,13 +143,16 @@ fn push_out_of_rect(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
     push_to_rect_nearest_edge(motion, max_x_outside, max_z_outside)
 }
 
-fn rect_clip_motion(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
-    if !motion.is_destination_in_rect(pos, size) {
+fn rect_clip_motion(pos: &WorldPos, motion: &Motion) -> Vec2 {
+    if !motion.is_destination_in_collision_bounds(pos) {
         return motion.to;
     }
 
-    let rel = (motion.size - pos) + motion.from;
-    let total_size = size + (motion.size << 1);
+    let size = pos.size;
+    let pos = pos.pos;
+
+    let rel = (motion.size() - pos) + motion.from();
+    let total_size = size + (motion.size() << 1);
     let mut outside_flags = if total_size.x <= rel.x {
         2u32
     } else {
@@ -164,8 +176,8 @@ fn rect_clip_motion(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
     let mut clipped = motion.to;
     if outside_flags & 2 != 0 {
         let xr = size.x >> 1;
-        let mut adjustment = xr.inc() + motion.size.x;
-        if !(motion.to.x - motion.from.x).is_negative() {
+        let mut adjustment = xr.inc() + motion.size().x;
+        if !(motion.to.x - motion.from().x).is_negative() {
             adjustment = -adjustment;
         }
         clipped.x = adjustment + xr + pos.x;
@@ -173,8 +185,8 @@ fn rect_clip_motion(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
 
     if outside_flags & 1 != 0 {
         let zr = size.z >> 1;
-        let mut adjustment = zr.inc() + motion.size.z;
-        if !(motion.to.z - motion.from.z).is_negative() {
+        let mut adjustment = zr.inc() + motion.size().z;
+        if !(motion.to.z - motion.from().z).is_negative() {
             adjustment = -adjustment;
         }
         clipped.z = adjustment + zr + pos.z;
@@ -183,14 +195,17 @@ fn rect_clip_motion(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
     clipped
 }
 
-fn rect_contains_point(pos: Vec2, size: Vec2, point: Vec2) -> bool {
-    rect_clip_motion(pos, size, &Motion::point(point)) != point
+fn rect_contains_point(pos: &WorldPos, point: Vec2) -> bool {
+    rect_clip_motion(pos, &Motion::point(point, Floor::ANY)) != point
 }
 
-fn circle_clip_motion(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
-    if !motion.is_destination_in_rect(pos, size) {
+fn circle_clip_motion(pos: &WorldPos, motion: &Motion) -> Vec2 {
+    if !motion.is_destination_in_collision_bounds(pos) {
         return motion.to;
     }
+
+    let size = pos.size;
+    let pos = pos.pos;
 
     let radius = size.x >> 1;
     let rel = (motion.to - pos) - Vec2::new(radius, radius);
@@ -208,8 +223,8 @@ fn circle_clip_motion(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
     motion.to + Vec2::new(x_offset, z_offset)
 }
 
-fn circle_contains_point(pos: Vec2, size: Vec2, point: Vec2) -> bool {
-    circle_clip_motion(pos, size, &Motion::point(point)) != point
+fn circle_contains_point(pos: &WorldPos, point: Vec2) -> bool {
+    circle_clip_motion(pos, &Motion::point(point, Floor::ANY)) != point
 }
 
 const fn tri_adjustments(a: Fixed32, b: Fixed32) -> (Fixed32, Fixed32) {
@@ -249,33 +264,22 @@ pub enum SpecialRectType {
 
 #[derive(Debug, Clone)]
 pub struct RectCollider {
-    pos: Vec2,
-    size: Vec2,
+    pos: WorldPos,
     capsule_type: CapsuleType,
     special_rect_type: SpecialRectType,
-    floor: Floor,
-    collision_mask: u16,
 }
 
 impl RectCollider {
-    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, floor: Floor, capsule_type: CapsuleType) -> Self {
+    pub const fn new(pos: WorldPos, capsule_type: CapsuleType) -> Self {
         Self {
-            pos: Vec2 { x, z },
-            size: Vec2 { x: width, z: height },
-            floor,
+            pos,
             capsule_type,
             special_rect_type: SpecialRectType::None,
-            collision_mask: 0xFFFF,
         }
     }
     
     pub const fn collision_mask(&self) -> u16 {
-        self.collision_mask
-    }
-
-    pub fn with_collision_mask(mut self, collision_mask: u16) -> Self {
-        self.collision_mask = collision_mask;
-        self
+        self.pos.collision_mask
     }
     
     pub const fn with_special_rect_type(mut self, special_rect_type: SpecialRectType) -> Self {
@@ -284,11 +288,11 @@ impl RectCollider {
     }
     
     pub const fn set_floor(&mut self, floor: Floor) {
-        self.floor = floor;
+        self.pos.floor = floor;
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
-        let (x, y, width, height) = draw_params.transform(self.pos.x, self.pos.z, self.size.x, self.size.z);
+        let (x, y, width, height) = draw_params.transform(self.pos.pos.x, self.pos.pos.z, self.pos.size.x, self.pos.size.z);
         let corner_radius = self.capsule_type.corner_radius(width, height);
 
         egui::Shape::Rect(epaint::RectShape::new(
@@ -305,91 +309,93 @@ impl RectCollider {
 
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
         let point = point.into();
-        if self.special_rect_type == SpecialRectType::Ramp {
-            // ramps don't inhibit motion, so a clip test won't tell us if the point is in the rect
-            return rect_contains_point(self.pos, self.size, point);
+        if matches!(self.special_rect_type, SpecialRectType::Ramp | SpecialRectType::Floor) {
+            // ramps and floors don't inhibit motion, so a clip test won't tell us if the point is in the rect
+            return rect_contains_point(&self.pos, point);
         }
 
-        self.clip_motion(&Motion::point(point)) != point
+        self.clip_motion(&Motion::point(point, Floor::ANY)) != point
     }
 
     pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
         // FIXME: add correct handling for half pipes
-        if self.special_rect_type == SpecialRectType::Ramp {
-            return motion.to; // ramps don't inhibit motion
+        if matches!(self.special_rect_type, SpecialRectType::Ramp | SpecialRectType::Floor) {
+            return motion.to; // ramps and floors don't inhibit motion
         }
+
+        if !motion.is_destination_in_collision_bounds(&self.pos) {
+            return motion.to;
+        }
+
+        let pos = self.pos.pos;
+        let size = self.pos.size;
 
         match self.capsule_type {
             CapsuleType::Horizontal => {
-                let z_radius = self.size.z >> 1;
-                let side = (((motion.to.x - (self.pos.x - z_radius + self.size.x)).0 as u32 & 0xbfffffff)
-                    | ((motion.to.x - (self.pos.x + z_radius)) >> 1).0 as u32) >> 0x1e;
+                let z_radius = size.z >> 1;
+                let side = (((motion.to.x - (pos.x - z_radius + size.x)).0 as u32 & 0xbfffffff)
+                    | ((motion.to.x - (pos.x + z_radius)) >> 1).0 as u32) >> 0x1e;
                 match side {
                     0 => {
-                        let pos = Vec2::new((self.pos.x - self.size.z) + self.size.x, self.pos.z);
-                        return circle_clip_motion(pos, Vec2::new(self.size.z, self.size.z), motion);
+                        let pos = WorldPos::rect(Vec2::new((pos.x - size.z) + size.x, pos.z), Vec2::new(size.z, size.z), self.pos.floor);
+                        return circle_clip_motion(&pos, motion);
                     }
-                    3 => return circle_clip_motion(self.pos, Vec2::new(self.size.z, self.size.z), motion),
+                    3 => {
+                        let pos = WorldPos::rect(pos, Vec2::new(size.z, size.z), self.pos.floor);
+                        return circle_clip_motion(&pos, motion);
+                    }
                     _ => (),
                 }
             }
             CapsuleType::Vertical => {
-                let x_radius = self.size.x >> 1;
-                let side = (((motion.to.z - (self.pos.z - x_radius + self.size.z)).0 as u32 & 0xbfffffff)
-                    | ((motion.to.z - (self.pos.z + x_radius)) >> 1).0 as u32) >> 0x1e;
+                let x_radius = size.x >> 1;
+                let side = (((motion.to.z - (pos.z - x_radius + size.z)).0 as u32 & 0xbfffffff)
+                    | ((motion.to.z - (pos.z + x_radius)) >> 1).0 as u32) >> 0x1e;
                 match side {
                     0 => {
-                        let pos = Vec2::new(self.pos.x, self.pos.z + (self.size.z - self.size.x));
-                        return circle_clip_motion(pos, Vec2::new(self.size.x, self.size.x), motion);
+                        let pos = WorldPos::rect(Vec2::new(pos.x, pos.z + (size.z - size.x)), Vec2::new(size.x, size.x), self.pos.floor);
+                        return circle_clip_motion(&pos, motion);
                     }
-                    3 => return circle_clip_motion(self.pos, Vec2::new(self.size.x, self.size.x), motion),
+                    3 => {
+                        let pos = WorldPos::rect(pos, Vec2::new(size.z, size.z), self.pos.floor);
+                        return circle_clip_motion(&pos, motion);
+                    }
                     _ => (),
                 }
             }
             _ => (),
         }
 
-        rect_clip_motion(self.pos, self.size, motion)
+        rect_clip_motion(&self.pos, motion)
     }
 
     pub fn set_pos<T: Into<Vec2>>(&mut self, pos: T) {
-        self.pos = pos.into();
+        self.pos.pos = pos.into();
     }
 
     pub fn set_size<T: Into<Vec2>>(&mut self, size: T) {
-        self.size = size.into();
+        self.pos.size = size.into();
     }
 }
 
 #[derive(Debug)]
 pub struct DiamondCollider {
-    pos: Vec2,
-    size: Vec2,
-    floor: Floor,
-    collision_mask: u16,
+    pos: WorldPos,
 }
 
 impl DiamondCollider {
-    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, floor: Floor) -> Self {
+    pub const fn new(pos: WorldPos) -> Self {
         Self {
-            pos: Vec2 { x, z },
-            size: Vec2 { x: width, z: height },
-            floor,
-            collision_mask: 0xFFFF,
+            pos,
         }
-    }
-    
-    pub fn with_collision_mask(mut self, collision_mask: u16) -> Self {
-        self.collision_mask = collision_mask;
-        self
     }
 
     pub const fn collision_mask(&self) -> u16 {
-        self.collision_mask
+        self.pos.collision_mask
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
-        let (x, y, width, height) = draw_params.transform(self.pos.x, self.pos.z, self.size.x, self.size.z);
+        let (x, y, width, height) = draw_params.transform(self.pos.pos.x, self.pos.pos.z, self.pos.size.x, self.pos.size.z);
         let x_radius = width / 2.0;
         let y_radius = height / 2.0;
 
@@ -416,16 +422,16 @@ impl DiamondCollider {
         // unlike some other collision types, when we clip motion, we can just force the character
         // back to the original position. so, to determine whether the motion was clipped, we need
         // to ensure that the from and to positions are different.
-        self.clip_motion(&Motion::point_with_motion(point)) != point
+        self.clip_motion(&Motion::point_with_motion(point, Floor::ANY)) != point
     }
 
     pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
-        if !motion.is_destination_in_rect(self.pos, self.size) {
+        if !motion.is_destination_in_collision_bounds(&self.pos) {
             return motion.to;
         }
 
-        let center_x = (self.size.x >> 1) + self.pos.x;
-        let center_z = (self.size.z >> 1) + self.pos.z;
+        let center_x = (self.pos.size.x >> 1) + self.pos.pos.x;
+        let center_z = (self.pos.size.z >> 1) + self.pos.pos.z;
 
         let quadrant = (((motion.to.z - center_z) >> 0x1e).0 & 2) | (((motion.to.x - center_x) >> 0x1f).0 & 1);
         match quadrant {
@@ -438,10 +444,13 @@ impl DiamondCollider {
     }
 
     fn clip_motion_in_quadrant0(&self, motion: &Motion) -> Vec2 {
-        let directional_size = motion.size_in_direction_of(self.pos, self.size);
+        let pos = self.pos.pos;
+        let size = self.pos.size;
 
-        let center = (self.size >> 1) + self.pos;
-        let far = self.pos + self.size;
+        let directional_size = motion.size_in_direction_of(pos, size);
+
+        let center = (size >> 1) + pos;
+        let far = pos + size;
 
         let x_diff1 = far.x - center.x + directional_size;
         let x_diff2 = (motion.offset.x - center.x) + motion.to.x;
@@ -470,18 +479,21 @@ impl DiamondCollider {
                 return motion.to;
             }*/
         } else {
-            motion.from
+            motion.from()
         }
     }
 
     fn clip_motion_in_quadrant1(&self, motion: &Motion) -> Vec2 {
-        let directional_size = motion.size_in_direction_of(self.pos, self.size);
+        let pos = self.pos.pos;
+        let size = self.pos.size;
 
-        let center = (self.size >> 1) + self.pos;
-        let far = self.pos + self.size;
+        let directional_size = motion.size_in_direction_of(pos, size);
 
-        let x_diff1 = center.x - self.pos.x + directional_size;
-        let x_diff2 = (directional_size - self.pos.x) + motion.to.x + directional_size;
+        let center = (size >> 1) + pos;
+        let far = pos + size;
+
+        let x_diff1 = center.x - pos.x + directional_size;
+        let x_diff2 = (directional_size - pos.x) + motion.to.x + directional_size;
 
         let z_diff1 = far.z - center.z + directional_size;
         let z_diff2 = motion.to.z + (motion.offset.z - center.z);
@@ -507,21 +519,24 @@ impl DiamondCollider {
                 return motion.to;
             }*/
         } else {
-            motion.from
+            motion.from()
         }
     }
 
     fn clip_motion_in_quadrant2(&self, motion: &Motion) -> Vec2 {
-        let directional_size = motion.size_in_direction_of(self.pos, self.size);
+        let pos = self.pos.pos;
+        let size = self.pos.size;
 
-        let center = (self.size >> 1) + self.pos;
-        let far = self.pos + self.size;
+        let directional_size = motion.size_in_direction_of(pos, size);
+
+        let center = (size >> 1) + pos;
+        let far = pos + size;
 
         let x_diff1 = far.x - center.x + directional_size;
         let x_diff2 = (motion.offset.x - center.x) + motion.to.x;
 
-        let z_diff1 = center.z - self.pos.z + directional_size;
-        let z_diff2 = (motion.offset.z - self.pos.z) + motion.to.z;
+        let z_diff1 = center.z - pos.z + directional_size;
+        let z_diff2 = (motion.offset.z - pos.z) + motion.to.z;
 
         let term1 = Fixed32((x_diff2.0 * z_diff1.0) / x_diff1.0);
         
@@ -546,19 +561,22 @@ impl DiamondCollider {
                 return motion.to;
             }*/
         } else {
-            motion.from
+            motion.from()
         }
     }
 
     fn clip_motion_in_quadrant3(&self, motion: &Motion) -> Vec2 {
-        let directional_size = motion.size_in_direction_of(self.pos, self.size);
+        let pos = self.pos.pos;
+        let size = self.pos.size;
 
-        let center = (self.size >> 1) + self.pos;
+        let directional_size = motion.size_in_direction_of(pos, size);
 
-        let x_diff1 = center.x - self.pos.x + directional_size;
-        let x_diff2 = (motion.offset.x - self.pos.x) + motion.to.x + directional_size;
+        let center = (size >> 1) + pos;
 
-        let z_diff1 = self.pos.z - center.z - directional_size;
+        let x_diff1 = center.x - pos.x + directional_size;
+        let x_diff2 = (motion.offset.x - pos.x) + motion.to.x + directional_size;
+
+        let z_diff1 = pos.z - center.z - directional_size;
         let z_diff2 = motion.to.z + (motion.offset.z - center.z);
 
         let term1 = Fixed32((x_diff2.0 * z_diff1.0) / x_diff1.0);
@@ -567,7 +585,7 @@ impl DiamondCollider {
             return motion.to;
         }
 
-        let z_diff3 = center.z - self.pos.z + directional_size;
+        let z_diff3 = center.z - pos.z + directional_size;
 
         let term2 = z_diff2 - term1;
         let term3 = Fixed32((x_diff1.0 * term2.0) / z_diff3.0);
@@ -584,44 +602,33 @@ impl DiamondCollider {
                 return motion.to;
             }*/
         } else {
-            motion.from
+            motion.from()
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct EllipseCollider {
-    pos: Vec2,
-    size: Vec2,
-    floor: Floor,
-    collision_mask: u16,
+    pos: WorldPos,
 }
 
 impl EllipseCollider {
-    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, floor: Floor) -> Self {
+    pub const fn new(pos: WorldPos) -> Self {
         Self {
-            pos: Vec2 { x, z },
-            size: Vec2 { x: width, z: height },
-            floor,
-            collision_mask: 0xFFFF,
+            pos,
         }
     }
 
     pub const fn collision_mask(&self) -> u16 {
-        self.collision_mask
-    }
-
-    pub fn with_collision_mask(mut self, collision_mask: u16) -> Self {
-        self.collision_mask = collision_mask;
-        self
+        self.pos.collision_mask
     }
     
     pub const fn set_floor(&mut self, floor: Floor) {
-        self.floor = floor;
+        self.pos.floor = floor;
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
-        let (x, y, width, height) = draw_params.transform(self.pos.x, self.pos.z, self.size.x, self.size.z);
+        let (x, y, width, height) = draw_params.transform(self.pos.pos.x, self.pos.pos.z, self.pos.size.x, self.pos.size.z);
 
         let radius_x = width / 2.0;
         let radius_y = height / 2.0;
@@ -637,19 +644,19 @@ impl EllipseCollider {
     }
 
     pub fn pos(&self) -> Vec2 {
-        self.pos
+        self.pos.pos
     }
 
     pub fn set_pos<T: Into<Vec2>>(&mut self, pos: T) {
-        self.pos = pos.into();
+        self.pos.pos = pos.into();
     }
 
     pub fn set_size<T: Into<Vec2>>(&mut self, size: T) {
-        self.size = size.into();
+        self.pos.size = size.into();
     }
 
     pub fn size(&self) -> Vec2 {
-        self.size
+        self.pos.size
     }
 
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
@@ -657,11 +664,11 @@ impl EllipseCollider {
         //  however, it IS used for the bounding rect test before we get into the actual circle logic. so the
         //  proper shape would be a circle clipped to the bounding rect, which we don't have an easy way to
         //  draw.
-        circle_contains_point(self.pos, self.size, point.into())
+        circle_contains_point(&self.pos, point.into())
     }
 
     pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
-        circle_clip_motion(self.pos, self.size, motion)
+        circle_clip_motion(&self.pos, motion)
     }
 }
 
@@ -686,31 +693,20 @@ impl TriangleType {
 
 #[derive(Debug)]
 pub struct TriangleCollider {
-    pos: Vec2,
-    size: Vec2,
-    floor: Floor,
+    pos: WorldPos,
     type_: TriangleType,
-    collision_mask: u16,
 }
 
 impl TriangleCollider {
-    pub const fn new(x: Fixed32, z: Fixed32, width: Fixed32, height: Fixed32, floor: Floor, type_: TriangleType) -> Self {
+    pub const fn new(pos: WorldPos, type_: TriangleType) -> Self {
         Self {
-            pos: Vec2 { x, z },
-            size: Vec2 { x: width, z: height },
-            floor,
+            pos,
             type_,
-            collision_mask: 0xFFFF,
         }
     }
 
     pub const fn collision_mask(&self) -> u16 {
-        self.collision_mask
-    }
-
-    pub fn with_collision_mask(mut self, collision_mask: u16) -> Self {
-        self.collision_mask = collision_mask;
-        self
+        self.pos.collision_mask
     }
 
     pub const fn offsets(&self) -> [(f32, f32); 3] {
@@ -718,7 +714,7 @@ impl TriangleCollider {
     }
 
     pub fn gui_shape(&self, draw_params: &DrawParams) -> egui::Shape {
-        let (x, y, width, height) = draw_params.transform(self.pos.x, self.pos.z, self.size.x, self.size.z);
+        let (x, y, width, height) = draw_params.transform(self.pos.pos.x, self.pos.pos.z, self.pos.size.x, self.pos.size.z);
         let offsets = self.offsets();
 
         let x1 = x + offsets[0].0 * width;
@@ -745,29 +741,32 @@ impl TriangleCollider {
     }
 
     fn clip_motion_top_left(&self, motion: &Motion) -> Vec2 {
-        let directional_size = motion.size_in_direction_of(self.pos, self.size);
+        let pos = self.pos.pos;
+        let size = self.pos.size;
 
-        let dist = motion.to - self.pos;
-        let far = self.pos + self.size;
+        let directional_size = motion.size_in_direction_of(pos, size);
 
-        let width = self.size.x + directional_size;
-        let height = self.size.z + directional_size;
+        let dist = motion.to - pos;
+        let far = pos + size;
+
+        let width = size.x + directional_size;
+        let height = size.z + directional_size;
 
         let scaled_dist = Fixed32((height.0 * dist.x.0) / width.0);
         if (dist.z + directional_size) <= scaled_dist {
             return motion.to;
         }
 
-        let x1_div = self.pos.x.0 / 0x12;
-        let z1_div = self.pos.z.0 / 0x12;
+        let x1_div = pos.x.0 / 0x12;
+        let z1_div = pos.z.0 / 0x12;
         let z2_div = far.z.0 / 0x12;
         let x2_div = far.x.0 / 0x12;
         let height_div = z2_div - z1_div;
         let width_div = x2_div - x1_div;
 
-        if (((motion.from.x.0 / 0x12) * height_div - (motion.from.z.0 / 0x12) * width_div) - z2_div * x1_div) + x2_div * z1_div < 0 {
-            if (dist.x + directional_size) < (self.size.x + directional_size) && dist.z < (self.size.z + directional_size) {
-                return rect_clip_motion(self.pos, self.size, motion);
+        if (((motion.from().x.0 / 0x12) * height_div - (motion.from().z.0 / 0x12) * width_div) - z2_div * x1_div) + x2_div * z1_div < 0 {
+            if (dist.x + directional_size) < (size.x + directional_size) && dist.z < (size.z + directional_size) {
+                return rect_clip_motion(&self.pos, motion);
             }
         } else {
             let term1 = (dist.z - scaled_dist) + directional_size;
@@ -782,33 +781,36 @@ impl TriangleCollider {
     }
 
     fn clip_motion_top_right(&self, motion: &Motion) -> Vec2 {
-        let directional_size = motion.size_in_direction_of(self.pos, self.size);
+        let pos = self.pos.pos;
+        let size = self.pos.size;
 
-        let dist = motion.to - self.pos;
-        let far = self.pos + self.size;
+        let directional_size = motion.size_in_direction_of(pos, size);
 
-        let z_dist = dist.z - self.size.z;
+        let dist = motion.to - pos;
+        let far = pos + size;
 
-        let scaled_dist = Fixed32(((self.size.z + (directional_size << 1)).0 * (dist.x + directional_size).0) / (self.size.x + (directional_size << 1)).0);
+        let z_dist = dist.z - size.z;
+
+        let scaled_dist = Fixed32(((size.z + (directional_size << 1)).0 * (dist.x + directional_size).0) / (size.x + (directional_size << 1)).0);
         if z_dist <= -scaled_dist {
             return motion.to;
         }
 
-        let x1_div = self.pos.x.0 / 0x12;
-        let z1_div = self.pos.z.0 / 0x12;
+        let x1_div = pos.x.0 / 0x12;
+        let z1_div = pos.z.0 / 0x12;
         let z2_div = far.z.0 / 0x12;
         let x2_div = far.x.0 / 0x12;
 
         let z1_minus_z2_div = z1_div - z2_div;
         let x2_minus_x1_div = x2_div - x1_div;
 
-        if (((motion.from.x.0 / 0x12) * z1_minus_z2_div - (motion.from.z.0 / 0x12) * x2_minus_x1_div) - z1_div * x1_div) + x2_div * z2_div < 0 {
-            if dist.x < (self.size.x + directional_size) && dist.z < (self.size.z + directional_size) {
-                return rect_clip_motion(self.pos, self.size, motion);
+        if (((motion.from().x.0 / 0x12) * z1_minus_z2_div - (motion.from().z.0 / 0x12) * x2_minus_x1_div) - z1_div * x1_div) + x2_div * z2_div < 0 {
+            if dist.x < (size.x + directional_size) && dist.z < (size.z + directional_size) {
+                return rect_clip_motion(&self.pos, motion);
             }
         } else {
             let term1 = z_dist + scaled_dist;
-            let term2 = Fixed32(((self.size.x + directional_size).0 * term1.0) / (self.size.z + directional_size).0);
+            let term2 = Fixed32(((size.x + directional_size).0 * term1.0) / (size.z + directional_size).0);
             let (x_adjustment, z_adjustment) = tri_adjustments(term1, term2);
             if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
                 return Vec2::new(motion.to.x - x_adjustment, motion.to.z - z_adjustment);
@@ -819,16 +821,19 @@ impl TriangleCollider {
     }
 
     fn clip_motion_bottom_right(&self, motion: &Motion) -> Vec2 {
-        let directional_size = motion.size_in_direction_of(self.pos, self.size);
+        let pos = self.pos.pos;
+        let size = self.pos.size;
 
-        let x1 = self.pos.x.0;
-        let z1 = self.pos.z.0;
+        let directional_size = motion.size_in_direction_of(pos, size);
 
-        let far = self.pos + self.size;
-        let dist = motion.to - self.pos;
+        let x1 = pos.x.0;
+        let z1 = pos.z.0;
 
-        let width = far.x - self.pos.x + directional_size;
-        let height = far.z - self.pos.z + directional_size;
+        let far = pos + size;
+        let dist = motion.to - pos;
+
+        let width = far.x - pos.x + directional_size;
+        let height = far.z - pos.z + directional_size;
 
         let scaled_dist = Fixed32((height.0 * (directional_size + dist.x).0) / width.0);
         if scaled_dist <= dist.z {
@@ -842,34 +847,37 @@ impl TriangleCollider {
         let height_div = z2_div - z1_div;
         let width_div = x2_div - x1_div;
 
-        if (((motion.from.x.0 / 0x12) * height_div - (motion.from.z.0 / 0x12) * width_div) - z2_div * x1_div) + x2_div * z1_div < 1 {
+        if (((motion.from().x.0 / 0x12) * height_div - (motion.from().z.0 / 0x12) * width_div) - z2_div * x1_div) + x2_div * z1_div < 1 {
             let term1 = dist.z - scaled_dist;
             let term2 = Fixed32((width.0 * term1.0) / height.0);
             let (x_adjustment, z_adjustment) = tri_adjustments(term1, term2);
             if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
                 Vec2::new(motion.to.x + x_adjustment, motion.to.z - z_adjustment)
             } else {
-                motion.from
+                motion.from()
             }
-        } else if dist.x < (self.size.x + directional_size) && (dist.z + directional_size) < (self.size.z + directional_size) {
-            rect_clip_motion(self.pos, self.size, motion)
+        } else if dist.x < (size.x + directional_size) && (dist.z + directional_size) < (size.z + directional_size) {
+            rect_clip_motion(&self.pos, motion)
         } else {
             motion.to
         }
     }
 
     fn clip_motion_bottom_left(&self, motion: &Motion) -> Vec2 {
-        let directional_size = motion.size_in_direction_of(self.pos, self.size);
+        let pos = self.pos.pos;
+        let size = self.pos.size;
 
-        let x1 = self.pos.x.0;
-        let z1 = self.pos.z.0;
+        let directional_size = motion.size_in_direction_of(pos, size);
 
-        let far = self.pos + self.size;
+        let x1 = pos.x.0;
+        let z1 = pos.z.0;
 
-        let width = directional_size + (far.x - self.pos.x);
-        let height = (self.pos.z - far.z) - directional_size;
+        let far = pos + size;
 
-        let dist = motion.to - self.pos;
+        let width = directional_size + (far.x - pos.x);
+        let height = (pos.z - far.z) - directional_size;
+
+        let dist = motion.to - pos;
 
         let scaled_dist = Fixed32((height.0 * dist.x.0) / width.0);
         if scaled_dist <= (motion.to.z - far.z) - directional_size {
@@ -882,24 +890,24 @@ impl TriangleCollider {
         let height_div = z1 / 0x12 - z2_div;
         let width_div = x2_div - x1_div;
 
-        if (((motion.from.x.0 / 0x12) * height_div - (motion.from.z.0 / 0x12) * width_div) - (z1 / 0x12) * x1_div) + x2_div * z2_div < 1 {
+        if (((motion.from().x.0 / 0x12) * height_div - (motion.from().z.0 / 0x12) * width_div) - (z1 / 0x12) * x1_div) + x2_div * z2_div < 1 {
             let term1 = motion.to.z - far.z - scaled_dist - directional_size;
-            let term2 = Fixed32((width.0 * term1.0) / (far.z - self.pos.z + directional_size).0);
+            let term2 = Fixed32((width.0 * term1.0) / (far.z - pos.z + directional_size).0);
             let (x_adjustment, z_adjustment) = tri_adjustments(term1, term2);
             if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
                 Vec2::new(motion.to.x - x_adjustment, motion.to.z - z_adjustment)
             } else {
-                motion.from
+                motion.from()
             }
-        } else if (dist.x + directional_size) < (self.size.x + directional_size) && (dist.z + directional_size) < (self.size.z + directional_size) {
-            rect_clip_motion(self.pos, self.size, motion)
+        } else if (dist.x + directional_size) < (size.x + directional_size) && (dist.z + directional_size) < (size.z + directional_size) {
+            rect_clip_motion(&self.pos, motion)
         } else {
             motion.to
         }
     }
 
     pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
-        if !motion.is_destination_in_rect(self.pos, self.size) {
+        if !motion.is_destination_in_collision_bounds(&self.pos) {
             return motion.to;
         }
 
@@ -914,7 +922,7 @@ impl TriangleCollider {
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
         let point = point.into();
 
-        self.clip_motion(&Motion::point_with_motion(point)) != point
+        self.clip_motion(&Motion::point_with_motion(point, Floor::ANY)) != point
     }
 }
 
@@ -1027,7 +1035,7 @@ impl Collider {
         })
     }
 
-    fn clip_motion(&self, motion: &Motion) -> Vec2 {
+    pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
         match self {
             Self::Rect(rect) => rect.clip_motion(motion),
             Self::Ellipse(ellipse) => ellipse.clip_motion(motion),
@@ -1069,12 +1077,12 @@ impl GameObject for Collider {
             Self::Quad(quad) => {
                 format!("X1: {: >6} | Z1: {: >6}\nX2: {: >6} | Z2: {: >6}\nX3: {: >6} | Z3: {: >6}\nX4: {: >6} | Z4: {: >6}\n", quad.p1.x, quad.p1.z, quad.p2.x, quad.p2.z, quad.p3.x, quad.p3.z, quad.p4.x, quad.p4.z)
             }
-            Self::Rect(RectCollider { pos, size, .. })
-            | Self::Diamond(DiamondCollider { pos, size, .. })
-            | Self::Ellipse(EllipseCollider { pos, size, .. })
-            | Self::Triangle(TriangleCollider { pos, size, .. })
+            Self::Rect(RectCollider { pos, .. })
+            | Self::Diamond(DiamondCollider { pos, .. })
+            | Self::Ellipse(EllipseCollider { pos, .. })
+            | Self::Triangle(TriangleCollider { pos, .. })
             => {
-                format!("X: {: >6} | Z: {: >6}\nW: {: >6} | H: {: >6}", pos.x, pos.z, size.x, size.z)
+                format!("X: {: >6} | Z: {: >6}\nW: {: >6} | H: {: >6}", pos.pos.x, pos.pos.z, pos.size.x, pos.size.z)
             }
         }
     }
@@ -1101,17 +1109,17 @@ impl GameObject for Collider {
                     format!("Floor: {}", quad.floor),
                 ]));
             }
-            Self::Rect(RectCollider { pos, size, floor, .. })
-            | Self::Diamond(DiamondCollider { pos, size, floor, .. })
-            | Self::Ellipse(EllipseCollider { pos, size, floor, .. })
-            | Self::Triangle(TriangleCollider { pos, size, floor, .. })
+            Self::Rect(RectCollider { pos, .. })
+            | Self::Diamond(DiamondCollider { pos, .. })
+            | Self::Ellipse(EllipseCollider { pos, .. })
+            | Self::Triangle(TriangleCollider { pos, .. })
             => {
                 let mut params = vec![
-                    format!("X: {}", pos.x),
-                    format!("Z: {}", pos.z),
-                    format!("W: {}", size.x),
-                    format!("H: {}", size.z),
-                    format!("Floor: {}", floor),
+                    format!("X: {}", pos.pos.x),
+                    format!("Z: {}", pos.pos.z),
+                    format!("W: {}", pos.size.x),
+                    format!("H: {}", pos.size.z),
+                    format!("Floor: {}", pos.floor),
                 ];
                 if self.collision_mask() != 0xFFFF {
                     params.push(format!("Collision: {:04X}", self.collision_mask()));
@@ -1125,10 +1133,10 @@ impl GameObject for Collider {
         let label = String::from("Calculated");
         match self {
             Self::Ellipse(ellipse) => {
-                let x_radius = ellipse.size.x >> 1;
-                let z_radius = ellipse.size.z >> 1;
-                let center_x = ellipse.pos.x + x_radius;
-                let center_z = ellipse.pos.z + z_radius;
+                let x_radius = ellipse.pos.size.x >> 1;
+                let z_radius = ellipse.pos.size.z >> 1;
+                let center_x = ellipse.pos.pos.x + x_radius;
+                let center_z = ellipse.pos.pos.z + z_radius;
                 
                 groups.push((label, vec![
                     format!("CX: {}", center_x),
@@ -1140,12 +1148,12 @@ impl GameObject for Collider {
             Self::Triangle(tri) => {
                 let offsets = tri.offsets();
 
-                let x1 = tri.pos.x + if offsets[0].0 > 0.0 { tri.size.x } else { Fixed32(0) };
-                let z1 = tri.pos.z + if offsets[0].1 > 0.0 { tri.size.z } else { Fixed32(0) };
-                let x2 = tri.pos.x + if offsets[1].0 > 0.0 { tri.size.x } else { Fixed32(0) };
-                let z2 = tri.pos.z + if offsets[1].1 > 0.0 { tri.size.z } else { Fixed32(0) };
-                let x3 = tri.pos.x + if offsets[2].0 > 0.0 { tri.size.x } else { Fixed32(0) };
-                let z3 = tri.pos.z + if offsets[2].1 > 0.0 { tri.size.z } else { Fixed32(0) };
+                let x1 = tri.pos.pos.x + if offsets[0].0 > 0.0 { tri.pos.size.x } else { Fixed32(0) };
+                let z1 = tri.pos.pos.z + if offsets[0].1 > 0.0 { tri.pos.size.z } else { Fixed32(0) };
+                let x2 = tri.pos.pos.x + if offsets[1].0 > 0.0 { tri.pos.size.x } else { Fixed32(0) };
+                let z2 = tri.pos.pos.z + if offsets[1].1 > 0.0 { tri.pos.size.z } else { Fixed32(0) };
+                let x3 = tri.pos.pos.x + if offsets[2].0 > 0.0 { tri.pos.size.x } else { Fixed32(0) };
+                let z3 = tri.pos.pos.z + if offsets[2].1 > 0.0 { tri.pos.size.z } else { Fixed32(0) };
                 
                 groups.push((label, vec![
                     format!("X1: {}", x1),
@@ -1157,13 +1165,13 @@ impl GameObject for Collider {
                 ]));
             }
             Self::Diamond(diamond) => {
-                let radius_x = diamond.size.x >> 1;
-                let radius_z = diamond.size.z >> 1;
+                let radius_x = diamond.pos.size.x >> 1;
+                let radius_z = diamond.pos.size.z >> 1;
 
-                let x = diamond.pos.x;
-                let z = diamond.pos.z;
-                let width = diamond.size.x;
-                let height = diamond.size.z;
+                let x = diamond.pos.pos.x;
+                let z = diamond.pos.pos.z;
+                let width = diamond.pos.size.x;
+                let height = diamond.pos.size.z;
                 groups.push((label, vec![
                     format!("X1: {}", x + radius_x),
                     format!("Z1: {}", z),
@@ -1176,10 +1184,10 @@ impl GameObject for Collider {
                 ]));
             }
             Self::Rect(rect) => {
-                let nx = rect.pos.x;
-                let nz = rect.pos.z;
-                let fx = rect.pos.x + rect.size.x;
-                let fz = rect.pos.z + rect.size.z;
+                let nx = rect.pos.pos.x;
+                let nz = rect.pos.pos.z;
+                let fx = rect.pos.pos.x + rect.pos.size.x;
+                let fz = rect.pos.pos.z + rect.pos.size.z;
                 
                 groups.push((label, vec![
                     format!("X2: {}", fx),
@@ -1198,10 +1206,10 @@ impl GameObject for Collider {
 
     fn floor(&self) -> Floor {
         match self {
-            Self::Rect(rect) => rect.floor,
-            Self::Diamond(diamond) => diamond.floor,
-            Self::Ellipse(ellipse) => ellipse.floor,
-            Self::Triangle(triangle) => triangle.floor,
+            Self::Rect(rect) => rect.pos.floor,
+            Self::Diamond(diamond) => diamond.pos.floor,
+            Self::Ellipse(ellipse) => ellipse.pos.floor,
+            Self::Triangle(triangle) => triangle.pos.floor,
             Self::Quad(quad) => quad.floor,
         }
     }
