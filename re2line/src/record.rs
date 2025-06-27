@@ -348,6 +348,10 @@ impl RngDescription {
         Self::new(description, RollCategory::Unknown, None, start_value)
     }
 
+    pub fn is_unknown(&self) -> bool {
+        self.category == RollCategory::Unknown || self.roll_type.is_none()
+    }
+
     pub fn rng_index(&self) -> usize {
         RNG_SEQUENCE.iter().position(|v| *v == self.start_value).unwrap()
     }
@@ -423,9 +427,46 @@ impl RngDescription {
 
         distribution
     }
+    
+    fn values_subset(&self, roll_description: &RollDescription, range_min: usize, range_max: usize, values: &mut Vec<(usize, String)>) {
+        for i in range_min..range_max {
+            let seed = &RNG_SEQUENCE[i];
+            values.push((i, roll_description.outcome(*seed).unwrap()));
+        }
+    }
+
+    pub fn values_in_range(&self, range_min: isize, range_max: isize) -> Vec<(usize, String)> {
+        let mut values = Vec::new();
+        if self.is_unknown() {
+            return values;
+        }
+
+        let roll_description = &ROLL_DESCRIPTIONS[self.roll_type.unwrap()];
+        let rng_index = self.rng_index();
+
+        let min = if range_min < -(rng_index as isize) {
+            let wrap_around = range_min.abs() - rng_index as isize;
+            let wrap_start = (RNG_SEQUENCE.len() as isize - wrap_around) as usize;
+            self.values_subset(roll_description, wrap_start, RNG_SEQUENCE.len(), &mut values);
+
+            0isize
+        } else {
+            rng_index as isize + range_min
+        };
+
+        let max = (rng_index as isize + range_max) as usize + 1;
+        self.values_subset(roll_description, min as usize, max.min(RNG_SEQUENCE.len()), &mut values);
+        
+        if max > RNG_SEQUENCE.len() {
+            let wrap_end = max - RNG_SEQUENCE.len();
+            self.values_subset(roll_description, 0, wrap_end, &mut values);
+        }
+
+        values
+    }
 
     pub fn options(&self) -> &[&'static str] {
-        if self.category == RollCategory::Unknown {
+        if self.is_unknown() {
             return &[];
         }
 

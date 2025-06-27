@@ -623,6 +623,7 @@ pub struct RollDescription {
     description: &'static str,
     result_formatter: Option<fn(u16) -> String>,
     result_options: Vec<&'static str>,
+    has_subject: bool,
 }
 
 impl RollDescription {
@@ -631,6 +632,7 @@ impl RollDescription {
             description: description_template,
             result_formatter: None,
             result_options: Vec::new(),
+            has_subject: false,       
         }
     }
 
@@ -639,6 +641,7 @@ impl RollDescription {
             description: description_template,
             result_formatter: Some(result_formatter),
             result_options: Vec::new(),
+            has_subject: true,
         }
     }
 
@@ -652,20 +655,29 @@ impl RollDescription {
         self
     }
     
-    pub const fn has_known_outcomes(&self) -> bool {
-        self.result_formatter.is_some()
+    pub fn without_subject(mut self) -> Self {
+        self.has_subject = false;
+        self
     }
     
     pub fn outcome(&self, seed: u16) -> Option<String> {
         self.result_formatter.as_ref().map(|formatter| formatter(seed))
     }
     
-    pub fn describe(&self, seed: u16, subject: Option<&str>) -> String {
-        let description = if let Some(subject) = subject {
+    pub fn label(&self, subject: &str) -> String {
+        self.describe_label(self.has_subject.then_some(subject))
+    }
+    
+    pub fn describe_label(&self, subject: Option<&str>) -> String {
+        if let Some(subject) = subject {
             format!("{} {}", subject, self.description)
         } else {
             self.description.to_string()
-        };
+        }
+    }
+    
+    pub fn describe(&self, seed: u16, subject: Option<&str>) -> String {
+        let description = self.describe_label(subject);
         
         if let Some(formatter) = &self.result_formatter {
             format!("{}: {}", description, formatter(seed))
@@ -676,6 +688,10 @@ impl RollDescription {
     
     pub fn options(&self) -> &[&'static str] {
         &self.result_options
+    }
+    
+    pub const fn has_subject(&self) -> bool {
+        self.has_subject
     }
 }
 
@@ -738,7 +754,7 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::SpiderHealth1 => RollDescription::new("rolled for health", spider_health1).with_options(&SPIDER_HEALTH1_OPTIONS),
         RollType::SpiderHealth2 => RollDescription::new("rolled for health", spider_health2).with_options(&SPIDER_HEALTH2_OPTIONS),
         RollType::SpiderPoison3In32 => RollDescription::new("rolled to poison (9.375%)", spider_poison_3_in_32).with_bool_options(),
-        RollType::HandgunCrit => RollDescription::new("Handgun rolled to crit (6.25%)", handgun_crit).with_bool_options(),
+        RollType::HandgunCrit => RollDescription::new("Handgun rolled to crit (6.25%)", handgun_crit).with_bool_options().without_subject(),
         RollType::DogHealth1 => RollDescription::new("rolled for health", dog_health).with_options(&DOG_HEALTH1_OPTIONS),
         RollType::DogHealth2 => RollDescription::new("rolled for health", dog_health2).with_options(&DOG_HEALTH2_OPTIONS),
         RollType::DogAnimationOffset1 => RollDescription::new("rolled for animation offset", dog_animation_offset1),

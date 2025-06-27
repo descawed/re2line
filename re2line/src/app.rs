@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::fs::File;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::io::BufReader;
 use std::str::FromStr;
@@ -11,6 +12,7 @@ use eframe::{Frame, Storage};
 use egui::{Color32, Context, Key, RichText, TextBuffer, Ui, ViewportCommand};
 use egui::layers::ShapeIdx;
 use egui::widgets::color_picker::Alpha;
+use egui_plot::{Line, Plot};
 use epaint::{Stroke, StrokeKind};
 use re2script::ScriptFormatter;
 use re2shared::record::FrameRecord;
@@ -25,8 +27,8 @@ use crate::collision::Collider;
 use crate::compare::{Checkpoint, Comparison, RoomFilter};
 use crate::draw::{VAlign, text_box};
 use crate::rdt::RdtExt;
-use crate::record::{PlayerSound, Recording, RollCategory, State, FRAME_DURATION};
-use crate::rng::RNG_SEQUENCE;
+use crate::record::{PlayerSound, Recording, RngDescription, RollCategory, State, FRAME_DURATION};
+use crate::rng::{RNG_SEQUENCE, ROLL_DESCRIPTIONS};
 
 mod config;
 mod game;
@@ -226,6 +228,10 @@ pub struct App {
     rng_distribution_binary: bool,
     rng_selected_outcomes: HashSet<&'static str>,
     rng_selected_roll_type: Option<RollType>,
+    rng_selected_index: usize,
+    rng_run_threshold: f64,
+    rng_run_window_size: usize,
+    is_rng_explore_window_open: bool,
 }
 
 impl App {
@@ -263,6 +269,10 @@ impl App {
             rng_distribution_binary: false,
             rng_selected_outcomes: HashSet::new(),
             rng_selected_roll_type: None,
+            rng_selected_index: 0,
+            rng_run_threshold: 2.0 / 3.0 * 100.0,
+            rng_run_window_size: 10,
+            is_rng_explore_window_open: false,
         })
     }
 
@@ -978,13 +988,6 @@ impl App {
                                     return;
                                 }
                                 
-                                // clear selections whenever we open the context menu for a different type of roll
-                                if self.rng_selected_roll_type != roll.roll_type {
-                                    self.rng_selected_outcomes.clear();
-                                    self.rng_distribution_binary = false;
-                                    self.rng_selected_roll_type = roll.roll_type;
-                                }
-                                
                                 if let Some((index, distance, value)) = roll.next_unique_value() {
                                     ui.label(format!("Next unique value: {value} (+{distance}, position {index})"));
                                 }
@@ -992,60 +995,11 @@ impl App {
                                 if let Some((index, distance, value)) = roll.prev_unique_value() {
                                     ui.label(format!("Previous unique value: {value} ({distance}, position {index})"));
                                 }
-                                
-                                ui.separator();
 
-                                let options = roll.options();
-                                
-                                ui.horizontal(|ui| {
-                                    ui.vertical(|ui| {
-                                        ui.label("Distribution");
-                                        
-                                        ui.add_enabled(!self.rng_selected_outcomes.is_empty(), egui::Checkbox::new(&mut self.rng_distribution_binary, "By desired outcome"));
-
-                                        let half_range = (RNG_SEQUENCE.len() / 2) as isize;
-                                        ui.add(egui::Slider::new(&mut self.rng_distribution_range_min, -half_range..=0).text("Min"));
-                                        ui.add(egui::Slider::new(&mut self.rng_distribution_range_max, 0..=half_range).text("Max"));
-
-                                        let distribution = roll.distribution(self.rng_distribution_range_min, self.rng_distribution_range_max);
-                                        let total = distribution.iter().map(|d| d.1).sum::<usize>() as f32;
-                                        
-                                        if self.rng_distribution_binary {
-                                            let mut count_desired = 0usize;
-                                            for (value, count) in distribution {
-                                                if self.rng_selected_outcomes.contains(value.as_str()) {
-                                                    count_desired += count;
-                                                }
-                                            }
-                                            
-                                            let desired_percent = count_desired as f32 / total * 100.0;
-                                            ui.label(format!("Desired: {desired_percent:.2}%"));
-                                        } else {
-                                            for (value, count) in distribution {
-                                                let percent = count as f32 / total * 100.0;
-                                                ui.label(format!("{value}: {percent:.2}%"));
-                                            }
-                                        }
-                                    });
-                                    
-                                    if !options.is_empty() {
-                                        ui.separator();
-                                        
-                                        ui.vertical(|ui| {
-                                            ui.label("Desired outcomes");
-                                            
-                                            for option in options {
-                                                let mut is_checked = self.rng_selected_outcomes.contains(option);
-                                                ui.checkbox(&mut is_checked, String::from(*option));
-                                                if is_checked {
-                                                    self.rng_selected_outcomes.insert(*option);
-                                                } else {
-                                                    self.rng_selected_outcomes.retain(|o| o != option);
-                                                }
-                                            }
-                                        });
-                                    }
-                                });
+                                if ui.button("Explore").clicked() {
+                                    self.open_rng_explore_window(roll.roll_type.unwrap(), roll.rng_index());
+                                    ui.close_menu();
+                                }
                             });
                         }
                     });
@@ -1536,6 +1490,183 @@ impl App {
         Ok(())
     }
 
+    fn open_rng_explore_window(&mut self, roll_type: RollType, rng_index: usize) {
+        if self.rng_selected_roll_type != Some(roll_type) {
+            self.rng_selected_outcomes.clear();
+        }
+
+        self.rng_selected_roll_type = Some(roll_type);
+        self.rng_selected_index = rng_index;
+        self.is_rng_explore_window_open = true;
+    }
+
+    fn rng_explore_window(&mut self, ctx: &Context) {
+        let mut is_rng_explore_window_open = self.is_rng_explore_window_open;
+        
+        egui::Window::new("Explore RNG")
+            .open(&mut is_rng_explore_window_open)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                let old_roll_type = self.rng_selected_roll_type;
+                egui::ComboBox::from_label("Roll type")
+                    .selected_text(match self.rng_selected_roll_type {
+                        Some(roll_type) => format!("{:?}", roll_type),
+                        None => "None".to_string(),
+                    })
+                    .show_ui(ui, |ui| {
+                        for (roll_type, description) in ROLL_DESCRIPTIONS.iter() {
+                            if matches!(roll_type, RollType::Partial | RollType::Invalid) {
+                                continue;
+                            }
+                            
+                            ui.selectable_value(&mut self.rng_selected_roll_type, Some(roll_type), format!("{:?} ({})", roll_type, description.label("<Character>")));
+                        }
+                    });
+                
+                if self.rng_selected_roll_type != old_roll_type {
+                    self.rng_selected_outcomes.clear();
+                }
+                
+                ui.add(egui::Slider::new(&mut self.rng_selected_index, 0..=(RNG_SEQUENCE.len() - 1)).text("RNG position"));
+                
+                let roll = match self.rng_selected_roll_type {
+                    Some(t) => {
+                        let desc = &ROLL_DESCRIPTIONS[t];
+                        RngDescription::new(desc.label("<Character>"), if desc.has_subject() { RollCategory::Character(0) } else { RollCategory::NonCharacter }, Some(t), RNG_SEQUENCE[self.rng_selected_index])
+                    }
+                    None => return,
+                };
+
+                ui.separator();
+
+                let options = roll.options();
+
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        ui.label("Distribution");
+
+                        ui.add_enabled(!self.rng_selected_outcomes.is_empty(), egui::Checkbox::new(&mut self.rng_distribution_binary, "By desired outcome"));
+
+                        let half_range = (RNG_SEQUENCE.len() / 2) as isize;
+                        ui.add(egui::Slider::new(&mut self.rng_distribution_range_min, -half_range..=0).text("Min"));
+                        ui.add(egui::Slider::new(&mut self.rng_distribution_range_max, 0..=half_range).text("Max"));
+
+                        let distribution = roll.distribution(self.rng_distribution_range_min, self.rng_distribution_range_max);
+                        let total = distribution.iter().map(|d| d.1).sum::<usize>() as f32;
+
+                        if self.rng_distribution_binary {
+                            let mut count_desired = 0usize;
+                            for (value, count) in distribution {
+                                if self.rng_selected_outcomes.contains(value.as_str()) {
+                                    count_desired += count;
+                                }
+                            }
+
+                            let desired_percent = count_desired as f32 / total * 100.0;
+                            ui.label(format!("Desired: {desired_percent:.2}%"));
+                        } else {
+                            for (value, count) in distribution {
+                                let percent = count as f32 / total * 100.0;
+                                ui.label(format!("{value}: {percent:.2}%"));
+                            }
+                        }
+                    });
+
+                    if !options.is_empty() {
+                        ui.separator();
+
+                        ui.vertical(|ui| {
+                            ui.label("Desired outcomes");
+
+                            for option in options {
+                                let mut is_checked = self.rng_selected_outcomes.contains(option);
+                                ui.checkbox(&mut is_checked, String::from(*option));
+                                if is_checked {
+                                    self.rng_selected_outcomes.insert(*option);
+                                } else {
+                                    self.rng_selected_outcomes.retain(|o| o != option);
+                                }
+                            }
+                        });
+                    }
+                });
+                
+                if self.rng_selected_outcomes.is_empty() {
+                    return;
+                }
+
+                let values = roll
+                    .values_in_range(self.rng_distribution_range_min, self.rng_distribution_range_max)
+                    .into_iter()
+                    .map(|(i, v)| (i, self.rng_selected_outcomes.contains(v.as_str())))
+                    .collect::<Vec<_>>();
+                
+                if values.is_empty() {
+                    return;
+                }
+                
+                ui.separator();
+                
+                ui.label("Runs");
+                ui.add(egui::Slider::new(&mut self.rng_run_threshold, 0.0..=100.0).text("Threshold"));
+                ui.add(egui::Slider::new(&mut self.rng_run_window_size, 2..=100).text("Window size"));
+                
+                let mut prefixes = Vec::with_capacity(values.len() + 1);
+                prefixes.push(0usize);
+                for (_, value) in &values {
+                    prefixes.push(prefixes.last().unwrap() + if *value { 1 } else { 0 });
+                }
+
+                let num_points = values.len().saturating_sub(self.rng_run_window_size).max(1);
+                let mut points = Vec::with_capacity(num_points);
+                let mut threshold_regions: Vec<Range<usize>> = Vec::new();
+                let f_window = self.rng_run_window_size as f64;
+                for i in 0..num_points {
+                    let end = (i + self.rng_run_window_size).min(values.len());
+                    let desired_count = prefixes[end] - prefixes[i];
+                    let desired_percent = (desired_count as f64 / f_window) * 100.0;
+                    let index = values[i].0;
+                    points.push([index as f64, desired_percent]);
+
+                    if desired_percent >= self.rng_run_threshold {
+                        if let Some(region) = threshold_regions.last_mut() && i < region.end {
+                            region.end = end;
+                        } else {
+                            threshold_regions.push(i..end);
+                        }
+                    }
+                }
+
+                ui.collapsing("Run list", |ui| {
+                    for region in threshold_regions {
+                        let size = region.end - region.start;
+                        let desired_count = prefixes[region.end] - prefixes[region.start];
+                        let desired_percent = (desired_count as f64 / (size as f64)) * 100.0;
+                        let start = values[region.start].0;
+                        let end = values[region.end - 1].0;
+                        ui.label(format!("{start} to {end} (size = {size}; {desired_percent:.2}%)"));
+                    }
+                });
+
+                let desired_line = Line::new("desired", points);
+                let threshold_line = Line::new("threshold", vec![
+                    [values[0].0 as f64, self.rng_run_threshold],
+                    [values.last().unwrap().0 as f64, self.rng_run_threshold],
+                ]);
+                Plot::new("rng_runs")
+                    .x_axis_label("RNG position")
+                    .y_axis_label("Desired %")
+                    .show(ui, |plot_ui| {
+                        plot_ui.line(desired_line);
+                        plot_ui.line(threshold_line);
+                    });
+            });
+
+        if self.is_rng_explore_window_open {
+            self.is_rng_explore_window_open = is_rng_explore_window_open;
+        }
+    }
+
     fn compare_filter_window(&mut self, ctx: &Context) {
         let mut is_compare_filter_window_open = self.is_compare_filter_window_open;
 
@@ -1681,6 +1812,11 @@ impl eframe::App for App {
                             self.compare_filter = RoomFilter::basic(room_id);
                         }
                         self.is_compare_filter_window_open = true;
+                        ui.close_menu();
+                    }
+
+                    if ui.button("Explore RNG").clicked() {
+                        self.is_rng_explore_window_open = true;
                         ui.close_menu();
                     }
                 });
@@ -2086,6 +2222,7 @@ impl eframe::App for App {
         // display modals if necessary
         self.error_modal(ctx);
         self.compare_filter_window(ctx);
+        self.rng_explore_window(ctx);
 
         let repaint_duration = if self.active_recording().is_some() && self.is_recording_playing {
             let now = Instant::now();
