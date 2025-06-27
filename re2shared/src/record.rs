@@ -23,6 +23,7 @@ pub enum CharacterField {
     #[brw(magic = 5u8)] Size(UFixed16, UFixed16),
     #[brw(magic = 8u8)] Health(i16),
     #[brw(magic = 6u8)] Floor(u8),
+    #[brw(magic = 14u8)] PartOffset(Fixed16, Fixed16),
     #[brw(magic = 10u8)] Type(u8),
     #[brw(magic = 1u8)] Id(u8),
     #[brw(magic = 4u8)] Motion(i16),

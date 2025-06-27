@@ -1,6 +1,6 @@
 use re2shared::record::*;
 use residat::common::*;
-use residat::re2::{Character, CharacterId, NUM_CHARACTERS, NUM_OBJECTS};
+use residat::re2::{Character, NUM_CHARACTERS, NUM_OBJECTS};
 
 use crate::game::Game;
 
@@ -11,6 +11,8 @@ pub struct CharacterState {
     id: u8,
     transform: MATRIX,
     part_translation: VECTOR,
+    part_offset_x: Fixed16,
+    part_offset_z: Fixed16,
     model_part_transforms: Vec<MATRIX>,
     motion_angle: Fixed16,
     motion: i16,
@@ -30,6 +32,8 @@ impl CharacterState {
             id: char.id,
             transform: char.transform.clone(),
             part_translation: char.parts[0].pos.clone(),
+            part_offset_x: char.parts[0].x_offset,
+            part_offset_z: char.parts[0].z_offset,
             model_part_transforms: unsafe { char.model_parts() }.into_iter().map(|p| p.composite_transform.clone()).collect(),
             motion_angle: char.motion_angle,
             motion: char.motion,
@@ -42,15 +46,10 @@ impl CharacterState {
         }
     }
     
-    fn model_parts_needed(&self) -> &'static [usize] {
-        let Ok(id) = CharacterId::try_from(self.id) else {
-            return &[];
-        };
-        
-        match id {
-            CharacterId::Dog => &[4], // dog
-            CharacterId::G2 => &[6, 11], // G2
-            _ if id.is_player() => &[0],
+    const fn model_parts_needed(&self) -> &'static [usize] {
+        match self.id {
+            32 => &[4], // dog
+            49 => &[6, 11], // G2
             _ => &[],
         }
     }
@@ -109,6 +108,12 @@ impl CharacterState {
         if self.part_translation != char.parts[0].pos {
             self.part_translation = char.parts[0].pos.clone();
             fields.push(CharacterField::PartTranslation(0, char.parts[0].pos.clone()));
+        }
+        
+        if self.part_offset_x != char.parts[0].x_offset || self.part_offset_z != char.parts[0].z_offset {
+            self.part_offset_x = char.parts[0].x_offset;
+            self.part_offset_z = char.parts[0].z_offset;
+            fields.push(CharacterField::PartOffset(char.parts[0].x_offset, char.parts[0].z_offset));       
         }
         
         let model_parts_needed = self.model_parts_needed();

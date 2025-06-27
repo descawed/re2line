@@ -8,14 +8,16 @@ use crate::record::State;
 pub struct Motion {
     pub from: Vec2,
     pub to: Vec2,
+    pub offset: Vec2,
     pub size: Vec2,
 }
 
 impl Motion {
-    pub const fn new(from: Vec2, to: Vec2, size: Vec2) -> Self {
+    pub const fn new(from: Vec2, to: Vec2, offset: Vec2, size: Vec2) -> Self {
         Self {
             from,
             to,
+            offset,
             size,
         }
     }
@@ -24,6 +26,7 @@ impl Motion {
         Self {
             from: point,
             to: point,
+            offset: Vec2::zero(),
             size: Vec2::zero(),
         }
     }
@@ -394,213 +397,187 @@ impl DiamondCollider {
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
         let point = point.into();
 
+        // unlike other collision types, when we clip motion, we can just force the character back to
+        // the original position. so, to determine whether the motion was clipped, we need to ensure
+        // that the from and to positions are different.
+        let motion = Motion::new(point - Vec2::new(1, 0), point, Vec2::zero(), Vec2::zero());
+        self.clip_motion(&motion) != point
+    }
+
+    pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
+        if !motion.is_destination_in_rect(self.pos, self.size) {
+            return motion.to;
+        }
+
         let center_x = (self.size.x >> 1) + self.pos.x;
         let center_z = (self.size.z >> 1) + self.pos.z;
 
-        let quadrant = (((point.z - center_z) >> 0x1e).0 & 2) | (((point.x - center_x) >> 0x1f).0 & 1);
+        let quadrant = (((motion.to.z - center_z) >> 0x1e).0 & 2) | (((motion.to.x - center_x) >> 0x1f).0 & 1);
         match quadrant {
-            0 => self.is_point_in_quadrant0(point),
-            1 => self.is_point_in_quadrant1(point),
-            2 => self.is_point_in_quadrant2(point),
-            3 => self.is_point_in_quadrant3(point),
+            0 => self.clip_motion_in_quadrant0(motion),
+            1 => self.clip_motion_in_quadrant1(motion),
+            2 => self.clip_motion_in_quadrant2(motion),
+            3 => self.clip_motion_in_quadrant3(motion),
             _ => unreachable!(),
         }
     }
-
-    const fn is_point_in_quadrant0(&self, point: Vec2) -> bool {
-        let center_x = (self.size.x.0 >> 1) + self.pos.x.0;
-        let center_z = (self.size.z.0 >> 1) + self.pos.z.0;
-
-        let far_x = self.pos.x.0 + self.size.x.0;
-        let far_z = self.pos.z.0 + self.size.z.0;
-
-        let px = point.x.0;
-        let pz = point.z.0;
-
-        let x_diff1 = far_x - center_x;
-        let x_diff2 = px - center_x;
-
-        let z_diff1 = center_z - far_z;
-        let z_diff2 = pz - far_z;
-
-        let term1 = (x_diff2 * z_diff1) / x_diff1;
-
-        term1 > z_diff2
-        /*if term1 <= z_diff2 {
-            return false;
-        }
-
-        let z_diff3 = far_z - center_z;
-
-        let term2 = z_diff2 - term1;
-        let term3 = (x_diff1 * term2) / z_diff3;
-
-        let term4 = term2 * term2 + term3 * term3;
-
-        let term5 = (term3 * term2 * term2) / term4;
-        let term6 = (term3 * term3 * term2) / term4;
-
-        let term5_sign = term5 >> 0x1f;
-        let term6_sign = term6 >> 0x1f;
-
-        if (term5 ^ term5_sign) - term5_sign < 0x191 && (term6 ^ term6_sign) - term6_sign < 0x191 {
-            let new_x = px - term5;
-            let new_z = pz - term6;
-
-            if (new_x / 0x12 - center_x / 0x12) * (center_z / 0x12 - far_z / 0x12) - (new_z / 0x12 - far_z / 0x12) * (far_x / 0x12 - center_x / 0x12) < 1 {
-                return true;
-            }
-        }
-
-        false*/
+    
+    fn adjustments(a: Fixed32, b: Fixed32) -> (Fixed32, Fixed32) {
+        let denom = a.0 * a.0 + b.0 * b.0;
+        let x = Fixed32(a.0.overflowing_mul(b.0).0.overflowing_mul(b.0).0 / denom);
+        let z = Fixed32(a.0.overflowing_mul(a.0).0.overflowing_mul(b.0).0 / denom);
+        (x, z)
     }
 
-    const fn is_point_in_quadrant1(&self, point: Vec2) -> bool {
-        let x = self.pos.x.0;
+    fn clip_motion_in_quadrant0(&self, motion: &Motion) -> Vec2 {
+        let directional_size = motion.size_in_direction_of(self.pos, self.size);
 
-        let center_x = (self.size.x.0 >> 1) + self.pos.x.0;
-        let center_z = (self.size.z.0 >> 1) + self.pos.z.0;
+        let center = (self.size >> 1) + self.pos;
+        let far = self.pos + self.size;
 
-        let far_z = self.pos.z.0 + self.size.z.0;
+        let x_diff1 = far.x - center.x + directional_size;
+        let x_diff2 = (motion.offset.x - center.x) + motion.to.x;
 
-        let px = point.x.0;
-        let pz = point.z.0;
+        let z_diff1 = center.z - far.z - directional_size;
+        let z_diff2 = (motion.offset.z - far.z) + motion.to.z;
 
-        let x_diff1 = center_x - x;
-        let x_diff2 = px - x;
+        let term1 = Fixed32((x_diff2.0 * z_diff1.0) / x_diff1.0);
 
-        let z_diff1 = far_z - center_z;
-        let z_diff2 = pz - center_z;
-
-        let term1 = (x_diff2 * z_diff1) / x_diff1;
-
-        term1 > z_diff2
-        /*if term1 <= z_diff2 {
-            return false;
+        if term1 <= z_diff2 - directional_size {
+            return motion.to;
         }
 
-        let term2 = z_diff2 - term1;
-        let term3 = (x_diff1 * term2) / z_diff1;
+        let z_diff3 = (far.z - center.z) + directional_size;
 
-        let term4 = term2 * term2 + term3 * term3;
-
-        let term5 = (term3 * term2 * term2) / term4;
-        let term6 = (term3 * term3 * term2) / term4;
-
-        let term5_sign = term5 >> 0x1f;
-        let term6_sign = term6 >> 0x1f;
-
-        if (term5 ^ term5_sign) - term5_sign < 0x191 && (term6 ^ term6_sign) - term6_sign < 0x191 {
-            let new_x = px + term5;
-            let new_z = pz - term6;
-
-            let x_div = x / 0x12;
-
-            if (new_x / 0x12 - x_div) * (far_z / 0x12 - center_z / 0x12) - (new_z / 0x12 - center_z / 0x12) * (center_x / 0x12 - x_div) < 1 {
-                return true;
-            }
-        }
-
-        false*/
-    }
-
-    const fn is_point_in_quadrant2(&self, point: Vec2) -> bool {
-        let z = self.pos.z.0;
-
-        let center_x = (self.size.x.0 >> 1) + self.pos.x.0;
-        let center_z = (self.size.z.0 >> 1) + self.pos.z.0;
-
-        let far_x = self.pos.x.0 + self.size.x.0;
-
-        let px = point.x.0;
-        let pz = point.z.0;
-
-        let x_diff1 = far_x - center_x;
-        let x_diff2 = px - center_x;
-
-        let z_diff1 = center_z - z;
-        let z_diff2 = pz - z;
-
-        let term1 = (x_diff2 * z_diff1) / x_diff1;
+        let term2 = z_diff2 - term1 - directional_size;
+        let term3 = Fixed32((x_diff1.0 * term2.0) / z_diff3.0);
         
-        z_diff2 > term1
-        /*if z_diff2 <= term1 {
-            return false;
+        let (x_adjustment, z_adjustment) = Self::adjustments(term3, term2);
+        if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
+            Vec2::new(motion.to.x - x_adjustment, motion.to.z - z_adjustment)
+            /*let new_x = (motion.to.x - x_adjustment + motion.offset.x).0;
+            let new_z = (motion.to.z - z_adjustment + motion.offset.z).0;
+
+            if (new_x / 0x12 - center.x.0 / 0x12) * (center.z.0 / 0x12 - far.z.0 / 0x12) - (new_z / 0x12 - far.z.0 / 0x12) * (far.x.0 / 0x12 - center.x.0 / 0x12) < 1 {
+                return motion.to;
+            }*/
+        } else {
+            motion.from
         }
-
-        let term2 = z_diff2 - term1;
-        let term3 = (x_diff1 * term2) / z_diff1;
-
-        let term4 = term2 * term2 + term3 * term3;
-
-        let term5 = (term3 * term2 * term2) / term4;
-        let term6 = (term3 * term3 * term2) / term4;
-
-        let term5_sign = term5 >> 0x1f;
-        let term6_sign = term6 >> 0x1f;
-
-        if (term5 ^ term5_sign) - term5_sign < 0x191 && (term6 ^ term6_sign) - term6_sign < 0x191 {
-            let new_x = px + term5;
-            let new_z = pz - term6;
-
-            let z_div = z / 0x12;
-
-            if -1 < (new_x / 0x12 - center_x / 0x12) * (center_z / 0x12 - z_div) - (new_z / 0x12 - z_div) * (far_x / 0x12 - center_x / 0x12) {
-                return true;
-            }
-        }
-
-        false*/
     }
 
-    const fn is_point_in_quadrant3(&self, point: Vec2) -> bool {
-        let x = self.pos.x.0;
-        let z = self.pos.z.0;
+    fn clip_motion_in_quadrant1(&self, motion: &Motion) -> Vec2 {
+        let directional_size = motion.size_in_direction_of(self.pos, self.size);
 
-        let center_x = (self.size.x.0 >> 1) + self.pos.x.0;
-        let center_z = (self.size.z.0 >> 1) + self.pos.z.0;
+        let center = (self.size >> 1) + self.pos;
+        let far = self.pos + self.size;
 
-        let px = point.x.0;
-        let pz = point.z.0;
+        let x_diff1 = center.x - self.pos.x + directional_size;
+        let x_diff2 = (directional_size - self.pos.x) + motion.to.x + directional_size;
 
-        let x_diff1 = center_x - x;
-        let x_diff2 = px - x;
+        let z_diff1 = far.z - center.z + directional_size;
+        let z_diff2 = motion.to.z + (motion.offset.z - center.z);
 
-        let z_diff1 = z - center_z;
-        let z_diff2 = pz - center_z;
+        let term1 = Fixed32((x_diff2.0 * z_diff1.0) / x_diff1.0);
 
-        let term1 = (x_diff2 * z_diff1) / x_diff1;
-
-        z_diff2 > term1
-        /*if z_diff2 <= term1 {
-            return false;
+        if term1 <= z_diff2 {
+            return motion.to;
         }
-
-        let z_diff3 = center_z - z;
 
         let term2 = z_diff2 - term1;
-        let term3 = (x_diff1 * term2) / z_diff3;
+        let term3 = Fixed32((x_diff1.0 * term2.0) / z_diff1.0);
+        
+        let (x_adjustment, z_adjustment) = Self::adjustments(term3, term2);
+        if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
+            Vec2::new(motion.to.x + x_adjustment, motion.to.z - z_adjustment)
+            /*let new_x = (motion.to.x + x_adjustment + motion.offset.x).0;
+            let new_z = (motion.to.z - z_adjustment + motion.offset.z).0;
 
-        let term4 = term2 * term2 + term3 * term3;
+            let x_div = self.pos.x.0 / 0x12;
 
-        let term5 = (term3 * term2 * term2) / term4;
-        let term6 = (term3 * term3 * term2) / term4;
+            if (new_x / 0x12 - x_div) * (far.z.0 / 0x12 - center.z.0 / 0x12) - (new_z / 0x12 - center.z.0 / 0x12) * (center.x.0 / 0x12 - x_div) < 1 {
+                return motion.to;
+            }*/
+        } else {
+            motion.from
+        }
+    }
 
-        let term5_sign = term5 >> 0x1f;
-        let term6_sign = term6 >> 0x1f;
+    fn clip_motion_in_quadrant2(&self, motion: &Motion) -> Vec2 {
+        let directional_size = motion.size_in_direction_of(self.pos, self.size);
 
-        if (term5 ^ term5_sign) - term5_sign < 0x191 && (term6 ^ term6_sign) - term6_sign < 0x191 {
-            let new_x = px - term5;
-            let new_z = pz - term6;
+        let center = (self.size >> 1) + self.pos;
+        let far = self.pos + self.size;
 
-            let x_div = x / 0x12;
+        let x_diff1 = far.x - center.x + directional_size;
+        let x_diff2 = (motion.offset.x - center.x) + motion.to.x;
 
-            if -1 < (new_x / 0x12 - x_div) * (z / 0x12 - center_z / 0x12) - (new_z / 0x12 - center_z / 0x12) * (center_x / 0x12 - x_div) {
-                return true;
-            }
+        let z_diff1 = center.z - self.pos.z + directional_size;
+        let z_diff2 = (motion.offset.z - self.pos.z) + motion.to.z;
+
+        let term1 = Fixed32((x_diff2.0 * z_diff1.0) / x_diff1.0);
+        
+        if z_diff2 + directional_size <= term1 {
+            return motion.to;
         }
 
-        false*/
+        let term2 = z_diff2 - term1 + directional_size;
+        let term3 = Fixed32((x_diff1.0 * term2.0) / z_diff1.0);
+        
+        let (x_adjustment, z_adjustment) = Self::adjustments(term3, term2);
+        if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
+            Vec2::new(motion.to.x + x_adjustment, motion.to.z - z_adjustment)
+            /*let mut clipped = motion.to;
+            clipped.x = motion.to.x + x_adjustment;
+            clipped.z = motion.to.z - z_adjustment;
+            clipped
+
+            let z_div = self.pos.z.0 / 0x12;
+
+            if -1 < ((clipped.x + motion.offset.x).0 / 0x12 - center.x.0 / 0x12) * (center.z.0 / 0x12 - z_div) - ((clipped.z + motion.offset.z).0 / 0x12 - z_div) * (far.x.0 / 0x12 - center.x.0 / 0x12) {
+                return motion.to;
+            }*/
+        } else {
+            motion.from
+        }
+    }
+
+    fn clip_motion_in_quadrant3(&self, motion: &Motion) -> Vec2 {
+        let directional_size = motion.size_in_direction_of(self.pos, self.size);
+
+        let center = (self.size >> 1) + self.pos;
+
+        let x_diff1 = center.x - self.pos.x + directional_size;
+        let x_diff2 = (motion.offset.x - self.pos.x) + motion.to.x + directional_size;
+
+        let z_diff1 = self.pos.z - center.z - directional_size;
+        let z_diff2 = motion.to.z + (motion.offset.z - center.z);
+
+        let term1 = Fixed32((x_diff2.0 * z_diff1.0) / x_diff1.0);
+
+        if z_diff2 <= term1 {
+            return motion.to;
+        }
+
+        let z_diff3 = center.z - self.pos.z + directional_size;
+
+        let term2 = z_diff2 - term1;
+        let term3 = Fixed32((x_diff1.0 * term2.0) / z_diff3.0);
+        
+        let (x_adjustment, z_adjustment) = Self::adjustments(term3, term2);
+        if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
+            Vec2::new(motion.to.x - x_adjustment, motion.to.z - z_adjustment)
+            /*let new_x = (motion.to.x - x_adjustment + motion.offset.x).0;
+            let new_z = (motion.to.z - z_adjustment + motion.offset.z).0;
+
+            let x_div = self.pos.x.0 / 0x12;
+
+            if -1 < (new_x / 0x12 - x_div) * (self.pos.z.0 / 0x12 - center.z.0 / 0x12) - (new_z / 0x12 - center.z.0 / 0x12) * (center.x.0 / 0x12 - x_div) {
+                return motion.to;
+            }*/
+        } else {
+            motion.from
+        }
     }
 }
 
@@ -1032,6 +1009,7 @@ impl Collider {
         match self {
             Self::Rect(rect) => rect.clip_motion(motion),
             Self::Ellipse(ellipse) => ellipse.clip_motion(motion),
+            Self::Diamond(diamond) => diamond.clip_motion(motion),
             _ => motion.to,
         }
     }

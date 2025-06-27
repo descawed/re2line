@@ -189,6 +189,7 @@ impl State {
                             character.set_part_center(Vec2::new(vector.x, vector.z));
                         }
                     }
+                    CharacterField::PartOffset(x, z) => character.set_part_offset(Vec2::new(*x, *z)),
                     CharacterField::ModelPartTransform(i, matrix) => {
                         let pos = Vec2::new(matrix.t.x, matrix.t.z);
                         character.set_model_part_center(*i as usize, pos);
@@ -244,7 +245,7 @@ impl State {
                     CharacterField::State(_) | CharacterField::Id(_) | CharacterField::MotionAngle(_)
                     | CharacterField::Motion(_) | CharacterField::Health(_) | CharacterField::Type(_)
                     | CharacterField::Velocity(_) | CharacterField::Transform(_)
-                    | CharacterField::ModelPartTransform(_, _) => (),
+                    | CharacterField::ModelPartTransform(_, _) | CharacterField::PartOffset(_, _) => (),
                 }
             }
         }
