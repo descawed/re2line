@@ -31,6 +31,15 @@ impl Motion {
         }
     }
 
+    pub const fn point_with_motion(point: Vec2) -> Self {
+        Self {
+            from: Vec2 { x: point.x.dec(), z: point.z },
+            to: point,
+            offset: Vec2::zero(),
+            size: Vec2::zero(),
+        }
+    }
+
     pub fn angle(&self) -> Fixed32 {
         self.from.angle_between(&self.to)
     }
@@ -201,6 +210,13 @@ fn circle_clip_motion(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
 
 fn circle_contains_point(pos: Vec2, size: Vec2, point: Vec2) -> bool {
     circle_clip_motion(pos, size, &Motion::point(point)) != point
+}
+
+const fn tri_adjustments(a: Fixed32, b: Fixed32) -> (Fixed32, Fixed32) {
+    let denom = a.0 * a.0 + b.0 * b.0;
+    let x = Fixed32(a.0.overflowing_mul(b.0).0.overflowing_mul(b.0).0 / denom);
+    let z = Fixed32(a.0.overflowing_mul(a.0).0.overflowing_mul(b.0).0 / denom);
+    (x, z)
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -397,11 +413,10 @@ impl DiamondCollider {
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
         let point = point.into();
 
-        // unlike other collision types, when we clip motion, we can just force the character back to
-        // the original position. so, to determine whether the motion was clipped, we need to ensure
-        // that the from and to positions are different.
-        let motion = Motion::new(point - Vec2::new(1, 0), point, Vec2::zero(), Vec2::zero());
-        self.clip_motion(&motion) != point
+        // unlike some other collision types, when we clip motion, we can just force the character
+        // back to the original position. so, to determine whether the motion was clipped, we need
+        // to ensure that the from and to positions are different.
+        self.clip_motion(&Motion::point_with_motion(point)) != point
     }
 
     pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
@@ -420,13 +435,6 @@ impl DiamondCollider {
             3 => self.clip_motion_in_quadrant3(motion),
             _ => unreachable!(),
         }
-    }
-    
-    fn adjustments(a: Fixed32, b: Fixed32) -> (Fixed32, Fixed32) {
-        let denom = a.0 * a.0 + b.0 * b.0;
-        let x = Fixed32(a.0.overflowing_mul(b.0).0.overflowing_mul(b.0).0 / denom);
-        let z = Fixed32(a.0.overflowing_mul(a.0).0.overflowing_mul(b.0).0 / denom);
-        (x, z)
     }
 
     fn clip_motion_in_quadrant0(&self, motion: &Motion) -> Vec2 {
@@ -451,8 +459,8 @@ impl DiamondCollider {
 
         let term2 = z_diff2 - term1 - directional_size;
         let term3 = Fixed32((x_diff1.0 * term2.0) / z_diff3.0);
-        
-        let (x_adjustment, z_adjustment) = Self::adjustments(term3, term2);
+
+        let (x_adjustment, z_adjustment) = tri_adjustments(term3, term2);
         if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
             Vec2::new(motion.to.x - x_adjustment, motion.to.z - z_adjustment)
             /*let new_x = (motion.to.x - x_adjustment + motion.offset.x).0;
@@ -486,8 +494,8 @@ impl DiamondCollider {
 
         let term2 = z_diff2 - term1;
         let term3 = Fixed32((x_diff1.0 * term2.0) / z_diff1.0);
-        
-        let (x_adjustment, z_adjustment) = Self::adjustments(term3, term2);
+
+        let (x_adjustment, z_adjustment) = tri_adjustments(term3, term2);
         if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
             Vec2::new(motion.to.x + x_adjustment, motion.to.z - z_adjustment)
             /*let new_x = (motion.to.x + x_adjustment + motion.offset.x).0;
@@ -523,8 +531,8 @@ impl DiamondCollider {
 
         let term2 = z_diff2 - term1 + directional_size;
         let term3 = Fixed32((x_diff1.0 * term2.0) / z_diff1.0);
-        
-        let (x_adjustment, z_adjustment) = Self::adjustments(term3, term2);
+
+        let (x_adjustment, z_adjustment) = tri_adjustments(term3, term2);
         if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
             Vec2::new(motion.to.x + x_adjustment, motion.to.z - z_adjustment)
             /*let mut clipped = motion.to;
@@ -563,8 +571,8 @@ impl DiamondCollider {
 
         let term2 = z_diff2 - term1;
         let term3 = Fixed32((x_diff1.0 * term2.0) / z_diff3.0);
-        
-        let (x_adjustment, z_adjustment) = Self::adjustments(term3, term2);
+
+        let (x_adjustment, z_adjustment) = tri_adjustments(term3, term2);
         if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
             Vec2::new(motion.to.x - x_adjustment, motion.to.z - z_adjustment)
             /*let new_x = (motion.to.x - x_adjustment + motion.offset.x).0;
@@ -736,163 +744,177 @@ impl TriangleCollider {
         })
     }
 
-    fn contains_point_top_left(&self, point: Vec2) -> bool {
-        let x1 = self.pos.x.0;
-        let z1 = self.pos.z.0;
+    fn clip_motion_top_left(&self, motion: &Motion) -> Vec2 {
+        let directional_size = motion.size_in_direction_of(self.pos, self.size);
 
-        let x2 = self.pos.x.0 + self.size.x.0;
-        let z2 = self.pos.z.0 + self.size.z.0;
+        let dist = motion.to - self.pos;
+        let far = self.pos + self.size;
 
-        let px = point.x.0;
-        let pz = point.z.0;
+        let width = self.size.x + directional_size;
+        let height = self.size.z + directional_size;
 
-        let width = x2 - x1;
-        let height = z2 - z1;
-
-        let x_dist = px - x1;
-        let z_dist = pz - z1;
-
-        let scaled_dist = (height * x_dist) / width;
-        if z_dist <= scaled_dist {
-            return false;
+        let scaled_dist = Fixed32((height.0 * dist.x.0) / width.0);
+        if (dist.z + directional_size) <= scaled_dist {
+            return motion.to;
         }
 
-        let x1_div = x1 / 0x12;
-        let z1_div = z1 / 0x12;
-        let z2_div = z2 / 0x12;
-        let x2_div = x2 / 0x12;
+        let x1_div = self.pos.x.0 / 0x12;
+        let z1_div = self.pos.z.0 / 0x12;
+        let z2_div = far.z.0 / 0x12;
+        let x2_div = far.x.0 / 0x12;
         let height_div = z2_div - z1_div;
         let width_div = x2_div - x1_div;
 
-        if (((px / 0x12) * height_div - (pz / 0x12) * width_div) - z2_div * x1_div) + x2_div * z1_div < 0 {
-            if x_dist < self.size.x.0 && z_dist < self.size.z.0 {
-                return rect_contains_point(self.pos, self.size, point);
+        if (((motion.from.x.0 / 0x12) * height_div - (motion.from.z.0 / 0x12) * width_div) - z2_div * x1_div) + x2_div * z1_div < 0 {
+            if (dist.x + directional_size) < (self.size.x + directional_size) && dist.z < (self.size.z + directional_size) {
+                return rect_clip_motion(self.pos, self.size, motion);
+            }
+        } else {
+            let term1 = (dist.z - scaled_dist) + directional_size;
+            let term2 = Fixed32((width.0 * term1.0) / height.0);
+            let (x_adjustment, z_adjustment) = tri_adjustments(term1, term2);
+            if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
+                return Vec2::new(motion.to.x - x_adjustment, motion.to.z - z_adjustment);
             }
         }
 
-        false
+        motion.to
     }
 
-    fn contains_point_top_right(&self, point: Vec2) -> bool {
-        let x1 = self.pos.x.0;
-        let z1 = self.pos.z.0;
+    fn clip_motion_top_right(&self, motion: &Motion) -> Vec2 {
+        let directional_size = motion.size_in_direction_of(self.pos, self.size);
 
-        let x2 = self.pos.x.0 + self.size.x.0;
-        let z2 = self.pos.z.0 + self.size.z.0;
+        let dist = motion.to - self.pos;
+        let far = self.pos + self.size;
 
-        let px = point.x.0;
-        let pz = point.z.0;
+        let z_dist = dist.z - self.size.z;
 
-        let width = self.size.x.0;
-        let height = self.size.z.0;
-
-        let x_dist = px - x1;
-        let z_dist = pz - z1 - height;
-
-        let scaled_dist = (height * x_dist) / width;
-        if scaled_dist <= -z_dist {
-            return false;
+        let scaled_dist = Fixed32(((self.size.z + (directional_size << 1)).0 * (dist.x + directional_size).0) / (self.size.x + (directional_size << 1)).0);
+        if z_dist <= -scaled_dist {
+            return motion.to;
         }
 
-        let x1_div = x1 / 0x12;
-        let z1_div = z1 / 0x12;
-        let z2_div = z2 / 0x12;
-        let x2_div = x2 / 0x12;
+        let x1_div = self.pos.x.0 / 0x12;
+        let z1_div = self.pos.z.0 / 0x12;
+        let z2_div = far.z.0 / 0x12;
+        let x2_div = far.x.0 / 0x12;
 
         let z1_minus_z2_div = z1_div - z2_div;
         let x2_minus_x1_div = x2_div - x1_div;
 
-        if (((px / 0x12) * z1_minus_z2_div - (pz / 0x12) * x2_minus_x1_div) - z1_div * x1_div) + x2_div * z2_div < 0 {
-            if x_dist < self.size.x.0 && (pz - z1) < self.size.z.0 {
-                return rect_contains_point(self.pos, self.size, point);
+        if (((motion.from.x.0 / 0x12) * z1_minus_z2_div - (motion.from.z.0 / 0x12) * x2_minus_x1_div) - z1_div * x1_div) + x2_div * z2_div < 0 {
+            if dist.x < (self.size.x + directional_size) && dist.z < (self.size.z + directional_size) {
+                return rect_clip_motion(self.pos, self.size, motion);
+            }
+        } else {
+            let term1 = z_dist + scaled_dist;
+            let term2 = Fixed32(((self.size.x + directional_size).0 * term1.0) / (self.size.z + directional_size).0);
+            let (x_adjustment, z_adjustment) = tri_adjustments(term1, term2);
+            if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
+                return Vec2::new(motion.to.x - x_adjustment, motion.to.z - z_adjustment);
             }
         }
 
-        false
+        motion.to
     }
 
-    fn contains_point_bottom_right(&self, point: Vec2) -> bool {
+    fn clip_motion_bottom_right(&self, motion: &Motion) -> Vec2 {
+        let directional_size = motion.size_in_direction_of(self.pos, self.size);
+
         let x1 = self.pos.x.0;
         let z1 = self.pos.z.0;
 
-        let x2 = self.pos.x.0 + self.size.x.0;
-        let z2 = self.pos.z.0 + self.size.z.0;
+        let far = self.pos + self.size;
+        let dist = motion.to - self.pos;
 
-        let px = point.x.0;
-        let pz = point.z.0;
+        let width = far.x - self.pos.x + directional_size;
+        let height = far.z - self.pos.z + directional_size;
 
-        let width = x2 - x1;
-        let height = z2 - z1;
-
-        let x_dist = px - x1;
-        let z_dist = pz - z1;
-
-        let scaled_dist = (height * x_dist) / width;
-        if scaled_dist <= z_dist {
-            return false;
+        let scaled_dist = Fixed32((height.0 * (directional_size + dist.x).0) / width.0);
+        if scaled_dist <= dist.z {
+            return motion.to;
         }
 
         let x1_div = x1 / 0x12;
         let z1_div = z1 / 0x12;
-        let z2_div = z2 / 0x12;
-        let x2_div = x2 / 0x12;
+        let z2_div = far.z.0 / 0x12;
+        let x2_div = far.x.0 / 0x12;
         let height_div = z2_div - z1_div;
         let width_div = x2_div - x1_div;
 
-        if (((px / 0x12) * height_div - (pz / 0x12) * width_div) - z2_div * x1_div) + x2_div * z1_div >= 1 {
-            if x_dist < self.size.x.0 && z_dist < self.size.z.0 {
-                return rect_contains_point(self.pos, self.size, point);
+        if (((motion.from.x.0 / 0x12) * height_div - (motion.from.z.0 / 0x12) * width_div) - z2_div * x1_div) + x2_div * z1_div < 1 {
+            let term1 = dist.z - scaled_dist;
+            let term2 = Fixed32((width.0 * term1.0) / height.0);
+            let (x_adjustment, z_adjustment) = tri_adjustments(term1, term2);
+            if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
+                Vec2::new(motion.to.x + x_adjustment, motion.to.z - z_adjustment)
+            } else {
+                motion.from
             }
+        } else if dist.x < (self.size.x + directional_size) && (dist.z + directional_size) < (self.size.z + directional_size) {
+            rect_clip_motion(self.pos, self.size, motion)
+        } else {
+            motion.to
         }
-
-        false
     }
 
-    fn contains_point_bottom_left(&self, point: Vec2) -> bool {
+    fn clip_motion_bottom_left(&self, motion: &Motion) -> Vec2 {
+        let directional_size = motion.size_in_direction_of(self.pos, self.size);
+
         let x1 = self.pos.x.0;
         let z1 = self.pos.z.0;
 
-        let x2 = self.pos.x.0 + self.size.x.0;
-        let z2 = self.pos.z.0 + self.size.z.0;
+        let far = self.pos + self.size;
 
-        let px = point.x.0;
-        let pz = point.z.0;
+        let width = directional_size + (far.x - self.pos.x);
+        let height = (self.pos.z - far.z) - directional_size;
 
-        let width = x2 - x1;
-        let height = z1 - z2;
+        let dist = motion.to - self.pos;
 
-        let x_dist = px - x1;
-        let z_dist = pz - z1;
-
-        let scaled_dist = (height * x_dist) / width;
-        if scaled_dist <= (pz - z2) {
-            return false;
+        let scaled_dist = Fixed32((height.0 * dist.x.0) / width.0);
+        if scaled_dist <= (motion.to.z - far.z) - directional_size {
+            return motion.to;
         }
 
         let x1_div = x1 / 0x12;
-        let z2_div = z2 / 0x12;
-        let x2_div = x2 / 0x12;
+        let z2_div = far.z.0 / 0x12;
+        let x2_div = far.x.0 / 0x12;
         let height_div = z1 / 0x12 - z2_div;
         let width_div = x2_div - x1_div;
 
-        if (((px / 0x12) * height_div - (pz / 0x12) * width_div) - (z1 / 0x12) * x1_div) + x2_div * z2_div >= 1 {
-            if x_dist < self.size.x.0 && z_dist < self.size.z.0 {
-                return rect_contains_point(self.pos, self.size, point);
+        if (((motion.from.x.0 / 0x12) * height_div - (motion.from.z.0 / 0x12) * width_div) - (z1 / 0x12) * x1_div) + x2_div * z2_div < 1 {
+            let term1 = motion.to.z - far.z - scaled_dist - directional_size;
+            let term2 = Fixed32((width.0 * term1.0) / (far.z - self.pos.z + directional_size).0);
+            let (x_adjustment, z_adjustment) = tri_adjustments(term1, term2);
+            if x_adjustment.abs() < RECT_THRESHOLD && z_adjustment.abs() < RECT_THRESHOLD {
+                Vec2::new(motion.to.x - x_adjustment, motion.to.z - z_adjustment)
+            } else {
+                motion.from
             }
+        } else if (dist.x + directional_size) < (self.size.x + directional_size) && (dist.z + directional_size) < (self.size.z + directional_size) {
+            rect_clip_motion(self.pos, self.size, motion)
+        } else {
+            motion.to
+        }
+    }
+
+    pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
+        if !motion.is_destination_in_rect(self.pos, self.size) {
+            return motion.to;
         }
 
-        false
+        match self.type_ {
+            TriangleType::BottomLeft => self.clip_motion_bottom_left(motion),
+            TriangleType::BottomRight => self.clip_motion_bottom_right(motion),
+            TriangleType::TopLeft => self.clip_motion_top_left(motion),
+            TriangleType::TopRight => self.clip_motion_top_right(motion),
+        }
     }
 
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
         let point = point.into();
 
-        match self.type_ {
-            TriangleType::BottomLeft => self.contains_point_bottom_left(point),
-            TriangleType::BottomRight => self.contains_point_bottom_right(point),
-            TriangleType::TopLeft => self.contains_point_top_left(point),
-            TriangleType::TopRight => self.contains_point_top_right(point),
-        }
+        self.clip_motion(&Motion::point_with_motion(point)) != point
     }
 }
 
@@ -1010,7 +1032,9 @@ impl Collider {
             Self::Rect(rect) => rect.clip_motion(motion),
             Self::Ellipse(ellipse) => ellipse.clip_motion(motion),
             Self::Diamond(diamond) => diamond.clip_motion(motion),
-            _ => motion.to,
+            Self::Triangle(triangle) => triangle.clip_motion(motion),
+            // quads never have collision
+            Self::Quad(_) => motion.to,
         }
     }
 }
