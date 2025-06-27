@@ -183,6 +183,7 @@ pub struct Character {
     pub center: Vec2,
     pub prev_center: Vec2,
     part_center: Vec2,
+    part_offset: Vec2,
     model_part_centers: Vec<Vec2>,
     pub size: Vec2,
     pub shape: EllipseCollider,
@@ -211,6 +212,7 @@ impl Character {
             center,
             prev_center: center,
             part_center: Vec2::zero(),
+            part_offset: Vec2::zero(),
             model_part_centers: Vec::new(),
             size: Vec2 { x: Fixed32(width.0 as i32), z: Fixed32(height.0 as i32) },
             shape: EllipseCollider::new(game_x, game_z, game_width, game_height, floor),
@@ -274,6 +276,14 @@ impl Character {
     pub const fn set_part_center(&mut self, part_center: Vec2) {
         self.part_center = part_center;
     }
+    
+    pub const fn part_offset(&self) -> Vec2 {
+        self.part_offset
+    }
+    
+    pub const fn set_part_offset(&mut self, part_offset: Vec2) {
+        self.part_offset = part_offset;
+    }
 
     pub fn model_part_centers(&self) -> &[Vec2] {
         &self.model_part_centers
@@ -318,7 +328,7 @@ impl Character {
     
     pub fn motion(&self) -> Motion {
         let directed_velocity = self.velocity.rotate_y(self.angle);
-        Motion::new(self.center, self.center + directed_velocity, self.size)
+        Motion::new(self.center, self.center + directed_velocity, self.part_offset(), self.size)
     }
 
     const fn is_crawling_zombie(&self) -> bool {
