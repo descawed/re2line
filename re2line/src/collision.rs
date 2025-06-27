@@ -3,8 +3,176 @@ use residat::common::{Fixed32, Vec2};
 use crate::app::{DrawParams, Floor, GameObject, ObjectType};
 use crate::record::State;
 
-const fn rect_contains_point(pos: Vec2, size: Vec2, point: Vec2) -> bool {
-    point.x.0 >= pos.x.0 && point.x.0 < pos.x.0 + size.x.0 && point.z.0 >= pos.z.0 && point.z.0 < pos.z.0 + size.z.0
+// TODO: handle floor during motion clipping
+#[derive(Debug, Clone)]
+pub struct Motion {
+    pub from: Vec2,
+    pub to: Vec2,
+    pub size: Vec2,
+}
+
+impl Motion {
+    pub const fn new(from: Vec2, to: Vec2, size: Vec2) -> Self {
+        Self {
+            from,
+            to,
+            size,
+        }
+    }
+
+    pub const fn point(point: Vec2) -> Self {
+        Self {
+            from: point,
+            to: point,
+            size: Vec2::zero(),
+        }
+    }
+
+    pub fn angle(&self) -> Fixed32 {
+        self.from.angle_between(&self.to)
+    }
+
+    pub fn size_in_direction_of(&self, pos: Vec2, size: Vec2) -> Fixed32 {
+        let radius = size >> 1;
+        let offset_to = self.to + self.size;
+        let angle = ((radius.z + pos.z) - offset_to.z).atan2((radius.x - offset_to.x) + pos.x);
+        let rel_angle = angle - self.angle();
+
+        let mut norm_angle = rel_angle & Fixed32(0xfff);
+        if rel_angle & 0xc00 == 0xc00 {
+            norm_angle = Fixed32(0x1000) - norm_angle;
+        } else if rel_angle & 0x800 == 0x800 {
+            norm_angle -= Fixed32(0x800);
+        } else if norm_angle & 0x400 == 0x400 {
+            norm_angle = Fixed32(0x800) - norm_angle;
+        }
+
+        if self.size.z < self.size.x {
+            norm_angle.cos() * (self.size.x - self.size.z) + self.size.z
+        } else {
+            norm_angle.sin() * (self.size.z - self.size.x) + self.size.x
+        }
+    }
+
+    pub fn is_destination_in_rect(&self, pos: Vec2, size: Vec2) -> bool {
+        // it's accurate to the game that we use this same size for both axes
+        let motion_size = self.size.x << 1;
+        let x_size = (size.x + motion_size).0 as u32;
+        let z_size = (size.z + motion_size).0 as u32;
+
+        let rel = (self.to + self.size) - pos;
+        let wrapped_x = rel.x.0 as u32;
+        let wrapped_z = rel.z.0 as u32;
+        
+        wrapped_x < x_size && wrapped_z < z_size
+    }
+}
+
+const RECT_THRESHOLD: Fixed32 = Fixed32(0x191);
+
+fn push_to_rect_nearest_edge(motion: &Motion, x_edge_offset: Fixed32, z_edge_offset: Fixed32) -> Vec2 {
+    let rel = motion.to - motion.from;
+    let x_edge_abs = x_edge_offset.abs();
+    let z_edge_abs = z_edge_offset.abs();
+
+    let quadrant = (((rel.x ^ x_edge_offset) >> 1).0 | ((rel.z ^ z_edge_offset) & 0xbfffffffu32 as i32)) >> 0x1e;
+
+    if quadrant == 1 {
+        if x_edge_abs < RECT_THRESHOLD {
+            return motion.to + Vec2::new(x_edge_offset, Fixed32(0));
+        }
+    } else if quadrant == 2 {
+        if z_edge_abs < RECT_THRESHOLD {
+            return motion.to + Vec2::new(Fixed32(0), z_edge_offset);
+        }
+    } else if quadrant != 3 {
+        return if x_edge_abs < z_edge_abs {
+            motion.to + Vec2::new(x_edge_offset, Fixed32(0))
+        } else {
+            motion.to + Vec2::new(Fixed32(0), z_edge_offset)
+        };
+    }
+
+    if x_edge_abs < z_edge_abs {
+        if x_edge_abs < (RECT_THRESHOLD << 1) {
+            return motion.to + Vec2::new(x_edge_offset, Fixed32(0));
+        }
+    } else if z_edge_abs < (RECT_THRESHOLD << 1) {
+        return motion.to + Vec2::new(Fixed32(0), z_edge_offset);
+    }
+
+    motion.from
+}
+
+fn push_out_of_rect(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
+    let directional_size = motion.size_in_direction_of(pos, size);
+
+    let mut max_x_outside = (size.x - motion.to.x) + pos.x.inc() + motion.size.x;
+    let min_x_outside = (pos.x - motion.to.x - motion.size.x).dec();
+    if max_x_outside > -min_x_outside {
+        max_x_outside = min_x_outside;
+    }
+
+    let min_z_outside = (pos.z - motion.to.z - directional_size).dec();
+    let mut max_z_outside = (size.z - motion.to.z) + pos.z.inc() + directional_size;
+    if max_z_outside > -min_z_outside {
+        max_z_outside = min_z_outside;
+    }
+
+    push_to_rect_nearest_edge(motion, max_x_outside, max_z_outside)
+}
+
+fn rect_clip_motion(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
+    if !motion.is_destination_in_rect(pos, size) {
+        return motion.to;
+    }
+    
+    let rel = (motion.size - pos) + motion.from;
+    let total_size = size + (motion.size << 1);
+    let mut outside_flags = if total_size.x <= rel.x {
+        2u32
+    } else {
+        0u32
+    } | if total_size.z <= rel.z {
+        1u32
+    } else {
+        0u32
+    };
+
+    if rel.x == Fixed32(-1) || rel.x == total_size.x.inc() {
+        outside_flags = 2;
+    }
+
+    if rel.z == Fixed32(-1) || rel.z == total_size.z.inc() {
+        outside_flags = 1;
+    } else if outside_flags == 0 {
+        return push_out_of_rect(pos, size, motion);
+    }
+
+    let mut clipped = motion.to;
+    if outside_flags & 2 != 0 {
+        let xr = size.x >> 1;
+        let mut adjustment = xr.inc() + motion.size.x;
+        if !(motion.to.x - motion.from.x).is_negative() {
+            adjustment = -adjustment;
+        }
+        clipped.x = adjustment + xr + pos.x;
+    }
+
+    if outside_flags & 1 != 0 {
+        let zr = size.z >> 1;
+        let mut adjustment = zr.inc() + motion.size.z;
+        if !(motion.to.z - motion.from.z).is_negative() {
+            adjustment = -adjustment;
+        }
+        clipped.z = adjustment + zr + pos.z;
+    }
+
+    clipped
+}
+
+fn rect_contains_point(pos: Vec2, size: Vec2, point: Vec2) -> bool {
+    rect_clip_motion(pos, size, &Motion::point(point)) != point
 }
 
 fn circle_contains_point(pos: Vec2, radius: Fixed32, point: Vec2) -> bool {
@@ -130,6 +298,15 @@ impl RectCollider {
         }
 
         rect_contains_point(self.pos, self.size, point)
+    }
+    
+    pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
+        // TODO: implement motion clipping for other rect types
+        if self.capsule_type != CapsuleType::None || self.special_rect_type != SpecialRectType::None {
+            return motion.to;
+        }
+        
+        rect_clip_motion(self.pos, self.size, motion)
     }
 
     pub fn set_pos<T: Into<Vec2>>(&mut self, pos: T) {
@@ -551,7 +728,7 @@ impl TriangleCollider {
         })
     }
 
-    const fn contains_point_top_left(&self, point: Vec2) -> bool {
+    fn contains_point_top_left(&self, point: Vec2) -> bool {
         let x1 = self.pos.x.0;
         let z1 = self.pos.z.0;
 
@@ -588,7 +765,7 @@ impl TriangleCollider {
         false
     }
 
-    const fn contains_point_top_right(&self, point: Vec2) -> bool {
+    fn contains_point_top_right(&self, point: Vec2) -> bool {
         let x1 = self.pos.x.0;
         let z1 = self.pos.z.0;
 
@@ -626,7 +803,7 @@ impl TriangleCollider {
         false
     }
 
-    const fn contains_point_bottom_right(&self, point: Vec2) -> bool {
+    fn contains_point_bottom_right(&self, point: Vec2) -> bool {
         let x1 = self.pos.x.0;
         let z1 = self.pos.z.0;
 
@@ -663,7 +840,7 @@ impl TriangleCollider {
         false
     }
 
-    const fn contains_point_bottom_left(&self, point: Vec2) -> bool {
+    fn contains_point_bottom_left(&self, point: Vec2) -> bool {
         let x1 = self.pos.x.0;
         let z1 = self.pos.z.0;
 
@@ -818,6 +995,13 @@ impl Collider {
             Self::Triangle(_) => "Triangle",
             Self::Quad(_) => "Quadrilateral",
         })
+    }
+    
+    fn clip_motion(&self, motion: &Motion) -> Vec2 {
+        match self {
+            Self::Rect(rect) => rect.clip_motion(motion),
+            _ => motion.to,
+        }
     }
 }
 
