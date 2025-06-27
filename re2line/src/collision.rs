@@ -63,7 +63,7 @@ impl Motion {
         let rel = (self.to + self.size) - pos;
         let wrapped_x = rel.x.0 as u32;
         let wrapped_z = rel.z.0 as u32;
-        
+
         wrapped_x < x_size && wrapped_z < z_size
     }
 }
@@ -126,7 +126,7 @@ fn rect_clip_motion(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
     if !motion.is_destination_in_rect(pos, size) {
         return motion.to;
     }
-    
+
     let rel = (motion.size - pos) + motion.from;
     let total_size = size + (motion.size << 1);
     let mut outside_flags = if total_size.x <= rel.x {
@@ -175,9 +175,29 @@ fn rect_contains_point(pos: Vec2, size: Vec2, point: Vec2) -> bool {
     rect_clip_motion(pos, size, &Motion::point(point)) != point
 }
 
-fn circle_contains_point(pos: Vec2, radius: Fixed32, point: Vec2) -> bool {
-    let rel_point = point - pos - Vec2::new(radius, radius);
-    rel_point.len() < radius
+fn circle_clip_motion(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
+    if !motion.is_destination_in_rect(pos, size) {
+        return motion.to;
+    }
+
+    let radius = size.x >> 1;
+    let rel = (motion.to - pos) - Vec2::new(radius, radius);
+    let distance_to_center = rel.len();
+    let distance_to_edge = (radius - distance_to_center) + motion.size_in_direction_of(pos, size);
+    if !distance_to_edge.is_positive() {
+        return motion.to;
+    }
+
+    let distance_to_center = distance_to_center.0;
+    let distance_to_edge = distance_to_edge.0;
+    let x_offset = ((rel.x.0 + 8) * distance_to_edge) / distance_to_center;
+    let z_offset = ((rel.z.0 + 8) * distance_to_edge) / distance_to_center;
+    
+    motion.to + Vec2::new(x_offset, z_offset)
+}
+
+fn circle_contains_point(pos: Vec2, size: Vec2, point: Vec2) -> bool {
+    circle_clip_motion(pos, size, &Motion::point(point)) != point
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -275,9 +295,9 @@ impl RectCollider {
                 match side {
                     0 => {
                         let pos = Vec2::new((self.pos.x - self.size.z) + self.size.x, self.pos.z);
-                        return circle_contains_point(pos, z_radius, point);
+                        return circle_contains_point(pos, Vec2::new(z_radius, z_radius), point);
                     }
-                    3 => return circle_contains_point(self.pos, z_radius, point),
+                    3 => return circle_contains_point(self.pos, Vec2::new(z_radius, z_radius), point),
                     _ => (),
                 }
             }
@@ -288,9 +308,9 @@ impl RectCollider {
                 match side {
                     0 => {
                         let pos = Vec2::new(self.pos.x, self.pos.z + (self.size.z - self.size.x));
-                        return circle_contains_point(pos, x_radius, point);
+                        return circle_contains_point(pos, Vec2::new(x_radius, x_radius), point);
                     }
-                    3 => return circle_contains_point(self.pos, x_radius, point),
+                    3 => return circle_contains_point(self.pos, Vec2::new(x_radius, x_radius), point),
                     _ => (),
                 }
             }
@@ -299,13 +319,13 @@ impl RectCollider {
 
         rect_contains_point(self.pos, self.size, point)
     }
-    
+
     pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
         // TODO: implement motion clipping for other rect types
         if self.capsule_type != CapsuleType::None || self.special_rect_type != SpecialRectType::None {
             return motion.to;
         }
-        
+
         rect_clip_motion(self.pos, self.size, motion)
     }
 
@@ -645,7 +665,14 @@ impl EllipseCollider {
 
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
         // FIXME: this logic makes it seem like this is truly a circle and not an ellipse? z radius is ignored?
-        circle_contains_point(self.pos, self.size.x >> 1, point.into())
+        //  however, it IS used for the bounding rect test before we get into the actual circle logic. so the
+        //  proper shape would be a circle clipped to the bounding rect, which we don't have an easy way to
+        //  draw.
+        circle_contains_point(self.pos, self.size, point.into())
+    }
+    
+    pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
+        circle_clip_motion(self.pos, self.size, motion)
     }
 }
 
@@ -996,7 +1023,7 @@ impl Collider {
             Self::Quad(_) => "Quadrilateral",
         })
     }
-    
+
     fn clip_motion(&self, motion: &Motion) -> Vec2 {
         match self {
             Self::Rect(rect) => rect.clip_motion(motion),
