@@ -192,7 +192,7 @@ fn circle_clip_motion(pos: Vec2, size: Vec2, motion: &Motion) -> Vec2 {
     let distance_to_edge = distance_to_edge.0;
     let x_offset = ((rel.x.0 + 8) * distance_to_edge) / distance_to_center;
     let z_offset = ((rel.z.0 + 8) * distance_to_edge) / distance_to_center;
-    
+
     motion.to + Vec2::new(x_offset, z_offset)
 }
 
@@ -286,44 +286,48 @@ impl RectCollider {
 
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
         let point = point.into();
+        if self.special_rect_type == SpecialRectType::Ramp {
+            // ramps don't inhibit motion, so a clip test won't tell us if the point is in the rect
+            return rect_contains_point(self.pos, self.size, point);
+        }
+
+        self.clip_motion(&Motion::point(point)) != point
+    }
+
+    pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
+        // FIXME: add correct handling for half pipes
+        if self.special_rect_type == SpecialRectType::Ramp {
+            return motion.to; // ramps don't inhibit motion
+        }
 
         match self.capsule_type {
             CapsuleType::Horizontal => {
                 let z_radius = self.size.z >> 1;
-                let side = (((point.x - (self.pos.x - z_radius + self.size.x)).0 as u32 & 0xbfffffff)
-                    | ((point.x - (self.pos.x + z_radius)) >> 1).0 as u32) >> 0x1e;
+                let side = (((motion.to.x - (self.pos.x - z_radius + self.size.x)).0 as u32 & 0xbfffffff)
+                    | ((motion.to.x - (self.pos.x + z_radius)) >> 1).0 as u32) >> 0x1e;
                 match side {
                     0 => {
                         let pos = Vec2::new((self.pos.x - self.size.z) + self.size.x, self.pos.z);
-                        return circle_contains_point(pos, Vec2::new(z_radius, z_radius), point);
+                        return circle_clip_motion(pos, Vec2::new(self.size.z, self.size.z), motion);
                     }
-                    3 => return circle_contains_point(self.pos, Vec2::new(z_radius, z_radius), point),
+                    3 => return circle_clip_motion(self.pos, Vec2::new(self.size.z, self.size.z), motion),
                     _ => (),
                 }
             }
             CapsuleType::Vertical => {
                 let x_radius = self.size.x >> 1;
-                let side = (((point.z - (self.pos.z - x_radius + self.size.z)).0 as u32 & 0xbfffffff)
-                    | ((point.z - (self.pos.z + x_radius)) >> 1).0 as u32) >> 0x1e;
+                let side = (((motion.to.z - (self.pos.z - x_radius + self.size.z)).0 as u32 & 0xbfffffff)
+                    | ((motion.to.z - (self.pos.z + x_radius)) >> 1).0 as u32) >> 0x1e;
                 match side {
                     0 => {
                         let pos = Vec2::new(self.pos.x, self.pos.z + (self.size.z - self.size.x));
-                        return circle_contains_point(pos, Vec2::new(x_radius, x_radius), point);
+                        return circle_clip_motion(pos, Vec2::new(self.size.x, self.size.x), motion);
                     }
-                    3 => return circle_contains_point(self.pos, Vec2::new(x_radius, x_radius), point),
+                    3 => return circle_clip_motion(self.pos, Vec2::new(self.size.x, self.size.x), motion),
                     _ => (),
                 }
             }
             _ => (),
-        }
-
-        rect_contains_point(self.pos, self.size, point)
-    }
-
-    pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
-        // TODO: implement motion clipping for other rect types
-        if self.capsule_type != CapsuleType::None || self.special_rect_type != SpecialRectType::None {
-            return motion.to;
         }
 
         rect_clip_motion(self.pos, self.size, motion)
@@ -670,7 +674,7 @@ impl EllipseCollider {
         //  draw.
         circle_contains_point(self.pos, self.size, point.into())
     }
-    
+
     pub fn clip_motion(&self, motion: &Motion) -> Vec2 {
         circle_clip_motion(self.pos, self.size, motion)
     }
@@ -1027,6 +1031,7 @@ impl Collider {
     fn clip_motion(&self, motion: &Motion) -> Vec2 {
         match self {
             Self::Rect(rect) => rect.clip_motion(motion),
+            Self::Ellipse(ellipse) => ellipse.clip_motion(motion),
             _ => motion.to,
         }
     }
