@@ -1,6 +1,6 @@
 use re2shared::record::*;
 use residat::common::*;
-use residat::re2::{Character, NUM_CHARACTERS, NUM_OBJECTS};
+use residat::re2::{Character, CharacterId, NUM_CHARACTERS, NUM_OBJECTS};
 
 use crate::game::Game;
 
@@ -42,10 +42,15 @@ impl CharacterState {
         }
     }
     
-    const fn model_parts_needed(&self) -> &'static [usize] {
-        match self.id {
-            32 => &[4], // dog
-            49 => &[6, 11], // G2
+    fn model_parts_needed(&self) -> &'static [usize] {
+        let Ok(id) = CharacterId::try_from(self.id) else {
+            return &[];
+        };
+        
+        match id {
+            CharacterId::Dog => &[4], // dog
+            CharacterId::G2 => &[6, 11], // G2
+            _ if id.is_player() => &[0],
             _ => &[],
         }
     }

@@ -4,7 +4,7 @@ use residat::common::{Fixed16, UFixed16, Fixed32, Vec2};
 use residat::re2::{CharacterId, Item};
 
 use crate::app::{DrawParams, Floor, GameObject, ObjectType};
-use crate::collision::{CapsuleType, EllipseCollider, RectCollider};
+use crate::collision::{CapsuleType, EllipseCollider, Motion, RectCollider};
 use crate::record::State;
 
 mod ai;
@@ -314,6 +314,11 @@ impl Character {
         let size = Vec2::new(self.size.x << 1, self.size.z << 1);
         self.shape.set_size(size);
         self.outline_shape.set_size(size);
+    }
+    
+    pub fn motion(&self) -> Motion {
+        let directed_velocity = self.velocity.rotate_y(self.angle);
+        Motion::new(self.center, self.center + directed_velocity, self.size)
     }
 
     const fn is_crawling_zombie(&self) -> bool {
