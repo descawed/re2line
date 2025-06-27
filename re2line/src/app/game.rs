@@ -19,6 +19,8 @@ pub enum Floor {
 }
 
 impl Floor {
+    pub const ANY: Self = Self::Aot(0x80);
+    
     pub const fn matches_any(&self) -> bool {
         if let Self::Aot(floor) = self {
             *floor & 0x80 != 0
@@ -66,6 +68,73 @@ impl Display for Floor {
         }
         
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WorldPos {
+    pub pos: Vec2,
+    pub size: Vec2,
+    pub floor: Floor,
+    pub collision_mask: u16,
+    pub collision_deny_mask: u16,
+    pub quadrant_mask: Option<u16>,
+}
+
+impl WorldPos {
+    pub const fn new(pos: Vec2, size: Vec2, floor: Floor, collision_mask: u16, collision_deny_mask: u16) -> Self {
+        Self {
+            pos,
+            size,
+            floor,
+            collision_mask,
+            collision_deny_mask,       
+            quadrant_mask: None,       
+        }
+    }
+
+    pub const fn point(pos: Vec2, floor: Floor) -> Self {
+        Self {
+            pos,
+            size: Vec2::zero(),
+            floor,
+            collision_mask: 0xffff,
+            collision_deny_mask: 0,       
+            quadrant_mask: None,      
+        }
+    }
+    
+    pub const fn rect(pos: Vec2, size: Vec2, floor: Floor) -> Self {
+        Self {
+            pos,
+            size,
+            floor,
+            collision_mask: 0xffff,
+            collision_deny_mask: 0,       
+            quadrant_mask: None,      
+        }
+    }
+    
+    pub fn with_quadrant_mask(mut self, quadrant_mask: u16) -> Self {
+        self.quadrant_mask = Some(quadrant_mask);
+        self
+    }
+
+    pub const fn can_collide_with(&self, other: &Self) -> bool {
+        self.floor.matches(other.floor)
+            && self.collision_mask & other.collision_mask != 0
+            && self.collision_deny_mask & other.collision_mask == 0
+            && self.collision_mask & other.collision_deny_mask == 0       
+            && if let (Some(self_mask), Some(other_mask)) = (self.quadrant_mask, other.quadrant_mask) {
+                self_mask & other_mask != 0
+            } else {
+                true       
+            }
+    }
+
+    pub fn set_quadrant_mask(&mut self, cell_center: Vec2) {
+        let rel = self.pos - cell_center;
+        self.collision_mask |= (1 << (rel.x.0 as u32 >> 0x1f)) << ((rel.z.0 as u32 >> 0x1e) & 2);
     }
 }
 

@@ -3,7 +3,7 @@ use epaint::{CircleShape, ColorMode, PathShape, PathStroke};
 use residat::common::{Fixed16, UFixed16, Fixed32, Vec2};
 use residat::re2::{CharacterId, Item};
 
-use crate::app::{DrawParams, Floor, GameObject, ObjectType};
+use crate::app::{DrawParams, Floor, GameObject, ObjectType, WorldPos};
 use crate::collision::{CapsuleType, EllipseCollider, Motion, RectCollider};
 use crate::record::State;
 
@@ -15,6 +15,10 @@ pub use hit::*;
 
 const INTERACTION_DISTANCE: Fixed32 = Fixed32(620);
 pub const PLAYER_COLLISION_MASK: u16 = 0x8000;
+pub const ENEMY_COLLISION_MASK: u16 = 0x400;
+pub const ENEMY_EXTRA_COLLISION_MASK: u16 = 0x200;
+pub const SHERRY_COLLISION_MASK: u16 = 0x800;
+pub const ALLY_COLLISION_MASK: u16 = 0x1000;
 
 const ARROW_HEAD_HEIGHT: f32 = 6.0;
 const ARROW_HEAD_WIDTH: f32 = 6.0;
@@ -24,6 +28,8 @@ const POINT_RADIUS: f32 = 3.0;
 
 const SLOW_COLOR: Color32 = Color32::from_rgba_premultiplied(255, 0, 0, 255);
 const FAST_COLOR: Color32 = Color32::from_rgba_premultiplied(0, 255, 0, 255);
+
+const CHARACTER_COLLISION_DENY: u16 = 0x100;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum CharacterType {
@@ -88,7 +94,7 @@ impl Object {
             flags,
             center,
             size,
-            shape: RectCollider::new(game_x, game_z, game_width, game_height, floor, CapsuleType::None),
+            shape: RectCollider::new(WorldPos::rect(Vec2 {x: game_x, z: game_z }, Vec2 { x: game_width, z: game_height }, floor), CapsuleType::None),
             floor,
             index: usize::MAX,
         }
@@ -215,8 +221,8 @@ impl Character {
             part_offset: Vec2::zero(),
             model_part_centers: Vec::new(),
             size: Vec2 { x: Fixed32(width.0 as i32), z: Fixed32(height.0 as i32) },
-            shape: EllipseCollider::new(game_x, game_z, game_width, game_height, floor),
-            outline_shape: RectCollider::new(game_x, game_z, game_width, game_height, floor, CapsuleType::None),
+            shape: EllipseCollider::new(WorldPos::rect(Vec2 { x: game_x, z: game_z }, Vec2 { x: game_width, z: game_height }, floor)),
+            outline_shape: RectCollider::new(WorldPos::rect(Vec2 { x: game_x, z: game_z }, Vec2 { x: game_width, z: game_height }, floor), CapsuleType::None),
             angle: angle.to_32(),
             current_health: health,
             max_health: health,
@@ -325,10 +331,50 @@ impl Character {
         self.shape.set_size(size);
         self.outline_shape.set_size(size);
     }
+
+    pub const fn collision_mask(&self) -> u16 {
+        match self.id {
+            CharacterId::SherryNpc | CharacterId::SherryVest => SHERRY_COLLISION_MASK,
+            // FIXME: G4 also uses the extra collision mask but only in certain circumstances
+            CharacterId::Spider => ENEMY_COLLISION_MASK | ENEMY_EXTRA_COLLISION_MASK,
+            // TODO: figure out if all neutral NPCs use this collision or only the actual sidekicks
+            CharacterId::FuseArm | CharacterId::FuseHousing | CharacterId::Irons | CharacterId::AdaNpc
+            | CharacterId::IronsTorso | CharacterId::AdaWounded | CharacterId::BenDead | CharacterId::Ben
+            | CharacterId::Annette | CharacterId::Kendo | CharacterId::Unknown73
+            | CharacterId::MayorsDaughter | CharacterId::Unknown76 | CharacterId::Unknown77
+            | CharacterId::Unknown78 | CharacterId::LeonNpc | CharacterId::ClaireNpc | CharacterId::Unknown82
+            | CharacterId::Unknown83 | CharacterId::LeonBandagedNpc => ALLY_COLLISION_MASK,
+            _ if self.id.is_player() => PLAYER_COLLISION_MASK,
+            _ => ENEMY_COLLISION_MASK,
+        }
+    }
     
     pub fn motion(&self) -> Motion {
         let directed_velocity = self.velocity.rotate_y(self.angle);
-        Motion::new(self.center, self.center + directed_velocity, self.part_offset(), self.size)
+        Motion::new(
+            WorldPos::new(self.prev_center, self.size, self.floor, self.collision_mask(), CHARACTER_COLLISION_DENY),
+            self.prev_center + directed_velocity,
+            self.part_offset(),
+        )
+    }
+
+    pub const fn is_moving(&self) -> bool {
+        // only supported for player for now
+        if !self.id.is_player() {
+            return false;
+        }
+
+        matches!(self.state,
+            [0x01, 0x01, _, _] // walking
+            | [0x01, 0x02, _, _] // running
+            | [0x01, 0x03, _, _] // backpedaling
+            | [0x01, 0x07, 0x03 | 0x04 | 0x05 | 0x06 | 0x07, _] // ?? unknown
+            // disabled for now because the movement only happens on certain animation frames, which
+            // we don't track at the moment
+            // | [0x01, 0x08, _, 0x02 | 0x03] // climbing up
+            | [0x01, 0x09, _, 0x02] // ?? unknown
+            | [0x01, 0x0a, 0x04 | 0x05, _] // pushing object
+        )
     }
 
     const fn is_crawling_zombie(&self) -> bool {

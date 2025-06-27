@@ -1,7 +1,8 @@
+use residat::common::Vec2;
 use residat::re2::Instruction;
 
 use crate::aot::{Entity, EntityForm};
-use crate::app::Floor;
+use crate::app::{Floor, WorldPos};
 use crate::collision::{CapsuleType, Collider, QuadCollider, RectCollider};
 
 pub trait InstructionExt {
@@ -13,7 +14,7 @@ impl InstructionExt for Instruction {
         Some(match self {
             Self::AotSet { aot, sce, sat, n_floor, x, z, w, h, .. } => Entity::new(
                 EntityForm::Other,
-                Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), Floor::Aot(*n_floor), CapsuleType::None)),
+                Collider::Rect(RectCollider::new(WorldPos::rect(Vec2::new(*x, *z), Vec2::new(*w, *h), Floor::Aot(*n_floor)), CapsuleType::None)),
                 *n_floor,
                 *aot as u8,
                 *sce,
@@ -30,7 +31,7 @@ impl InstructionExt for Instruction {
                         next_room: *next_room,
                         next_n_floor: *next_nfloor,
                     },
-                    Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), Floor::Aot(*n_floor), CapsuleType::None)),
+                    Collider::Rect(RectCollider::new(WorldPos::rect(Vec2::new(*x, *z), Vec2::new(*w, *h), Floor::Aot(*n_floor)), CapsuleType::None)),
                     *n_floor,
                     *aot,
                     *sce,
@@ -84,7 +85,7 @@ impl InstructionExt for Instruction {
                     md1: *md1,
                     action: *action,
                 },
-                Collider::Rect(RectCollider::new((*x).to_32(), (*z).to_32(), (*w).to_32(), (*h).to_32(), Floor::Aot(*n_floor), CapsuleType::None)),
+                Collider::Rect(RectCollider::new(WorldPos::rect(Vec2::new(*x, *z), Vec2::new(*w, *h), Floor::Aot(*n_floor)), CapsuleType::None)),
                 *n_floor,
                 *aot,
                 *sce,

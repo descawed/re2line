@@ -36,7 +36,7 @@ mod layer;
 
 use config::Config;
 pub use config::RoomId;
-pub use game::{DrawParams, Floor, GameObject, ObjectType};
+pub use game::{DrawParams, Floor, GameObject, ObjectType, WorldPos};
 use layer::Layer;
 
 pub const APP_NAME: &str = "re2line";
@@ -2232,7 +2232,24 @@ impl eframe::App for App {
                     // if we get clamped due to reaching the end of the comparison section and
                     // the other comparison paths are not playing, pause playback
                     self.is_recording_playing = false;
+                } else if let Some(player) = self.get_character(0) && player.is_moving() {
+                    // validate our collision logic
+                    let mut motion = player.motion();
+                    motion.origin.set_quadrant_mask(self.center);
+
+                    for collider in self.colliders.objects() {
+                        motion.to = collider.clip_motion(&motion);
+                    }
+                    
+                    // FIXME: seems to have issues sometimes when running in corners with multiple overlapping colliders
+                    if motion.to != player.center {
+                        eprintln!(
+                            "Player position {:?} on frame {} did not match calculated next position {:?}. Start position {:?}, velocity {:?}, angle {}",
+                            player.center, self.active_recording().map(|r| r.index()).unwrap(), motion.to, player.prev_center, player.velocity, player.angle.to_degrees(),
+                        );
+                    }
                 }
+
                 FRAME_DURATION
             } else {
                 // schedule a re-draw for the next frame
