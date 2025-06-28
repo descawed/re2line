@@ -772,7 +772,7 @@ impl Recording {
             points.push(state_char.center());
         }
         
-        Some(CharacterPath::new(points, character.id, index, character.floor()))
+        Some(CharacterPath::new(points, character.id, character.floor()))
     }
 
     pub fn timeline(&self) -> Vec<Vec<(String, &State)>> {
