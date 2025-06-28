@@ -2245,11 +2245,10 @@ impl eframe::App for App {
                         motion.to = collider.clip_motion(&motion);
                     }
                     
-                    // FIXME: seems to have issues sometimes when running in corners with multiple overlapping colliders
                     if motion.to != player.center {
                         eprintln!(
-                            "Player position {:?} on frame {} did not match calculated next position {:?}. Start position {:?}, velocity {:?}, angle {}",
-                            player.center, self.active_recording().map(|r| r.index()).unwrap(), motion.to, player.prev_center, player.velocity, player.angle.to_degrees(),
+                            "Player position {:?} on frame {} did not match calculated next position {:?}. Start position {:?}, velocity {:?}, angle {}, angled velocity {:?}",
+                            player.center, self.active_recording().map(|r| r.index()).unwrap(), motion.to, player.prev_center, player.velocity, player.angle.to_degrees(), player.velocity.rotate_y(player.angle),
                         );
                     }
                 }
