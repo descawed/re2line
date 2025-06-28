@@ -219,6 +219,7 @@ impl GameObject for Object {
 
         groups.push((String::from("Position"), vec![
             format!("X: {}", self.center().x),
+            format!("Y: {}", self.center_3d().y),
             format!("Z: {}", self.center().z),
             format!("XR: {}", self.size.x),
             format!("ZR: {}", self.size.z),
@@ -891,6 +892,7 @@ impl GameObject for Character {
 
         groups.push((String::from("Position"), vec![
             format!("X: {}", self.center.x),
+            format!("Y: {}", self.center.y),
             format!("Z: {}", self.center.z),
             format!("Angle: {:.1}°", self.angle.to_degrees() % 360.0),
             format!("Floor: {}", self.floor),
