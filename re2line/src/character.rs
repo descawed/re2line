@@ -34,6 +34,7 @@ const CHARACTER_COLLISION_DENY: u16 = 0x100;
 const FLAG_ENABLED: u32 = 1;
 const FLAG_NO_COLLISION: u32 = 2;
 const FLAG_COLLISION_RECEIVER: u32 = 4;
+const FLAG_NO_OBJECT_COLLISION: u32 = 0x40;
 const FLAG_COLLISION_MUTUAL_EXCLUSION: u32 = 0x1000;
 const FLAG_LIMIT_COLLISION_DISPLACEMENT: u32 = 0x100000;
 
@@ -81,35 +82,38 @@ impl From<CharacterId> for CharacterType {
 #[derive(Debug, Clone)]
 pub struct Object {
     pub flags: u32,
-    pub center: Vec2,
+    center: Vec3,
     pub size: Vec2,
+    parts: [Option<Part>; MAX_PARTS],
+    prev_root_part_pos: Vec3,
     pub shape: RectCollider,
     floor: Floor,
     pub index: usize,
 }
 
 impl Object {
-    pub const fn new(flags: u32, x: Fixed32, z: Fixed32, width: UFixed16, height: UFixed16, floor: Floor) -> Self {
-        let game_x = Fixed32(x.0 - width.0 as i32);
-        let game_z = Fixed32(z.0 - height.0 as i32);
-        let game_width = UFixed16(width.0 << 1).to_32();
-        let game_height = UFixed16(height.0 << 1).to_32();
+    pub fn new(flags: u32, pos: Vec3, width: UFixed16, height: UFixed16, floor: Floor) -> Self {
+        let game_x = pos.x - width.to_32();
+        let game_z = pos.z - height.to_32();
+        let game_width = (width << 1).to_32();
+        let game_height = (height << 1).to_32();
 
-        let center = Vec2 { x, z };
         let size = Vec2 { x: Fixed32(width.0 as i32), z: Fixed32(height.0 as i32) };
 
         Self {
             flags,
-            center,
+            center: pos,
             size,
+            parts: [const { None }; MAX_PARTS],
+            prev_root_part_pos: Vec3::zero(),
             shape: RectCollider::new(WorldPos::rect(Vec2 {x: game_x, z: game_z }, Vec2 { x: game_width, z: game_height }, floor), CapsuleType::None),
             floor,
             index: usize::MAX,
         }
     }
 
-    pub const fn empty() -> Self {
-        Self::new(0, Fixed32(0), Fixed32(0), UFixed16(0), UFixed16(0), Floor::Id(0))
+    pub fn empty() -> Self {
+        Self::new(0, Vec3::zero(), UFixed16(0), UFixed16(0), Floor::Id(0))
     }
 
     pub fn set_floor(&mut self, floor: Floor) {
@@ -125,10 +129,43 @@ impl Object {
         self.index = index;
     }
 
-    pub fn set_pos(&mut self, x: impl Into<Fixed32>, z: impl Into<Fixed32>) {
-        self.center = Vec2::new(x, z);
-        let pos = self.center - self.size;
-        self.shape.set_pos(pos);
+    pub const fn center(&self) -> Vec2 {
+        self.center_3d().xz()
+    }
+
+    pub const fn center_3d(&self) -> Vec3 {
+        match &self.parts[0] {
+            Some(part) => part.pos,
+            None => self.center,
+        }
+    }
+
+    pub const fn parts(&self) -> &[Option<Part>] {
+        &self.parts
+    }
+
+    pub fn active_parts(&self) -> impl Iterator<Item = &Part> {
+        self.parts.iter().filter_map(Option::as_ref)
+    }
+
+    pub const fn parts_mut(&mut self) -> &mut [Option<Part>] {
+        &mut self.parts
+    }
+
+    pub fn active_parts_mut(&mut self) -> impl Iterator<Item = &mut Part> {
+        self.parts.iter_mut().filter_map(Option::as_mut)
+    }
+
+    pub fn set_pos(&mut self, pos: impl Into<Vec3>) {
+        self.center = pos.into();
+    }
+    
+    pub const fn prev_root_part_pos(&self) -> Vec3 {
+        self.prev_root_part_pos
+    }
+
+    pub const fn set_prev_root_part_pos(&mut self, pos: Vec3) {
+        self.prev_root_part_pos = pos;
     }
 
     pub fn set_size(&mut self, width: impl Into<Fixed32>, height: impl Into<Fixed32>) {
@@ -136,10 +173,19 @@ impl Object {
         self.size.z = height.into();
         let size = Vec2::new(self.size.x << 1, self.size.z << 1);
         self.shape.set_size(size);
+        self.update_gui_shape();
     }
 
-    pub const fn is_pushable(&self) -> bool {
+    pub const fn is_enabled(&self) -> bool {
+        self.flags & FLAG_ENABLED != 0
+    }
+
+    pub const fn has_collision(&self) -> bool {
         self.flags & 2 == 0
+    }
+    
+    pub fn update_gui_shape(&mut self) {
+        self.shape.set_pos(self.center() - self.size);
     }
 }
 
@@ -172,8 +218,8 @@ impl GameObject for Object {
         ]));
 
         groups.push((String::from("Position"), vec![
-            format!("X: {}", self.center.x),
-            format!("Z: {}", self.center.z),
+            format!("X: {}", self.center().x),
+            format!("Z: {}", self.center().z),
             format!("XR: {}", self.size.x),
             format!("ZR: {}", self.size.z),
             format!("Floor: {}", self.floor),
@@ -211,6 +257,10 @@ impl Part {
         Self::new(Vec3::zero(), size, offset)
     }
 
+    pub const fn pos(&self) -> Vec3 {
+        self.pos
+    }
+
     pub fn set_pos(&mut self, pos: impl Into<Vec3>) {
         self.pos = pos.into();
     }
@@ -233,6 +283,7 @@ pub struct Character {
     prev_center: Vec3,
     parts: [Option<Part>; MAX_PARTS],
     part_offset: Vec2,
+    prev_root_part_pos: Vec3,
     model_part_centers: Vec<Vec2>,
     pub size: Vec2,
     pub shape: EllipseCollider,
@@ -263,6 +314,7 @@ impl Character {
             prev_center: center,
             parts: [const { None }; MAX_PARTS],
             part_offset: Vec2::zero(),
+            prev_root_part_pos: Vec3::zero(),
             model_part_centers: Vec::new(),
             size: Vec2 { x: Fixed32(width.0 as i32), z: Fixed32(height.0 as i32) },
             shape: EllipseCollider::new(WorldPos::rect(Vec2 { x: game_x, z: game_z }, Vec2 { x: game_width, z: game_height }, floor)),
@@ -294,6 +346,10 @@ impl Character {
         self.flags & FLAG_COLLISION_RECEIVER != 0
     }
 
+    pub const fn can_collide_with_objects(&self) -> bool {
+        self.flags & FLAG_NO_OBJECT_COLLISION == 0
+    }
+
     pub const fn has_collision_mutual_exclusion(&self) -> bool {
         self.flags & FLAG_COLLISION_MUTUAL_EXCLUSION != 0
     }
@@ -317,11 +373,30 @@ impl Character {
     pub const fn prev_center_3d(&self) -> Vec3 {
         self.prev_center
     }
+    
+    pub const fn part_center(&self) -> Vec2 {
+        self.part_center_3d().xz()
+    }
+    
+    pub const fn part_center_3d(&self) -> Vec3 {
+        match self.parts[0].as_ref() {
+            Some(p) => p.pos,
+            None => self.center,
+        }
+    }
 
     pub fn set_floor(&mut self, floor: Floor) {
         self.floor = floor;
         self.shape.set_floor(floor);
         self.outline_shape.set_floor(floor);
+    }
+    
+    pub const fn prev_root_part_pos(&self) -> Vec3 {
+        self.prev_root_part_pos
+    }
+
+    pub const fn set_prev_root_part_pos(&mut self, pos: Vec3) {
+        self.prev_root_part_pos = pos;
     }
 
     pub const fn name(&self) -> &'static str {
@@ -369,13 +444,6 @@ impl Character {
 
     pub fn active_parts_mut(&mut self) -> impl Iterator<Item = &mut Part> {
         self.parts.iter_mut().filter_map(Option::as_mut)
-    }
-
-    pub const fn part_center(&self) -> Vec2 {
-        match &self.parts[0] {
-            Some(part) => part.pos.xz(),
-            None => Vec2::zero(),
-        }
     }
     
     pub const fn part_offset(&self) -> Vec2 {
@@ -446,10 +514,27 @@ impl Character {
     
     pub fn motion(&self) -> Motion {
         Motion::new(
-            WorldPos::new(self.prev_center.xz(), self.size, self.floor, self.collision_mask(), CHARACTER_COLLISION_DENY),
-            self.center.xz(),
+            WorldPos::new(self.prev_root_part_pos.xz(), self.size, self.floor, self.collision_mask(), CHARACTER_COLLISION_DENY),
+            self.part_center(),
             self.part_offset(),
         )
+    }
+    
+    pub fn apply_motion(&mut self, motion: &Motion) {
+        let Some(part) = self.parts[0].as_mut() else {
+            self.center.x = motion.to.x;
+            self.center.z = motion.to.z;
+            return;
+        };
+        
+        let old_pos = part.pos;
+
+        part.pos.x = motion.to.x;
+        part.pos.z = motion.to.z;
+        
+        let diff = part.pos - old_pos;
+        self.center.x += diff.x;
+        self.center.z += diff.z;
     }
 
     pub const fn is_moving(&self) -> bool {
@@ -479,13 +564,13 @@ impl Character {
         for part in clone.active_parts_mut() {
             part.pos = (part.pos - self.center) + motion_center;
         }
-        
+
         clone.center = motion_center;
 
         clone
     }
 
-    pub fn collide_with(&mut self, receiver: &Self) -> bool {
+    pub fn collide_with_character(&mut self, receiver: &Self) -> bool {
         if !receiver.is_enabled() {
             return false;
         }
@@ -508,7 +593,7 @@ impl Character {
                 let Some(collider_part) = collider_part else {
                     continue;
                 };
-                
+
                 let combined_size = (collider_part.size_offset + receiver_part.size_offset).to_32();
                 let extent = (combined_size << 1).0 as u32;
 
@@ -573,12 +658,125 @@ impl Character {
 
                 collider_part.pos.x += x_adjust;
                 collider_part.pos.z += z_adjust;
-                
+
                 had_collision = true;
             }
         }
 
         had_collision
+    }
+
+    pub fn does_object_collide(&self, object: &Object) -> bool {
+        if !object.is_enabled() || !object.has_collision() || !self.can_collide_with_objects() {
+            return false;
+        }
+
+        let Some(ref our_part) = self.parts[0] else {
+            return false;
+        };
+
+        let Some(ref object_part) = object.parts[0] else {
+            return false;
+        };
+
+        let diff = object_part.pos - our_part.pos;
+        let our_size_offset = our_part.size_offset.to_32();
+        let x_size = object_part.size.x + our_size_offset;
+        let z_size = object_part.size.z + our_size_offset;
+
+        if ((x_size << 1).0 as u32) < (diff.x + x_size).0 as u32 {
+            return false;
+        }
+
+        if ((z_size << 1).0 as u32) < (diff.z + z_size).0 as u32 {
+            return false;
+        }
+
+        let y_size = object_part.size.y + our_part.size.y;
+        ((diff.y + y_size).0 as u32) < (y_size << 1).0 as u32
+    }
+
+    pub fn collide_with_object(&mut self, object: &Object) -> bool {
+        if !self.does_object_collide(object) {
+            return false;
+        }
+
+        let our_part = self.parts[0].as_mut().unwrap();
+        let object_part = object.parts[0].as_ref().unwrap();
+
+        let diff = object_part.pos - our_part.pos;
+        let our_size_offset = our_part.size_offset.to_32();
+        let x_size = object_part.size.x + our_size_offset;
+        let z_size = object_part.size.z + our_size_offset;
+        let y_size = object_part.size.y + our_part.size.y;
+
+        let y_dist = (object.prev_root_part_pos.y - self.prev_root_part_pos.y + y_size).0 as u32;
+        if y_dist >= (y_size << 1).0 as u32 {
+            // TODO: add logic for relocating object rather than character
+            let y_adjust = if diff.y.is_negative() {
+                y_size.inc()
+            } else {
+                -y_size
+            };
+
+            let local = our_part.local_pos(self.center, self.angle);
+            let y = object_part.pos.y - local.y + y_adjust;
+            self.center.y = y;
+            our_part.pos.y = y + local.y;
+            return true;
+        }
+
+        if ((x_size << 1).0 as u32) < (object_part.pos.x - self.prev_root_part_pos.x + x_size).0 as u32 {
+            let x_motion = our_part.pos.x - self.prev_root_part_pos.x;
+            let x_adjust = if x_motion.is_negative() {
+                x_size.inc()
+            } else {
+                -x_size.inc()
+            };
+            let x_adjust = object_part.pos.x - our_part.pos.x + x_adjust;
+
+            our_part.pos.x += x_adjust;
+            self.center.x += x_adjust;
+            return true;
+        }
+
+        if ((z_size << 1).0 as u32) < (object_part.pos.z - self.prev_root_part_pos.z + z_size).0 as u32 {
+            let z_motion = our_part.pos.z - self.prev_root_part_pos.z;
+            let z_adjust = if z_motion.is_negative() {
+                z_size.inc()
+            } else {
+                -z_size.inc()
+            };
+            let z_adjust = object_part.pos.z - our_part.pos.z + z_adjust;
+
+            our_part.pos.z += z_adjust;
+            self.center.z += z_adjust;
+            return true;
+        }
+
+        if (x_size.0 * diff.z.0).abs() < (z_size.0 * diff.x.0).abs() {
+            let x_adjust = if diff.x.is_negative() {
+                x_size.inc()
+            } else {
+                -x_size.inc()
+            };
+            let x_adjust = object_part.pos.x - our_part.pos.x + x_adjust;
+            
+            our_part.pos.x += x_adjust;
+            self.center.x += x_adjust;
+            return true;
+        }
+        
+        let z_adjust = if diff.z.is_negative() {
+            z_size.inc()
+        } else {
+            -z_size.inc()
+        };
+        let z_adjust = object_part.pos.z - our_part.pos.z + z_adjust;
+
+        our_part.pos.z += z_adjust;
+        self.center.z += z_adjust;
+        true
     }
 
     const fn is_crawling_zombie(&self) -> bool {
@@ -627,11 +825,7 @@ impl Character {
             let pos = match ai_zone.origin {
                 ZoneOrigin::Base => self.center.xz(),
                 ZoneOrigin::Part(i) => {
-                    if i != 0 {
-                        continue;
-                    }
-
-                    self.part_center()
+                    self.parts.get(i).and_then(Option::as_ref).map(|p| p.pos.xz()).unwrap_or_else(Vec2::zero)
                 }
                 ZoneOrigin::ModelPart(i) => {
                     if i >= self.model_part_centers.len() {

@@ -123,6 +123,8 @@ pub(super) struct Config {
      pub show_known_non_character_rng: bool,
      #[serde(default = "default_true")]
      pub show_unknown_rng: bool,
+     #[serde(default)]
+     pub show_all_objects: bool,
      pub object_settings: EnumMap<ObjectType, ObjectSettings>,
 }
 
@@ -188,6 +190,7 @@ impl Default for Config {
                show_character_rng: true,
                show_known_non_character_rng: true,
                show_unknown_rng: true,
+               show_all_objects: false,
                object_settings: enum_map! {
                     ObjectType::Floor => ObjectSettings::fill(Color32::from_rgb(0xa4, 0x4d, 0x68)),
                     ObjectType::Collider => ObjectSettings::stroke(Color32::from_rgb(0x63, 0xb3, 0x4d)),
