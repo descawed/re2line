@@ -647,20 +647,12 @@ impl EllipseCollider {
         })
     }
 
-    pub fn pos(&self) -> Vec2 {
-        self.pos.pos
-    }
-
     pub fn set_pos<T: Into<Vec2>>(&mut self, pos: T) {
         self.pos.pos = pos.into();
     }
 
     pub fn set_size<T: Into<Vec2>>(&mut self, size: T) {
         self.pos.size = size.into();
-    }
-
-    pub fn size(&self) -> Vec2 {
-        self.pos.size
     }
 
     pub fn contains_point<T: Into<Vec2>>(&self, point: T) -> bool {
