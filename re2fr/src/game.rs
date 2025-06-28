@@ -28,7 +28,7 @@ pub struct GameVersion {
     pub script_rng_patch: usize,
     pub script_rng_seed: usize,
     pub sound_flags: usize,
-    pub known_rng_rolls: [(usize, RollType); 120],
+    pub known_rng_rolls: [(usize, RollType); 126],
 }
 
 const GAME_VERSIONS: [GameVersion; 1] = [
@@ -196,6 +196,13 @@ const GAME_VERSIONS: [GameVersion; 1] = [
             (0x004920ba, RollType::G2Swipe50),
             (0x00490ad3, RollType::G2Thrust25),
             (0x004914f7, RollType::G2Slash75),
+
+            (0x004da99e, RollType::WaterSplash),
+            (0x004da9ee, RollType::WaterSplash),
+            (0x004da21d, RollType::WaterSplash),
+            (0x004da26d, RollType::WaterSplash),
+            (0x004da558, RollType::WaterSplash),
+            (0x004da5a8, RollType::WaterSplash),
         ],
     },
 ];

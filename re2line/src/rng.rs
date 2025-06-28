@@ -618,6 +618,10 @@ fn g2_slash75(seed: u16) -> String {
     bool_text(roll8(seed) & 3 != 0)
 }
 
+fn water_splash(seed: u16) -> String {
+    format!("{}", roll8(seed).overflowing_mul(4).0)
+}
+
 #[derive(Debug)]
 pub struct RollDescription {
     description: &'static str,
@@ -774,6 +778,7 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::G2Swipe50 => RollDescription::new("rolled for normal attack instead of heavy attack (50%)", not_bit_one).with_bool_options(),
         RollType::G2Slash75 => RollDescription::new("rolled to slash (75%)", g2_slash75).with_bool_options(),
         RollType::G2Thrust25 => RollDescription::new("rolled for thrusting strike (25%)", and_three_zero).with_bool_options(),
+        RollType::WaterSplash => RollDescription::new("rolled for water splash effect", water_splash),
         RollType::Partial => RollDescription::simple("Partial roll in a larger series"),
         RollType::Invalid => RollDescription::simple("Invalid roll"),
     }
