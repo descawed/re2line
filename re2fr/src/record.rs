@@ -1,8 +1,29 @@
 use re2shared::record::*;
 use residat::common::*;
-use residat::re2::{Character, NUM_CHARACTERS, NUM_OBJECTS};
+use residat::re2::{Character, CharacterPart, MAX_PARTS, NUM_CHARACTERS, NUM_OBJECTS};
 
 use crate::game::Game;
+
+#[derive(Debug, Clone)]
+struct Part {
+    translation: VECTOR,
+    x_size: UFixed16,
+    y_size: UFixed16,
+    z_size: UFixed16,
+    size_offset: UFixed16,
+}
+
+impl Part {
+    pub fn from_part(part: &CharacterPart) -> Self {
+        Self {
+            translation: part.pos.clone(),
+            x_size: part.x_size,
+            y_size: part.y_size,
+            z_size: part.z_size,
+            size_offset: part.size_offset,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct CharacterState {
@@ -10,7 +31,7 @@ pub struct CharacterState {
     state: [u8; 4],
     id: u8,
     transform: MATRIX,
-    part_translation: VECTOR,
+    parts: [Option<Part>; MAX_PARTS],
     part_offset_x: Fixed16,
     part_offset_z: Fixed16,
     model_part_transforms: Vec<MATRIX>,
@@ -26,12 +47,17 @@ pub struct CharacterState {
 
 impl CharacterState {
     pub fn from_character(char: &Character) -> Self {
+        let mut parts = [None, None, None, None];
+        for (state_part, char_part) in parts.iter_mut().zip(char.parts()) {
+            *state_part = Some(Part::from_part(char_part));
+        }
+
         Self {
             flags: char.flags,
             state: char.state.clone(),
             id: char.id,
             transform: char.transform.clone(),
-            part_translation: char.parts[0].pos.clone(),
+            parts,
             part_offset_x: char.parts[0].x_offset,
             part_offset_z: char.parts[0].z_offset,
             model_part_transforms: unsafe { char.model_parts() }.into_iter().map(|p| p.composite_transform.clone()).collect(),
@@ -59,7 +85,6 @@ impl CharacterState {
             CharacterField::State(self.state.clone()),
             CharacterField::Id(self.id),
             CharacterField::Transform(self.transform.clone()),
-            CharacterField::PartTranslation(0, self.part_translation.clone()),
             CharacterField::MotionAngle(self.motion_angle),
             CharacterField::Motion(self.motion),
             CharacterField::Size(self.x_size, self.z_size),
@@ -69,6 +94,15 @@ impl CharacterState {
             CharacterField::Type(self.type_),
             CharacterField::Flags(self.flags),
         ];
+
+        for (i, part) in self.parts.iter().enumerate() {
+            let Some(part) = part else {
+                continue;
+            };
+
+            delta.push(CharacterField::PartTranslation(i as u8, part.translation.clone()));
+            delta.push(CharacterField::PartSize(i as u8, part.x_size, part.y_size, part.z_size, part.size_offset));
+        }
         
         for &i in self.model_parts_needed() {
             if i >= self.model_part_transforms.len() {
@@ -104,10 +138,41 @@ impl CharacterState {
             self.transform = char.transform.clone();
             fields.push(CharacterField::Transform(char.transform.clone()));
         }
-        
-        if self.part_translation != char.parts[0].pos {
-            self.part_translation = char.parts[0].pos.clone();
-            fields.push(CharacterField::PartTranslation(0, char.parts[0].pos.clone()));
+
+        let char_parts = char.parts();
+        for (i, state_part) in self.parts.iter_mut().enumerate() {
+            if i >= char_parts.len() {
+                if state_part.is_some() {
+                    *state_part = None;
+                    fields.push(CharacterField::PartTranslation(i as u8, VECTOR::zero()));
+                    fields.push(CharacterField::PartSize(i as u8, UFixed16(0), UFixed16(0), UFixed16(0), UFixed16(0)));
+                }
+                continue;
+            }
+
+            let char_part = &char_parts[i];
+            
+            match state_part {
+                Some(state_part) => {
+                    if state_part.translation != char_part.pos {
+                        state_part.translation = char_part.pos.clone();
+                        fields.push(CharacterField::PartTranslation(i as u8, char_part.pos.clone()));
+                    }
+                    
+                    if state_part.x_size != char_part.x_size || state_part.y_size != char_part.y_size || state_part.z_size != char_part.z_size || state_part.size_offset != char_part.size_offset {
+                        state_part.x_size = char_part.x_size;
+                        state_part.y_size = char_part.y_size;
+                        state_part.z_size = char_part.z_size;
+                        state_part.size_offset = char_part.size_offset;
+                        fields.push(CharacterField::PartSize(i as u8, char_part.x_size, char_part.y_size, char_part.z_size, char_part.size_offset));
+                    }
+                }
+                None => {
+                    *state_part = Some(Part::from_part(char_part));
+                    fields.push(CharacterField::PartTranslation(i as u8, char_part.pos.clone()));
+                    fields.push(CharacterField::PartSize(i as u8, char_part.x_size, char_part.y_size, char_part.z_size, char_part.size_offset));   
+                }
+            }
         }
         
         if self.part_offset_x != char.parts[0].x_offset || self.part_offset_z != char.parts[0].z_offset {

@@ -21,6 +21,7 @@ pub enum CharacterField {
     #[brw(magic = 13u8)] ModelPartTransform(u8, MATRIX),
     #[brw(magic = 11u8)] Flags(u32),
     #[brw(magic = 5u8)] Size(UFixed16, UFixed16),
+    #[brw(magic = 15u8)] PartSize(u8, UFixed16, UFixed16, UFixed16, UFixed16), // x, y, z, offset
     #[brw(magic = 8u8)] Health(i16),
     #[brw(magic = 6u8)] Floor(u8),
     #[brw(magic = 14u8)] PartOffset(Fixed16, Fixed16),
