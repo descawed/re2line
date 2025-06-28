@@ -329,20 +329,23 @@ impl RectCollider {
 
         let pos = self.pos.pos;
         let size = self.pos.size;
+        
+        let mut adjusted_pos = self.pos.clone();
 
         match self.capsule_type {
             CapsuleType::Horizontal => {
                 let z_radius = size.z >> 1;
                 let side = (((motion.to.x - (pos.x - z_radius + size.x)).0 as u32 & 0xbfffffff)
-                    | ((motion.to.x - (pos.x + z_radius)) >> 1).0 as u32) >> 0x1e;
+                    | ((motion.to.x - (pos.x + z_radius)).0 as u32 >> 1)) >> 0x1e;
                 match side {
                     0 => {
-                        let pos = WorldPos::rect(Vec2::new((pos.x - size.z) + size.x, pos.z), Vec2::new(size.z, size.z), self.pos.floor);
-                        return circle_clip_motion(&pos, motion);
+                        adjusted_pos.pos = Vec2::new((pos.x - size.z) + size.x, pos.z);
+                        adjusted_pos.size = Vec2::new(size.z, size.z);
+                        return circle_clip_motion(&adjusted_pos, motion);
                     }
                     3 => {
-                        let pos = WorldPos::rect(pos, Vec2::new(size.z, size.z), self.pos.floor);
-                        return circle_clip_motion(&pos, motion);
+                        adjusted_pos.size = Vec2::new(size.z, size.z);
+                        return circle_clip_motion(&adjusted_pos, motion);
                     }
                     _ => (),
                 }
@@ -350,15 +353,16 @@ impl RectCollider {
             CapsuleType::Vertical => {
                 let x_radius = size.x >> 1;
                 let side = (((motion.to.z - (pos.z - x_radius + size.z)).0 as u32 & 0xbfffffff)
-                    | ((motion.to.z - (pos.z + x_radius)) >> 1).0 as u32) >> 0x1e;
+                    | ((motion.to.z - (pos.z + x_radius)).0 as u32 >> 1)) >> 0x1e;
                 match side {
                     0 => {
-                        let pos = WorldPos::rect(Vec2::new(pos.x, pos.z + (size.z - size.x)), Vec2::new(size.x, size.x), self.pos.floor);
-                        return circle_clip_motion(&pos, motion);
+                        adjusted_pos.pos = Vec2::new(pos.x, pos.z + (size.z - size.x));
+                        adjusted_pos.size = Vec2::new(size.x, size.x);
+                        return circle_clip_motion(&adjusted_pos, motion);
                     }
                     3 => {
-                        let pos = WorldPos::rect(pos, Vec2::new(size.z, size.z), self.pos.floor);
-                        return circle_clip_motion(&pos, motion);
+                        adjusted_pos.size = Vec2::new(size.x, size.x);
+                        return circle_clip_motion(&adjusted_pos, motion);
                     }
                     _ => (),
                 }
@@ -1014,7 +1018,7 @@ pub enum Collider {
 }
 
 impl Collider {
-    fn type_string(&self) -> String {
+    pub fn type_string(&self) -> String {
         String::from(match self {
             Self::Rect(rect) => {
                 match rect.capsule_type {
