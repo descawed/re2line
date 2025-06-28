@@ -2228,11 +2228,15 @@ impl eframe::App for App {
             let now = Instant::now();
             let duration = now - self.last_play_tick;
             if duration >= FRAME_DURATION {
+                let previous_room_id = self.config.last_rdt.unwrap();
                 if !self.next_recording_frame(){
                     // if we get clamped due to reaching the end of the comparison section and
                     // the other comparison paths are not playing, pause playback
                     self.is_recording_playing = false;
-                } else if let Some(player) = self.get_character(0) && player.is_moving() {
+                } else if let Some(player) = self.get_character(0)
+                    && player.is_moving()
+                    // don't try to project normal movement when the room changes
+                    && self.config.last_rdt.unwrap() == previous_room_id {
                     // validate our collision logic
                     let mut motion = player.motion();
                     motion.origin.set_quadrant_mask(self.center);
