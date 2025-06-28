@@ -96,7 +96,7 @@ fn push_to_rect_nearest_edge(motion: &Motion, x_edge_offset: Fixed32, z_edge_off
     let x_edge_abs = x_edge_offset.abs();
     let z_edge_abs = z_edge_offset.abs();
 
-    let quadrant = (((rel.x ^ x_edge_offset) >> 1).0 | ((rel.z ^ z_edge_offset) & 0xbfffffffu32 as i32)) >> 0x1e;
+    let quadrant = (((rel.x ^ x_edge_offset).0 as u32 >> 1) | ((rel.z ^ z_edge_offset).0 as u32 & 0xbfffffff)) >> 0x1e;
 
     if quadrant == 1 {
         if x_edge_abs < RECT_THRESHOLD {
@@ -153,11 +153,11 @@ fn rect_clip_motion(pos: &WorldPos, motion: &Motion) -> Vec2 {
 
     let rel = (motion.size() - pos) + motion.from();
     let total_size = size + (motion.size() << 1);
-    let mut outside_flags = if total_size.x <= rel.x {
+    let mut outside_flags = if total_size.x.0 as u32 <= rel.x.0 as u32 {
         2u32
     } else {
         0u32
-    } | if total_size.z <= rel.z {
+    } | if total_size.z.0 as u32 <= rel.z.0 as u32 {
         1u32
     } else {
         0u32
