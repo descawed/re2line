@@ -955,15 +955,14 @@ impl GameObject for Character {
 pub struct CharacterPath {
     pub points: Vec<Vec2>,
     pub character_id: CharacterId,
-    pub character_index: usize,
     pub floor: Floor,
     pub limit: usize,
     pub dynamic_color: bool,
 }
 
 impl CharacterPath {
-    pub const fn new(points: Vec<Vec2>, character_id: CharacterId, character_index: usize, floor: Floor) -> Self {
-        Self { points, character_id, character_index, floor, limit: usize::MAX, dynamic_color: true }
+    pub const fn new(points: Vec<Vec2>, character_id: CharacterId, floor: Floor) -> Self {
+        Self { points, character_id, floor, limit: usize::MAX, dynamic_color: true }
     }
     
     pub fn len(&self) -> Fixed32 {
