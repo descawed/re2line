@@ -176,7 +176,7 @@ impl State {
                     CharacterField::Id(id) => character.id = match CharacterId::try_from(*id).ok() {
                         Some(id) => id,
                         None => {
-                            println!("Unknown character ID: {}", id);
+                            eprintln!("Unknown character ID: {}", id);
                             CharacterId::Unknown
                         }
                     },
@@ -223,6 +223,9 @@ impl State {
 
             if let (Some(new_character), Some(old_character)) = (character.as_mut(), self.characters[index].as_ref()) {
                 new_character.set_prev_pos(old_character.center_3d());
+                if let Some(Some(part)) = old_character.parts().get(0) {
+                    new_character.set_prev_root_part_pos(part.pos());
+                }
             }
         }
 
@@ -243,9 +246,28 @@ impl State {
                 let object = object.as_mut().unwrap();
                 object.set_index(index);
                 match change {
+                    CharacterField::Transform(matrix) => object.set_pos(&matrix.t),
                     CharacterField::PartTranslation(i, vector) => {
+                        if let Some(part) = object.parts_mut().get_mut(*i as usize) {
+                            match part {
+                                Some(part) => part.set_pos(vector),
+                                None => *part = Some(Part::from_pos(vector.into())),
+                            }
+                        }
+                        
                         if *i == 0 {
-                            object.set_pos(vector.x, vector.z);
+                            object.update_gui_shape();
+                            if object.prev_root_part_pos().is_zero() {
+                                object.set_prev_root_part_pos(vector.into());
+                            }
+                        }
+                    }
+                    CharacterField::PartSize(i, x, y, z, offset) => {
+                        if let Some(part) = object.parts_mut().get_mut(*i as usize) {
+                            match part {
+                                Some(part) => part.set_size(*x, *y, *z, *offset),
+                                None => *part = Some(Part::from_size(Vec3::new(*x, *y, *z), *offset)),
+                            }
                         }
                     }
                     CharacterField::Size(width, height) => object.set_size(*width, *height),
@@ -255,10 +277,13 @@ impl State {
                     // don't care about these for objects
                     CharacterField::State(_) | CharacterField::Id(_) | CharacterField::MotionAngle(_)
                     | CharacterField::Motion(_) | CharacterField::Health(_) | CharacterField::Type(_)
-                    | CharacterField::Velocity(_) | CharacterField::Transform(_)
-                    | CharacterField::ModelPartTransform(_, _) | CharacterField::PartOffset(_, _)
-                    | CharacterField::PartSize(_, _, _, _, _) => (),
+                    | CharacterField::Velocity(_)
+                    | CharacterField::ModelPartTransform(_, _) | CharacterField::PartOffset(_, _) => (),
                 }
+            }
+
+            if let (Some(new_object), Some(old_object)) = (object.as_mut(), self.objects[index].as_ref()) {
+                new_object.set_prev_root_part_pos(old_object.center_3d());
             }
         }
 

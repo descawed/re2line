@@ -47,7 +47,7 @@ pub struct CharacterState {
 
 impl CharacterState {
     pub fn from_character(char: &Character) -> Self {
-        let mut parts = [None, None, None, None];
+        let mut parts = [const { None }; MAX_PARTS];
         for (state_part, char_part) in parts.iter_mut().zip(char.parts()) {
             *state_part = Some(Part::from_part(char_part));
         }
@@ -151,14 +151,14 @@ impl CharacterState {
             }
 
             let char_part = &char_parts[i];
-            
+
             match state_part {
                 Some(state_part) => {
                     if state_part.translation != char_part.pos {
                         state_part.translation = char_part.pos.clone();
                         fields.push(CharacterField::PartTranslation(i as u8, char_part.pos.clone()));
                     }
-                    
+
                     if state_part.x_size != char_part.x_size || state_part.y_size != char_part.y_size || state_part.z_size != char_part.z_size || state_part.size_offset != char_part.size_offset {
                         state_part.x_size = char_part.x_size;
                         state_part.y_size = char_part.y_size;
@@ -170,7 +170,7 @@ impl CharacterState {
                 None => {
                     *state_part = Some(Part::from_part(char_part));
                     fields.push(CharacterField::PartTranslation(i as u8, char_part.pos.clone()));
-                    fields.push(CharacterField::PartSize(i as u8, char_part.x_size, char_part.y_size, char_part.z_size, char_part.size_offset));   
+                    fields.push(CharacterField::PartSize(i as u8, char_part.x_size, char_part.y_size, char_part.z_size, char_part.size_offset));
                 }
             }
         }

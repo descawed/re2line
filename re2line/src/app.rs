@@ -1018,6 +1018,10 @@ impl App {
                 }
             }
             ui.checkbox(&mut self.config.show_sounds, "Show sounds");
+            if ui.checkbox(&mut self.config.show_all_objects, "Show all objects").clicked() {
+                // re-populate objects from state when this setting is changed
+                self.update_from_state();
+            }
             ui.separator();
 
             for (object_type, object_settings) in &mut self.config.object_settings {
@@ -1187,8 +1191,8 @@ impl App {
                 continue;
             };
 
-            // we don't care about displaying arbitrary 3D objects
-            if !object.is_pushable() {
+            // don't display non-interactable 3D objects unless it was requested
+            if !object.has_collision() && !self.config.show_all_objects {
                 continue;
             }
 
@@ -2237,6 +2241,7 @@ impl eframe::App for App {
                     && player.is_moving()
                     // don't try to project normal movement when the room changes
                     && self.config.last_rdt.unwrap() == previous_room_id {
+                    // validate our collision logic
                     let mut motion_player = player.clone_for_collision();
                     
                     for character in self.characters.objects() {
@@ -2244,10 +2249,9 @@ impl eframe::App for App {
                             continue;
                         }
                         
-                        motion_player.collide_with(character);
+                        motion_player.collide_with_character(character);
                     }
                     
-                    // validate our collision logic
                     let mut motion = motion_player.motion();
                     motion.origin.set_quadrant_mask(self.center);
 
@@ -2255,10 +2259,16 @@ impl eframe::App for App {
                         motion.to = collider.clip_motion(&motion);
                     }
                     
-                    if motion.to != player.center() {
+                    motion_player.apply_motion(&motion);
+                    
+                    for object in self.objects.objects() {
+                        motion_player.collide_with_object(object);
+                    }
+                    
+                    if motion_player.center() != player.center() {
                         eprintln!(
                             "Player position {:?} on frame {} did not match calculated next position {:?}. Start position {:?}, velocity {:?}, angle {}, angled velocity {:?}",
-                            player.center(), self.active_recording().map(|r| r.index()).unwrap(), motion.to, player.prev_center(), player.velocity, player.angle.to_degrees(), player.velocity.rotate_y(player.angle),
+                            player.part_center(), self.active_recording().map(|r| r.index()).unwrap(), motion_player.center(), player.prev_root_part_pos().xz(), player.velocity, player.angle.to_degrees(), player.velocity.rotate_y(player.angle),
                         );
                     }
                 }
