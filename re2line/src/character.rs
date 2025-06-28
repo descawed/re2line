@@ -793,9 +793,6 @@ impl Character {
 
             let pos = match ai_zone.origin {
                 ZoneOrigin::Base => self.center.xz(),
-                ZoneOrigin::Part(i) => {
-                    self.parts.get(i).and_then(Option::as_ref).map(|p| p.pos.xz()).unwrap_or_else(Vec2::zero)
-                }
                 ZoneOrigin::ModelPart(i) => {
                     if i >= self.model_part_centers.len() {
                         continue;

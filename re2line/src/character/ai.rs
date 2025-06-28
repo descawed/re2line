@@ -12,7 +12,6 @@ use crate::record::State;
 #[derive(Debug, Clone)]
 pub enum ZoneOrigin {
     Base,
-    Part(usize),
     ModelPart(usize),
 }
 
