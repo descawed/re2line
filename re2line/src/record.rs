@@ -181,12 +181,23 @@ impl State {
                         }
                     },
                     CharacterField::Transform(matrix) => {
-                        character.set_pos(matrix.t.x, matrix.t.z);
-                        character.set_prev_pos(matrix.t.x, matrix.t.z);
+                        character.set_pos(&matrix.t);
+                        character.set_prev_pos(&matrix.t);
                     },
                     CharacterField::PartTranslation(i, vector) => {
-                        if *i == 0 {
-                            character.set_part_center(Vec2::new(vector.x, vector.z));
+                        if let Some(part) = character.parts_mut().get_mut(*i as usize) {
+                            match part {
+                                Some(part) => part.set_pos(vector),
+                                None => *part = Some(Part::from_pos(vector.into())),
+                            }
+                        }
+                    }
+                    CharacterField::PartSize(i, x, y, z, offset) => {
+                        if let Some(part) = character.parts_mut().get_mut(*i as usize) {
+                            match part {
+                                Some(part) => part.set_size(*x, *y, *z, *offset),
+                                None => *part = Some(Part::from_size(Vec3::new(*x, *y, *z), *offset)),
+                            }
                         }
                     }
                     CharacterField::PartOffset(x, z) => character.set_part_offset(Vec2::new(*x, *z)),
@@ -206,12 +217,12 @@ impl State {
                     CharacterField::Health(health) => character.set_health(*health),
                     CharacterField::Removed => unreachable!(),
                     CharacterField::Type(type_) => character.type_ = *type_,
-                    CharacterField::Flags(_) => (), // don't currently care about this for NPCs
+                    CharacterField::Flags(flags) => character.flags = *flags,
                 }
             }
 
             if let (Some(new_character), Some(old_character)) = (character.as_mut(), self.characters[index].as_ref()) {
-                new_character.set_prev_pos(old_character.center.x, old_character.center.z);
+                new_character.set_prev_pos(old_character.center_3d());
             }
         }
 
@@ -245,7 +256,8 @@ impl State {
                     CharacterField::State(_) | CharacterField::Id(_) | CharacterField::MotionAngle(_)
                     | CharacterField::Motion(_) | CharacterField::Health(_) | CharacterField::Type(_)
                     | CharacterField::Velocity(_) | CharacterField::Transform(_)
-                    | CharacterField::ModelPartTransform(_, _) | CharacterField::PartOffset(_, _) => (),
+                    | CharacterField::ModelPartTransform(_, _) | CharacterField::PartOffset(_, _)
+                    | CharacterField::PartSize(_, _, _, _, _) => (),
                 }
             }
         }
@@ -295,7 +307,7 @@ impl State {
         
         Some(PlayerSound {
             age: 0,
-            pos: player.center,
+            pos: player.center(),
             sounds: self.sounds,
         })
     }
@@ -732,7 +744,7 @@ impl Recording {
                 continue;
             };
             
-            points.push(state_char.center);
+            points.push(state_char.center());
         }
         
         Some(CharacterPath::new(points, character.id, index, character.floor()))

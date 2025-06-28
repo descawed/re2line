@@ -2237,18 +2237,28 @@ impl eframe::App for App {
                     && player.is_moving()
                     // don't try to project normal movement when the room changes
                     && self.config.last_rdt.unwrap() == previous_room_id {
+                    let mut motion_player = player.clone_for_collision();
+                    
+                    for character in self.characters.objects() {
+                        if character.index() == 0 {
+                            continue;
+                        }
+                        
+                        motion_player.collide_with(character);
+                    }
+                    
                     // validate our collision logic
-                    let mut motion = player.motion();
+                    let mut motion = motion_player.motion();
                     motion.origin.set_quadrant_mask(self.center);
 
                     for collider in self.colliders.objects() {
                         motion.to = collider.clip_motion(&motion);
                     }
                     
-                    if motion.to != player.center {
+                    if motion.to != player.center() {
                         eprintln!(
                             "Player position {:?} on frame {} did not match calculated next position {:?}. Start position {:?}, velocity {:?}, angle {}, angled velocity {:?}",
-                            player.center, self.active_recording().map(|r| r.index()).unwrap(), motion.to, player.prev_center, player.velocity, player.angle.to_degrees(), player.velocity.rotate_y(player.angle),
+                            player.center(), self.active_recording().map(|r| r.index()).unwrap(), motion.to, player.prev_center(), player.velocity, player.angle.to_degrees(), player.velocity.rotate_y(player.angle),
                         );
                     }
                 }

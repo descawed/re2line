@@ -33,7 +33,7 @@ impl Checkpoint {
                         continue;
                     }
 
-                    if entity.is_triggered(object_type, player.center, interaction_point, floor, is_action_pressed) {
+                    if entity.is_triggered(object_type, player.center(), interaction_point, floor, is_action_pressed) {
                         return true;
                     }
                 }
@@ -301,10 +301,6 @@ impl Comparison {
 
     pub const fn recording_mut(&mut self) -> &mut Recording {
         &mut self.loaded_recording.recording
-    }
-
-    pub fn runs(&self) -> &[Run] {
-        &self.runs
     }
     
     pub fn runs_desc(&self) -> impl Iterator<Item = &Run> {

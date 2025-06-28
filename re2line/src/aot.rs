@@ -189,7 +189,7 @@ impl GameObject for Entity {
         let mut draw_params = draw_params.clone();
         if let Some(ref player) = state.characters()[0] {
             let trigger_point = if self.is_trigger_on_enter() {
-                player.center
+                player.center()
             } else {
                 player.interaction_point()
             };

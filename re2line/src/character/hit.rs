@@ -259,7 +259,7 @@ impl WeaponRangeVisualization {
 
         Some(Self {
             weapon,
-            pos: player.center,
+            pos: player.center(),
             floor: player.floor(),
             angle: player.angle,
             aim_range: [bounds0, bounds1, bounds2],

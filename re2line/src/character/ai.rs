@@ -139,7 +139,7 @@ impl AiZone {
         
         // if the player is in this zone, draw it with an outline
         if let Some(ref player) = state.characters()[0] {
-            if self.is_point_in_zone(player.center.saturating_sub(pos), angle) {
+            if self.is_point_in_zone(player.center().saturating_sub(pos), angle) {
                 // add an outline to the shape when the player is inside
                 draw_params.stroke.width = 3.0;
                 draw_params.stroke.color = Color32::from_rgb(0x42, 0x03, 0x03);
