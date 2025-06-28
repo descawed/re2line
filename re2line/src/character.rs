@@ -140,20 +140,8 @@ impl Object {
         }
     }
 
-    pub const fn parts(&self) -> &[Option<Part>] {
-        &self.parts
-    }
-
-    pub fn active_parts(&self) -> impl Iterator<Item = &Part> {
-        self.parts.iter().filter_map(Option::as_ref)
-    }
-
     pub const fn parts_mut(&mut self) -> &mut [Option<Part>] {
         &mut self.parts
-    }
-
-    pub fn active_parts_mut(&mut self) -> impl Iterator<Item = &mut Part> {
-        self.parts.iter_mut().filter_map(Option::as_mut)
     }
 
     pub fn set_pos(&mut self, pos: impl Into<Vec3>) {
@@ -366,14 +354,6 @@ impl Character {
     pub const fn center_3d(&self) -> Vec3 {
         self.center
     }
-
-    pub const fn prev_center(&self) -> Vec2 {
-        self.prev_center.xz()
-    }
-
-    pub const fn prev_center_3d(&self) -> Vec3 {
-        self.prev_center
-    }
     
     pub const fn part_center(&self) -> Vec2 {
         self.part_center_3d().xz()
@@ -406,14 +386,6 @@ impl Character {
 
     pub const fn type_(&self) -> CharacterType {
         CharacterType::from_character_id(self.id)
-    }
-
-    pub const fn current_health(&self) -> i16 {
-        self.current_health
-    }
-
-    pub const fn max_health(&self) -> i16 {
-        self.max_health
     }
 
     pub const fn set_health(&mut self, health: i16) {
@@ -453,10 +425,6 @@ impl Character {
     
     pub const fn set_part_offset(&mut self, part_offset: Vec2) {
         self.part_offset = part_offset;
-    }
-
-    pub fn model_part_centers(&self) -> &[Vec2] {
-        &self.model_part_centers
     }
 
     pub fn set_model_part_center(&mut self, i: usize, model_part_center: Vec2) {
