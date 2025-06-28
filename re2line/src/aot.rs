@@ -168,11 +168,13 @@ impl GameObject for Entity {
                     format!("Target Floor: {}", next_n_floor),
                 ]));
             }
-            EntityForm::Item { i_item, n_item, flag, .. } => {
+            EntityForm::Item { i_item, n_item, flag, md1, action } => {
                 groups.push((String::from("Item"), vec![
                     format!("Type: {}", Item::name_from_id(i_item)),
                     format!("Count: {}", n_item),
                     format!("Flag: {}", flag),
+                    format!("MD1: {}", md1),
+                    format!("Action: {}", action),
                 ]));
             }
             EntityForm::Other => {}
