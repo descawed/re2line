@@ -43,6 +43,7 @@ pub struct CharacterState {
     velocity: SVECTOR,
     health: i16,
     type_: u8,
+    water_level: Fixed16,
 }
 
 impl CharacterState {
@@ -69,6 +70,7 @@ impl CharacterState {
             velocity: char.velocity.clone(),
             health: char.health,
             type_: (char.type_ & 0xff) as u8,
+            water_level: char.water_level,       
         }
     }
     
@@ -93,6 +95,7 @@ impl CharacterState {
             CharacterField::Health(self.health),
             CharacterField::Type(self.type_),
             CharacterField::Flags(self.flags),
+            CharacterField::WaterLevel(self.water_level),
         ];
 
         for (i, part) in self.parts.iter().enumerate() {
@@ -234,6 +237,11 @@ impl CharacterState {
             self.type_ = type_;
             fields.push(CharacterField::Type(type_));
         }
+        
+        if self.water_level != char.water_level {
+            self.water_level = char.water_level;
+            fields.push(CharacterField::WaterLevel(char.water_level));
+        }
 
         fields
     }
@@ -241,6 +249,8 @@ impl CharacterState {
 
 #[derive(Debug)]
 pub struct GameState {
+    game_flags: u32,
+    game_flags2: u32,
     rng: u32,
     keys_down: u32,
     keys_down_this_frame: u32,
@@ -254,6 +264,8 @@ pub struct GameState {
 impl GameState {
     pub fn from_game(game: &Game) -> Self {
         Self {
+            game_flags: game.game_flags(),
+            game_flags2: game.game_flags2(),
             rng: game.rng(),
             keys_down: game.keys_down(),
             keys_down_this_frame: game.keys_down_this_frame(),
@@ -268,6 +280,8 @@ impl GameState {
     pub fn track_delta(&mut self, game: &Game) -> Vec<GameField> {
         let mut fields = Vec::new();
 
+        let game_flags = game.game_flags();
+        let game_flags2 = game.game_flags2();
         let rng = game.rng();
         let keys_down = game.keys_down();
         let keys_down_this_frame = game.keys_down_this_frame();
@@ -276,6 +290,16 @@ impl GameState {
         let stage_offset = game.stage_offset();
         let scenario = if game.is_claire() { 1 } else { 0 };
         let sound_flags = game.sound_flags();
+        
+        if self.game_flags != game_flags {
+            self.game_flags = game_flags;
+            fields.push(GameField::GameFlags1(game_flags));
+        }
+        
+        if self.game_flags2 != game_flags2 {
+            self.game_flags2 = game_flags2;
+            fields.push(GameField::GameFlags2(game_flags2));       
+        }
 
         if self.rng != rng {
             self.rng = rng;

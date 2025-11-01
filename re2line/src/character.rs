@@ -285,6 +285,7 @@ pub struct Character {
     pub velocity: Vec2,
     pub type_: u8,
     pub index: usize,
+    water_level: Fixed32,
 }
 
 impl Character {
@@ -316,6 +317,7 @@ impl Character {
             velocity,
             type_: 0,
             index: usize::MAX,
+            water_level: Fixed32(0),
         }
     }
 
@@ -387,6 +389,10 @@ impl Character {
     pub const fn type_(&self) -> CharacterType {
         CharacterType::from_character_id(self.id)
     }
+    
+    pub const fn current_health(&self) -> i16 {
+        self.current_health
+    }
 
     pub const fn set_health(&mut self, health: i16) {
         self.current_health = health;
@@ -432,6 +438,14 @@ impl Character {
             self.model_part_centers.resize(i + 1, Vec2::zero());
         }
         self.model_part_centers[i] = model_part_center;
+    }
+    
+    pub const fn water_level(&self) -> Fixed32 {
+        self.water_level
+    }
+    
+    pub const fn set_water_level(&mut self, water_level: Fixed32) {
+        self.water_level = water_level;
     }
 
     pub fn gui_interaction_point(&self, draw_params: &DrawParams) -> Pos2 {
