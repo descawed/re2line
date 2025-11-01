@@ -65,7 +65,7 @@ pub fn text_box<T: Into<String>>(text: T, pos: Pos2, valign: VAlign, bg_color: C
     let text = text.into();
     let font_id = TextStyle::Body.resolve(&*ui.style());
 
-    let text_shape = ui.fonts(|fonts| {
+    let text_shape = ui.fonts_mut(|fonts| {
         let mut job = LayoutJob::simple(
             text,
             font_id,
