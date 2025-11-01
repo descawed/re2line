@@ -33,7 +33,7 @@ impl Floor {
         match self {
             Self::Mask(mask) => *mask,
             Self::Aot(_) if self.matches_any() => 0xFFFFFFFF,
-            Self::Id(floor) | Self::Aot(floor) => 1 << *floor,       
+            Self::Id(floor) | Self::Aot(floor) => 1 << (*floor & 0x1f),
         }
     }
     

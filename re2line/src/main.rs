@@ -1,6 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 
+mod animation;
 mod app;
 mod collision;
 mod compare;
