@@ -9,11 +9,11 @@ description = "A mod/trainer to record speedrun data from Resident Evil 2"
 crate-type = ["cdylib"]
 
 [dependencies]
-anyhow = "1.0.98"
+anyhow = "1.0.100"
 binrw = "0.15.0"
-chrono = "0.4.41"
+chrono = "0.4.42"
 hook86 = { git = "https://github.com/descawed/hook86.git", features = ["crash_logging"] }
-log = "0.4.27"
+log = "0.4.28"
 re2shared = { path = "../re2shared" }
 residat = { git = "https://github.com/descawed/residat.git", branch = "master" }
 simplelog = "0.12.2"

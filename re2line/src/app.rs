@@ -390,7 +390,7 @@ impl App {
                 self.pan -= i.pointer.delta();
             }
             
-            let viewport = i.screen_rect();
+            let viewport = i.viewport_rect();
             self.set_pointer_game_pos(i.pointer.latest_pos(), viewport);
             
             if i.pointer.primary_pressed() {
@@ -443,7 +443,7 @@ impl App {
     }
 
     fn calculate_origin(&mut self, ctx: &Context) -> egui::Pos2 {
-        let viewport = ctx.input(egui::InputState::screen_rect);
+        let viewport = ctx.input(egui::InputState::viewport_rect);
 
         let window_center = viewport.center();
         egui::Pos2::new(
@@ -999,7 +999,7 @@ impl App {
 
                                 if ui.button("Explore").clicked() {
                                     self.open_rng_explore_window(roll.roll_type.unwrap(), roll.rng_index());
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             });
                         }
@@ -1781,20 +1781,20 @@ impl eframe::App for App {
         }
 
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("Open game folder").clicked() {
                         if let Err(e) = self.prompt_load_game() {
                             self.show_error(format!("Failed to open RDT: {e}"));
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
 
                     if ui.button("Open recording").clicked() && self.is_game_loaded() {
                         if let Err(e) = self.prompt_load_recording() {
                             self.show_error(format!("Failed to open recording: {e}"));
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     
                     ui.separator(); // don't want open button too close to close button
@@ -1802,11 +1802,11 @@ impl eframe::App for App {
                     if self.comparison.is_some() {
                         if ui.button("Close comparison").clicked() {
                             self.close_comparison();
-                            ui.close_menu();
+                            ui.close();
                         }
                     } else if ui.add_enabled(self.active_recording.is_some(), egui::Button::new("Close recording")).clicked() {
                         self.close_recording();
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -1817,12 +1817,12 @@ impl eframe::App for App {
                             self.compare_filter = RoomFilter::basic(room_id);
                         }
                         self.is_compare_filter_window_open = true;
-                        ui.close_menu();
+                        ui.close();
                     }
 
                     if ui.button("Explore RNG").clicked() {
                         self.is_rng_explore_window_open = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
             });
@@ -2206,7 +2206,7 @@ impl eframe::App for App {
             // show player inputs in top right
             if let Some(state) = self.active_recording().and_then(Recording::current_state) {
                 let input_state = state.input_state();
-                let viewport = ctx.input(egui::InputState::screen_rect);
+                let viewport = ctx.input(egui::InputState::content_rect);
                 let input_origin = viewport.right_top();
 
                 let forward_pos = input_origin + egui::Vec2::new(-INPUT_OFFSET * 2.0, INPUT_SIZE + INPUT_MARGIN * 2.0);
