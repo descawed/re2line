@@ -2175,11 +2175,19 @@ impl eframe::App for App {
                         }
                     }
                     SelectedObject::AiZone(i) => {
-                        let ai_zone = &self.ai_zones[i];
-                        let mut ai_draw_params = self.config.get_obj_draw_params(ai_zone, view_center);
-                        ai_draw_params.highlight();
-                        ai_draw_params.set_draw_origin(hover_pos);
-                        ui.draw_game_tooltip(ai_zone, &ai_draw_params, state, i);
+                        match self.ai_zones.objects().get(i) {
+                            Some(ai_zone) => {
+                                let mut ai_draw_params = self.config.get_obj_draw_params(ai_zone, view_center);
+                                ai_draw_params.highlight();
+                                ai_draw_params.set_draw_origin(hover_pos);
+                                ui.draw_game_tooltip(ai_zone, &ai_draw_params, state, i);
+                            }
+                            None => {
+                                // FIXME: this only happens because we don't properly update the index
+                                //  when a character's AI zones change
+                                self.hover_object = SelectedObject::None;
+                            }
+                        }
                     }
                     SelectedObject::Character(i) => {
                         if let (Some(character), Some(settings)) = (self.get_character(i), self.get_character_settings(i)) {
