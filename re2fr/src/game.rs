@@ -28,6 +28,7 @@ pub struct GameVersion {
     pub script_rng_patch: usize,
     pub script_rng_seed: usize,
     pub sound_flags: usize,
+    pub game_flags2: usize,
     pub known_rng_rolls: [(usize, RollType); 126],
 }
 
@@ -55,6 +56,7 @@ const GAME_VERSIONS: [GameVersion; 1] = [
         script_rng_patch: 0x004e3bec,
         script_rng_seed: 0x00695e58,
         sound_flags: 0x00989eee,
+        game_flags2: 0x00989e6c,
         known_rng_rolls: [
             (0x004e3be1, RollType::Script),
             (0x00451be7, RollType::ZombieStaggerThreshold),
@@ -225,6 +227,7 @@ pub struct Game {
     stage_offset: *const u32,
     game_flags: *const u32,
     sound_flags: *const u8,
+    game_flags2: *const u32,
 }
 
 impl Game {
@@ -258,6 +261,7 @@ impl Game {
             let stage_offset = version.stage_offset as *const u32;
             let game_flags = version.game_flags as *const u32;
             let sound_flags = version.sound_flags as *const u8;
+            let game_flags2 = version.game_flags2 as *const u32;
 
             return Ok(Self {
                 version,
@@ -275,7 +279,8 @@ impl Game {
                 room_index,
                 stage_offset,
                 game_flags,
-                sound_flags,           
+                sound_flags,          
+                game_flags2,   
             });
         }
 
@@ -349,6 +354,18 @@ impl Game {
     pub fn is_b_scenario(&self) -> bool {
         unsafe {
             *self.game_flags & 0x40000000 != 0
+        }
+    }
+    
+    pub fn game_flags(&self) -> u32 {
+        unsafe {
+            *self.game_flags
+        }
+    }
+    
+    pub fn game_flags2(&self) -> u32 {
+        unsafe {
+            *self.game_flags2
         }
     }
 

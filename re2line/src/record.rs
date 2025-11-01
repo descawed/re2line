@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::io::{Cursor, Read, Seek};
 use std::ops::Range;
 use std::time::Duration;
@@ -23,6 +24,50 @@ const KEY_LEFT: u32 = 0x08;
 const KEY_ACTION: u32 = 0x80;
 const KEY_AIM: u32 = 0x100;
 const KEY_RUN_CANCEL: u32 = 0x200;
+
+const FLAGS1_FORCE_CUT: u32 = 0x00000100;
+const FLAGS1_EX_BATTLE: u32 = 0x00004000;
+const FLAGS1_LOADING_SCREEN: u32 = 0x00020000;
+const FLAGS1_ACTION_PRESSED: u32 = 0x00200000;
+const FLAGS1_4TH_SURVIVOR: u32 = 0x02000000;
+const FLAGS1_B_SCENARIO: u32 = 0x40000000;
+const FLAGS1_CLAIRE: u32 = 0x80000000;
+
+const FLAGS2_TOFU: u32 = 0x00000001;
+const FLAGS2_4TH_SURVIVOR: u32 = 0x00000008;
+const FLAGS2_EX_BATTLE: u32 = 0x01000000;
+const FLAGS2_LOADING_SCREEN: u32 = 0x02000000;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum Scenario {
+    LeonA,
+    LeonB,
+    ClaireA,
+    ClaireB,
+    Hunk,
+    Tofu,
+    ExBattle,
+}
+
+impl Scenario {
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::LeonA => "Leon A",
+            Self::LeonB => "Leon B",
+            Self::ClaireA => "Claire A",
+            Self::ClaireB => "Claire B",
+            Self::Hunk => "4th Survivor",
+            Self::Tofu => "Tofu Survivor",
+            Self::ExBattle => "EX Battle",
+        }
+    }
+}
+
+impl Display for Scenario {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
 
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -104,6 +149,8 @@ impl InputState {
 
 #[derive(Debug, Clone)]
 pub struct State {
+    game_flags: u32,
+    game_flags2: u32,
     frame_index: usize,
     room_index: usize,
     room_id: RoomId,
@@ -119,6 +166,8 @@ pub struct State {
 impl State {
     pub const fn empty() -> Self {
         Self {
+            game_flags: 0,
+            game_flags2: 0,
             // usize::MAX enables us to roll over to zero when we apply the first change set, which
             // represents the first frame
             frame_index: usize::MAX,
@@ -135,6 +184,8 @@ impl State {
     }
 
     pub fn make_next_state(&self, record: &FrameRecord) -> Self {
+        let mut game_flags = self.game_flags;
+        let mut game_flags2 = self.game_flags2;
         let mut room_id = self.room_id;
         let mut sounds = self.sounds;
         let mut rng_value = self.rng_value;
@@ -143,6 +194,8 @@ impl State {
         let mut is_new_game_start = false;
         for change in &record.game_changes {
             match change {
+                GameField::GameFlags1(flags) => game_flags = *flags,
+                GameField::GameFlags2(flags) => game_flags2 = *flags,
                 GameField::StageIndex(stage_index) => room_id.stage = *stage_index,
                 GameField::RoomIndex(room_index) => room_id.room = *room_index,
                 GameField::Scenario(scenario) => room_id.player = *scenario,
@@ -218,6 +271,7 @@ impl State {
                     CharacterField::Removed => unreachable!(),
                     CharacterField::Type(type_) => character.type_ = *type_,
                     CharacterField::Flags(flags) => character.flags = *flags,
+                    CharacterField::WaterLevel(water_level) => character.set_water_level(water_level.to_32()),
                 }
             }
 
@@ -277,7 +331,7 @@ impl State {
                     // don't care about these for objects
                     CharacterField::State(_) | CharacterField::Id(_) | CharacterField::MotionAngle(_)
                     | CharacterField::Motion(_) | CharacterField::Health(_) | CharacterField::Type(_)
-                    | CharacterField::Velocity(_)
+                    | CharacterField::Velocity(_) | CharacterField::WaterLevel(_)
                     | CharacterField::ModelPartTransform(_, _) | CharacterField::PartOffset(_, _) => (),
                 }
             }
@@ -300,6 +354,8 @@ impl State {
         };
 
         Self {
+            game_flags,
+            game_flags2,
             frame_index,
             room_index,
             room_id,
@@ -351,6 +407,56 @@ impl State {
 
     pub const fn is_new_game_start(&self) -> bool {
         self.is_new_game_start
+    }
+
+    pub const fn is_cut_forced(&self) -> bool {
+        self.game_flags & FLAGS1_FORCE_CUT != 0
+    }
+    
+    pub const fn is_action_press_flagged(&self) -> bool {
+        self.game_flags & FLAGS1_ACTION_PRESSED != 0
+    }
+    
+    pub const fn is_b_scenario(&self) -> bool {
+        self.game_flags & FLAGS1_B_SCENARIO != 0
+    }
+    
+    pub const fn is_claire_scenario(&self) -> bool {
+        self.game_flags & FLAGS1_CLAIRE != 0
+    }
+    
+    pub const fn is_tofu(&self) -> bool {
+        self.game_flags2 & FLAGS2_TOFU != 0
+    }
+    
+    pub const fn is_loading_screen(&self) -> bool {
+        self.game_flags & FLAGS1_LOADING_SCREEN != 0 && self.game_flags2 & FLAGS2_LOADING_SCREEN != 0
+    }
+    
+    pub const fn is_4th_survivor(&self) -> bool {
+        self.game_flags & FLAGS1_4TH_SURVIVOR != 0
+    }
+    
+    pub const fn is_ex_battle(&self) -> bool {
+        self.game_flags2 & FLAGS2_EX_BATTLE != 0
+    }
+    
+    pub const fn scenario(&self) -> Scenario {
+        if self.is_ex_battle() {
+            Scenario::ExBattle
+        } else if self.is_4th_survivor() {
+            match self.is_tofu() {
+                true => Scenario::Tofu,
+                false => Scenario::Hunk,
+            }
+        } else {
+            match (self.is_claire_scenario(), self.is_b_scenario()) {
+                (true, true) => Scenario::ClaireB,
+                (true, false) => Scenario::ClaireA,
+                (false, true) => Scenario::LeonB,
+                (false, false) => Scenario::LeonA,
+            }
+        }
     }
 }
 

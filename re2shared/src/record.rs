@@ -5,7 +5,7 @@ use residat::re2::VSYNCS_PER_SECOND;
 use crate::rng::RollType;
 
 pub const RECORD_VERSION: u16 = 2;
-pub const MAX_CHARACTER_CHANGES: usize = 20; // this is kind of arbitrary now because there can be multiple PartTransforms and ModelPartTransforms
+pub const MAX_CHARACTER_CHANGES: usize = 21; // this is kind of arbitrary now because there can be multiple PartTransforms and ModelPartTransforms
 
 // these enum variants are out of order because it's more efficient for binrw to have the most
 // common variants first
@@ -25,6 +25,7 @@ pub enum CharacterField {
     #[brw(magic = 8u8)] Health(i16),
     #[brw(magic = 6u8)] Floor(u8),
     #[brw(magic = 14u8)] PartOffset(Fixed16, Fixed16),
+    #[brw(magic = 16u8)] WaterLevel(Fixed16),
     #[brw(magic = 10u8)] Type(u8),
     #[brw(magic = 1u8)] Id(u8),
     #[brw(magic = 4u8)] Motion(i16),
@@ -39,6 +40,8 @@ pub enum GameField {
     RngRoll(u32, u16),
     #[brw(magic = 0u8)] KeysDown(u32),
     #[brw(magic = 1u8)] KeysDownThisFrame(u32),
+    #[brw(magic = 13u8)] GameFlags1(u32),
+    #[brw(magic = 14u8)] GameFlags2(u32),
     #[brw(magic = 7u8)]
     CharacterRng {
         char_index: u8,

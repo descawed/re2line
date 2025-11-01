@@ -894,7 +894,8 @@ impl App {
             };
             
             for (i, run) in recording.timeline().into_iter().enumerate() {
-                ui.collapsing(format!("Run #{}", i + 1), |ui| {
+                let scenario = run[0].1.scenario();
+                ui.collapsing(format!("Run #{} - {}", i + 1, scenario), |ui| {
                     for (timestamp, state) in run {
                         let frame_index = state.frame_index();
                         let label = format!("{} - {} ({})", state.room_id(), timestamp, frame_index);
