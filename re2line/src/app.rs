@@ -1771,6 +1771,38 @@ impl App {
             self.is_compare_filter_window_open = is_compare_filter_window_open;
         }
     }
+
+    fn simulate_motion(&self, player: &Character) {
+        let mut motion_player = player.clone_for_collision();
+
+        for character in self.characters.objects() {
+            if character.index() == 0 {
+                continue;
+            }
+
+            motion_player.collide_with_character(character);
+        }
+
+        let mut motion = motion_player.motion();
+        motion.origin.set_quadrant_mask(self.center);
+
+        for collider in self.colliders.objects() {
+            motion.to = collider.clip_motion(&motion);
+        }
+
+        motion_player.apply_motion(&motion);
+
+        for object in self.objects.objects() {
+            motion_player.collide_with_object(object);
+        }
+
+        if motion_player.center() != player.center() {
+            eprintln!(
+                "Player position {:?} on frame {} did not match calculated next position {:?}. Start position {:?}, velocity {:?}, angle {}, angled velocity {:?}",
+                player.part_center(), self.active_recording().map(|r| r.index()).unwrap(), motion_player.center(), player.prev_root_part_pos().xz(), player.velocity, player.angle.to_degrees(), player.velocity.rotate_y(player.angle),
+            );
+        }
+    }
 }
 
 impl eframe::App for App {
@@ -2251,35 +2283,8 @@ impl eframe::App for App {
                     // don't try to project normal movement when the room changes
                     && self.config.last_rdt.unwrap() == previous_room_id {
                     // validate our collision logic
-                    let mut motion_player = player.clone_for_collision();
-                    
-                    for character in self.characters.objects() {
-                        if character.index() == 0 {
-                            continue;
-                        }
-                        
-                        motion_player.collide_with_character(character);
-                    }
-                    
-                    let mut motion = motion_player.motion();
-                    motion.origin.set_quadrant_mask(self.center);
-
-                    for collider in self.colliders.objects() {
-                        motion.to = collider.clip_motion(&motion);
-                    }
-                    
-                    motion_player.apply_motion(&motion);
-                    
-                    for object in self.objects.objects() {
-                        motion_player.collide_with_object(object);
-                    }
-                    
-                    if motion_player.center() != player.center() {
-                        eprintln!(
-                            "Player position {:?} on frame {} did not match calculated next position {:?}. Start position {:?}, velocity {:?}, angle {}, angled velocity {:?}",
-                            player.part_center(), self.active_recording().map(|r| r.index()).unwrap(), motion_player.center(), player.prev_root_part_pos().xz(), player.velocity, player.angle.to_degrees(), player.velocity.rotate_y(player.angle),
-                        );
-                    }
+                    #[cfg(feature = "motion-simulation")]
+                    self.simulate_motion(player);
                 }
 
                 FRAME_DURATION
