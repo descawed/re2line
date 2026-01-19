@@ -681,7 +681,7 @@ impl App {
         let exec_buf = rdt.raw(RdtSection::ExecScript);
         
         let mut formatter = ScriptFormatter::new(true, false, 2, false);
-        let init_func = formatter.parse_function(init_buf);
+        let init_func = formatter.parse_function(init_buf, true)?;
         let exec_script = formatter.parse_script(exec_buf)?;
         
         Ok(format!("{}\n\n{}", init_func, exec_script))

@@ -141,7 +141,9 @@ impl RdtExt for Rdt {
     fn get_entities(&self) -> Vec<Entity> {
         let mut entities = Vec::new();
 
-        get_script_entities(&mut entities, self.init_script());
+        for function in self.init_script() {
+            get_script_entities(&mut entities, function);
+        }
         for function in self.exec_script() {
             get_script_entities(&mut entities, function);
         }
