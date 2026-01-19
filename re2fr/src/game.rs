@@ -73,8 +73,6 @@ const GAME_VERSIONS: [GameVersion; 1] = [
             (0x00451bad, RollType::Partial),
             (0x00451bb7, RollType::ZombieSpeed),
 
-            // these two health rolls pull from different arrays, but I'm not bothering to make them
-            // separate types because the recording already tracks what the health ends up being
             (0x00451ad4, RollType::Partial),
             (0x00451ade, RollType::ZombieHealth),
 
