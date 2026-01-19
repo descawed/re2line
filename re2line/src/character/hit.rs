@@ -201,7 +201,8 @@ impl WeaponRangeVisualization {
 
     pub fn for_state(state: &State) -> Option<Self> {
         let player = state.characters()[0].as_ref()?;
-        if player.describe_state() != "Weapon" {
+        // any aiming/attacking state
+        if !matches!(player.state, [0x01, 0x05, _, _]) {
             return None;
         }
 
