@@ -132,10 +132,10 @@ impl AiZone {
 
     pub fn gui_shape(&self, angle: Fixed32, pos: Vec2, mut draw_params: DrawParams, state: &State) -> Shape {
         let facing_angle = angle.to_radians();
-        
+
         let (gui_x, gui_y, _, _) = draw_params.transform(pos.x, pos.z, 0, 0);
         let gui_pos = egui::Pos2::new(gui_x, gui_y);
-        
+
         // if the player is in this zone, draw it with an outline
         if let Some(ref player) = state.characters()[0] {
             if self.is_point_in_zone(player.center().saturating_sub(pos), angle) {
@@ -144,7 +144,7 @@ impl AiZone {
                 draw_params.stroke.color = Color32::from_rgb(0x42, 0x03, 0x03);
             }
         }
-        
+
         let radians = self.half_angle.to_radians();
         let radius = self.radius.to_f32() * draw_params.scale;
         if radians.abs() >= PI {
@@ -191,7 +191,7 @@ impl AiZone {
                 return false;
             }
         }
-        
+
         self.type_mask.matches(type_)
     }
 
@@ -287,9 +287,14 @@ pub const fn describe_player_ai_state(state: &[u8; 4]) -> &'static str {
         [0x01, 0x00, _, _] => "Idle",
         [0x01, 0x01, _, _] => "Walk",
         [0x01, 0x02, _, _] => "Run",
-        [0x01, 0x03, _, _] => "Backpedal",
+        [0x01, 0x03, _, _] => "Back up",
         [0x01, 0x04, _, _] => "Turn",
-        [0x01, 0x05, _, _] => "Weapon",
+        [0x01, 0x05, 0x00, _] => "Raise aim",
+        [0x01, 0x05, 0x01, _] => "Aim",
+        [0x01, 0x05, 0x02 | 0x06, _] => "Attack",
+        [0x01, 0x05, 0x03, _] => "Drop aim",
+        [0x01, 0x05, 0x04, _] => "Reload",
+        [0x01, 0x05, 0x05, _] => "Switch target",
         [0x01, 0x06, _, _] => "Pick up",
         [0x01, 0x07, _, _] => "Stairs",
         [0x01, 0x08, _, _] => "Climb",

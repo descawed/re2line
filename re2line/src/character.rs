@@ -147,7 +147,7 @@ impl Object {
     pub fn set_pos(&mut self, pos: impl Into<Vec3>) {
         self.center = pos.into();
     }
-    
+
     pub const fn prev_root_part_pos(&self) -> Vec3 {
         self.prev_root_part_pos
     }
@@ -171,7 +171,7 @@ impl Object {
     pub const fn has_collision(&self) -> bool {
         self.flags & 2 == 0
     }
-    
+
     pub fn update_gui_shape(&mut self) {
         self.shape.set_pos(self.center() - self.size);
     }
@@ -294,7 +294,7 @@ impl Character {
         let game_z = Fixed32(z.0 - height.0 as i32);
         let game_width = UFixed16(width.0 << 1).to_32();
         let game_height = UFixed16(height.0 << 1).to_32();
-        
+
         let center = Vec3 { x, y, z };
 
         Self {
@@ -356,11 +356,11 @@ impl Character {
     pub const fn center_3d(&self) -> Vec3 {
         self.center
     }
-    
+
     pub const fn part_center(&self) -> Vec2 {
         self.part_center_3d().xz()
     }
-    
+
     pub const fn part_center_3d(&self) -> Vec3 {
         match self.parts[0].as_ref() {
             Some(p) => p.pos,
@@ -373,7 +373,7 @@ impl Character {
         self.shape.set_floor(floor);
         self.outline_shape.set_floor(floor);
     }
-    
+
     pub const fn prev_root_part_pos(&self) -> Vec3 {
         self.prev_root_part_pos
     }
@@ -389,7 +389,7 @@ impl Character {
     pub const fn type_(&self) -> CharacterType {
         CharacterType::from_character_id(self.id)
     }
-    
+
     pub const fn current_health(&self) -> i16 {
         self.current_health
     }
@@ -400,11 +400,11 @@ impl Character {
             self.max_health = health;
         }
     }
-    
+
     pub const fn index(&self) -> usize {
         self.index
     }
-    
+
     pub const fn set_index(&mut self, index: usize) {
         self.index = index;
     }
@@ -424,11 +424,11 @@ impl Character {
     pub fn active_parts_mut(&mut self) -> impl Iterator<Item = &mut Part> {
         self.parts.iter_mut().filter_map(Option::as_mut)
     }
-    
+
     pub const fn part_offset(&self) -> Vec2 {
         self.part_offset
     }
-    
+
     pub const fn set_part_offset(&mut self, part_offset: Vec2) {
         self.part_offset = part_offset;
     }
@@ -439,11 +439,11 @@ impl Character {
         }
         self.model_part_centers[i] = model_part_center;
     }
-    
+
     pub const fn water_level(&self) -> Fixed32 {
         self.water_level
     }
-    
+
     pub const fn set_water_level(&mut self, water_level: Fixed32) {
         self.water_level = water_level;
     }
@@ -465,7 +465,7 @@ impl Character {
         self.shape.set_pos(pos);
         self.outline_shape.set_pos(pos);
     }
-    
+
     pub fn set_prev_pos(&mut self, pos: impl Into<Vec3>) {
         self.prev_center = pos.into();
     }
@@ -494,7 +494,7 @@ impl Character {
             _ => ENEMY_COLLISION_MASK,
         }
     }
-    
+
     pub fn motion(&self) -> Motion {
         Motion::new(
             WorldPos::new(self.prev_root_part_pos.xz(), self.size, self.floor, self.collision_mask(), CHARACTER_COLLISION_DENY),
@@ -502,19 +502,19 @@ impl Character {
             self.part_offset(),
         )
     }
-    
+
     pub fn apply_motion(&mut self, motion: &Motion) {
         let Some(part) = self.parts[0].as_mut() else {
             self.center.x = motion.to.x;
             self.center.z = motion.to.z;
             return;
         };
-        
+
         let old_pos = part.pos;
 
         part.pos.x = motion.to.x;
         part.pos.z = motion.to.z;
-        
+
         let diff = part.pos - old_pos;
         self.center.x += diff.x;
         self.center.z += diff.z;
@@ -529,26 +529,32 @@ impl Character {
         matches!(self.state,
             [0x01, 0x01, _, _] // walking
             | [0x01, 0x02, _, _] // running
-            | [0x01, 0x03, _, _] // backpedaling
-            | [0x01, 0x07, 0x03 | 0x04 | 0x05 | 0x06 | 0x07, _] // ?? unknown
+            | [0x01, 0x03, _, _] // backing up
+            | [0x01, 0x07, 0x03 | 0x04 | 0x05 | 0x06 | 0x07, _] // stairs
             // disabled for now because the movement only happens on certain animation frames, which
             // we don't track at the moment
             // | [0x01, 0x08, _, 0x02 | 0x03] // climbing up
-            | [0x01, 0x09, _, 0x02] // ?? unknown
+            | [0x01, 0x09, _, 0x02] // start push
             | [0x01, 0x0a, 0x04 | 0x05, _] // pushing object
         )
     }
 
-    pub fn clone_for_collision(&self) -> Self {
-        let mut clone = self.clone();
+    pub fn apply_velocity(&mut self) {
         let directed_velocity = Vec3::from(self.velocity.rotate_y(self.angle));
         let motion_center = self.prev_center + directed_velocity;
 
-        for part in clone.active_parts_mut() {
-            part.pos = (part.pos - self.center) + motion_center;
+        let old_center = self.center;
+        for part in self.active_parts_mut() {
+            part.pos = (part.pos - old_center) + motion_center;
         }
 
-        clone.center = motion_center;
+        self.center = motion_center;
+    }
+
+    pub fn clone_for_collision(&self) -> Self {
+        // TODO: probably remove this method once we implement animation
+        let mut clone = self.clone();
+        clone.apply_velocity();
 
         clone
     }
@@ -744,12 +750,12 @@ impl Character {
                 -x_size.inc()
             };
             let x_adjust = object_part.pos.x - our_part.pos.x + x_adjust;
-            
+
             our_part.pos.x += x_adjust;
             self.center.x += x_adjust;
             return true;
         }
-        
+
         let z_adjust = if diff.z.is_negative() {
             z_size.inc()
         } else {
@@ -797,7 +803,7 @@ impl Character {
             _ if self.id.is_zombie() => &ZOMBIE_AI_ZONES[..],
             _ => return Vec::new(),
         };
-        
+
         let mut positioned_ai_zones = Vec::new();
         for ai_zone in ai_zones {
             if !ai_zone.check_state(&self.state, self.type_ & 0x3f) {
@@ -821,10 +827,10 @@ impl Character {
 
         positioned_ai_zones
     }
-    
+
     pub fn equipped_item(&self) -> Option<Item> {
         if self.id.is_player() {
-            Item::try_from(self.type_ as u16).ok()
+            Item::try_from(self.type_ as u16 & 0xfff).ok()
         } else {
             None
         }
@@ -839,7 +845,7 @@ impl GameObject for Character {
     fn contains_point(&self, point: Vec2) -> bool {
         self.shape.contains_point(point)
     }
-    
+
     fn name(&self) -> String {
         self.id.name().to_string()
     }
@@ -847,7 +853,7 @@ impl GameObject for Character {
     fn name_prefix(&self, _index: usize) -> String {
         format!("#{}", self.index)
     }
-    
+
     fn description(&self) -> String {
         format!(
             "State: {:02X} {:02X} {:02X} {:02X}\nHP: {}/{}",
@@ -905,7 +911,7 @@ impl GameObject for Character {
             0xFFFF
         }
     }
-    
+
     fn gui_shape(&self, draw_params: &DrawParams, _state: &State) -> Shape {
         let body_shape = self.shape.gui_shape(draw_params);
         let body_rect = body_shape.visual_bounding_rect();
@@ -975,19 +981,19 @@ impl CharacterPath {
     pub const fn new(points: Vec<Vec2>, character_id: CharacterId, floor: Floor) -> Self {
         Self { points, character_id, floor, limit: usize::MAX, dynamic_color: true }
     }
-    
+
     pub fn len(&self) -> Fixed32 {
         self.points.iter().fold(Fixed32(0), |acc, p| acc + p.len())
     }
-    
+
     pub fn max_speed(&self) -> Fixed32 {
         self.points.windows(2).fold(Fixed32(0), |acc, p| acc.max((p[1] - p[0]).len()))
     }
-    
+
     pub const fn frames(&self) -> usize {
         self.points.len()
     }
-    
+
     pub fn initial_segment(&self) -> &[Vec2] {
         let limit = self.limit.min(self.points.len());
         &self.points[0..limit]
@@ -998,11 +1004,11 @@ impl GameObject for CharacterPath {
     fn object_type(&self) -> ObjectType {
         ObjectType::CharacterPath
     }
-    
+
     fn contains_point(&self, _point: Vec2) -> bool {
         false
     }
-    
+
     fn name(&self) -> String {
         format!("{} path", self.character_id.name())
     }
@@ -1018,7 +1024,7 @@ impl GameObject for CharacterPath {
             format!("Frames: {}", self.points.len()),
             format!("Length: {}", self.len()),
         ]));
-        
+
         groups
     }
 
@@ -1029,7 +1035,7 @@ impl GameObject for CharacterPath {
     fn gui_shape(&self, params: &DrawParams, _state: &State) -> Shape {
         let max_speed = self.max_speed().to_f32();
         let mut shapes = Vec::new();
-        
+
         for segment in self.initial_segment().windows(2) {
             let start = segment[0];
             let end = segment[1];
@@ -1038,20 +1044,20 @@ impl GameObject for CharacterPath {
                 // TODO: draw a circle or something here
                 continue;
             }
-            
+
             let gui_start = params.transform_point(start);
             let gui_end = params.transform_point(end);
-            
+
             let mut stroke = params.stroke.clone();
             if self.dynamic_color {
                 let t = speed / max_speed;
                 let color = SLOW_COLOR.lerp_to_gamma(FAST_COLOR, t).gamma_multiply_u8(params.color().a());
                 stroke.color = color;
             }
-            
+
             shapes.push(Shape::line_segment([gui_start, gui_end], stroke));
         }
-        
+
         Shape::Vec(shapes)
     }
 }

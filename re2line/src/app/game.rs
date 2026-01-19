@@ -11,6 +11,8 @@ use crate::character::{BehaviorType, CharacterType};
 use crate::draw::{VAlign, text_box};
 use crate::record::State;
 
+const FLOOR_HEIGHT: Fixed32 = Fixed32(-1800);
+
 #[derive(Debug, Clone, Copy)]
 pub enum Floor {
     Mask(u32),
@@ -20,7 +22,7 @@ pub enum Floor {
 
 impl Floor {
     pub const ANY: Self = Self::Aot(0x80);
-    
+
     pub const fn matches_any(&self) -> bool {
         if let Self::Aot(floor) = self {
             *floor & 0x80 != 0
@@ -28,7 +30,7 @@ impl Floor {
             false
         }
     }
-    
+
     pub const fn mask(&self) -> u32 {
         match self {
             Self::Mask(mask) => *mask,
@@ -36,9 +38,18 @@ impl Floor {
             Self::Id(floor) | Self::Aot(floor) => 1 << (*floor & 0x1f),
         }
     }
-    
+
     pub const fn matches(&self, other: Self) -> bool {
         self.mask() & other.mask() != 0
+    }
+
+    pub const fn y(&self) -> Option<Fixed32> {
+        match self {
+            Self::Id(floor) | Self::Aot(floor) if !self.matches_any() => {
+                Some(Fixed32(*floor as i32 * FLOOR_HEIGHT.0))
+            }
+            _ => None,
+        }
     }
 }
 
@@ -49,7 +60,7 @@ impl Display for Floor {
             Self::Aot(floor) => if self.matches_any() {
                 write!(f, "Any")
             } else {
-                write!(f, "{}", floor)           
+                write!(f, "{}", floor)
             }?,
             Self::Mask(mask) => {
                 let mut wrote = false;
@@ -60,13 +71,13 @@ impl Display for Floor {
                         } else {
                             wrote = true;
                         }
-                        
-                        write!(f, "{}", i)?;   
+
+                        write!(f, "{}", i)?;
                     }
                 }
             }
         }
-        
+
         Ok(())
     }
 }
@@ -88,8 +99,8 @@ impl WorldPos {
             size,
             floor,
             collision_mask,
-            collision_deny_mask,       
-            quadrant_mask: None,       
+            collision_deny_mask,
+            quadrant_mask: None,
         }
     }
 
@@ -99,22 +110,22 @@ impl WorldPos {
             size: Vec2::zero(),
             floor,
             collision_mask: 0xffff,
-            collision_deny_mask: 0,       
-            quadrant_mask: None,      
+            collision_deny_mask: 0,
+            quadrant_mask: None,
         }
     }
-    
+
     pub const fn rect(pos: Vec2, size: Vec2, floor: Floor) -> Self {
         Self {
             pos,
             size,
             floor,
             collision_mask: 0xffff,
-            collision_deny_mask: 0,       
-            quadrant_mask: None,      
+            collision_deny_mask: 0,
+            quadrant_mask: None,
         }
     }
-    
+
     pub fn with_quadrant_mask(mut self, quadrant_mask: u16) -> Self {
         self.quadrant_mask = Some(quadrant_mask);
         self
@@ -124,12 +135,12 @@ impl WorldPos {
         self.floor.matches(other.floor)
             && self.collision_mask & other.collision_mask != 0
             && self.collision_deny_mask & other.collision_mask == 0
-            && self.collision_mask & other.collision_deny_mask == 0       
+            && self.collision_mask & other.collision_deny_mask == 0
             && if let (Some(self_mask), Some(other_mask)) = (self.quadrant_mask, other.quadrant_mask) {
-                self_mask & other_mask != 0
-            } else {
-                true       
-            }
+            self_mask & other_mask != 0
+        } else {
+            true
+        }
     }
 
     pub fn set_quadrant_mask(&mut self, cell_center: Vec2) {
@@ -205,29 +216,29 @@ impl ObjectType {
             Self::AiAggroZone => "AI Aggro Zone",
             Self::AiTacticZone => "AI Tactic Zone",
             Self::WeaponRange => "Weapon Range",
-            Self::CharacterPath => "Character Path",       
+            Self::CharacterPath => "Character Path",
         }
     }
-    
+
     pub const fn is_ai_zone(&self) -> bool {
         matches!(self, Self::AiAggroZone | Self::AiAttackZone | Self::AiHitZone | Self::AiTacticZone)
     }
-    
+
     pub const fn is_aot(&self) -> bool {
         matches!(
             self,
             Self::Auto | Self::Door | Self::Item | Self::Normal | Self::Message | Self::Event | Self::FlagChg | Self::Water | Self::Move | Self::Save | Self::ItemBox | Self::Damage | Self::Status | Self::Hikidashi | Self::Windows,
         )
     }
-    
+
     pub const fn is_character(&self) -> bool {
         matches!(self, Self::Enemy | Self::Player | Self::Ally | Self::Neutral)
     }
-    
+
     pub const fn is_collider(&self) -> bool {
         matches!(self, Self::Collider)
     }
-    
+
     pub const fn is_floor(&self) -> bool {
         matches!(self, Self::Floor)
     }
@@ -306,7 +317,7 @@ impl DrawParams {
             h * self.scale,
         )
     }
-    
+
     pub fn transform_point(&self, point: Vec2) -> Pos2 {
         let (x, y, _, _) = self.transform(point.x, point.z, 0, 0);
         Pos2::new(x, y)
@@ -331,7 +342,7 @@ impl DrawParams {
             self.fill_color = color;
         }
     }
-    
+
     pub fn fade(&mut self, factor: f32) {
         self.set_color(self.color().gamma_multiply(factor))
     }
@@ -358,7 +369,7 @@ impl DrawParams {
         self.stroke.color = Color32::BLACK;
         self.stroke.width = HIGHLIGHT_STROKE;
     }
-    
+
     pub fn set_draw_origin(&mut self, origin: Pos2) {
         self.origin = origin;
         self.draw_at_origin = true;
@@ -370,27 +381,27 @@ const LABEL_MARGIN: f32 = 10.0;
 
 pub trait GameObject {
     fn object_type(&self) -> ObjectType;
-    
+
     fn contains_point(&self, point: Vec2) -> bool;
 
     fn name(&self) -> String;
-    
+
     fn name_prefix(&self, index: usize) -> String {
         format!("#{index}")
     }
-    
+
     fn description(&self) -> String;
-    
+
     fn details(&self) -> Vec<(String, Vec<String>)>;
-    
+
     fn floor(&self) -> Floor;
-    
+
     fn collision_mask(&self) -> u16 {
         0xFFFF
     }
 
     fn gui_shape(&self, params: &DrawParams, state: &State) -> egui::Shape;
-    
+
     fn gui_tooltip(&self, params: &DrawParams, state: &State, ui: &egui::Ui, name_prefix: &str) -> egui::Shape {
         let name = format!("{} {}", name_prefix, self.name());
 
@@ -403,7 +414,7 @@ pub trait GameObject {
 
             (body_center.x, body_rect.min.y)
         };
-        
+
         let text = format!("{}\n{}", name, self.description());
 
         let (text_bg_shape, text_shape) = text_box(
@@ -414,7 +425,7 @@ pub trait GameObject {
             Color32::from_rgb(0xe0, 0xe0, 0xe0),
             ui,
         );
-        
+
         egui::Shape::Vec(vec![text_bg_shape, text_shape])
     }
 }
