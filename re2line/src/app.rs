@@ -1623,15 +1623,22 @@ impl App {
                 }
 
                 let num_points = values.len().saturating_sub(self.rng_run_window_size).max(1);
-                let mut points = Vec::with_capacity(num_points);
+                let mut point_lines = [Vec::with_capacity(num_points), Vec::with_capacity(num_points)];
+                let mut points = &mut point_lines[0];
                 let mut threshold_regions: Vec<Range<usize>> = Vec::new();
+                let mut last_index = None;
                 let f_window = self.rng_run_window_size as f64;
                 for i in 0..num_points {
                     let end = (i + self.rng_run_window_size).min(values.len());
                     let desired_count = prefixes[end] - prefixes[i];
                     let desired_percent = (desired_count as f64 / f_window) * 100.0;
                     let index = values[i].0;
+                    // if we encounter a discontinuity, switch to a different line
+                    if let Some(last_index) = last_index && last_index + 1 != index {
+                        points = &mut point_lines[1];
+                    }
                     points.push([index as f64, desired_percent]);
+                    last_index = Some(index);
 
                     if desired_percent >= self.rng_run_threshold {
                         if let Some(region) = threshold_regions.last_mut() && i < region.end {
@@ -1653,16 +1660,22 @@ impl App {
                     }
                 });
 
-                let desired_line = Line::new("desired", points);
                 let threshold_line = Line::new("threshold", vec![
-                    [values[0].0 as f64, self.rng_run_threshold],
-                    [values.last().unwrap().0 as f64, self.rng_run_threshold],
-                ]);
+                    [0.0, self.rng_run_threshold],
+                    [RNG_SEQUENCE.len() as f64, self.rng_run_threshold],
+                ]).color(Color32::BLUE);
                 Plot::new("rng_runs")
                     .x_axis_label("RNG position")
                     .y_axis_label("Desired %")
+                    .min_size(egui::Vec2::new(200.0, 100.0))
+                    .default_y_bounds(0.0, 100.0)
+                    .allow_zoom([true, false])
                     .show(ui, |plot_ui| {
-                        plot_ui.line(desired_line);
+                        for points in point_lines {
+                            if !points.is_empty() {
+                                plot_ui.line(Line::new("desired", points).color(Color32::RED));
+                            }
+                        }
                         plot_ui.line(threshold_line);
                     });
             });
