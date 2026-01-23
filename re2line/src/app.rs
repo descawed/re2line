@@ -1630,8 +1630,12 @@ impl App {
                 let f_window = self.rng_run_window_size as f64;
                 for i in 0..num_points {
                     let end = (i + self.rng_run_window_size).min(values.len());
-                    let desired_count = prefixes[end] - prefixes[i];
-                    let desired_percent = (desired_count as f64 / f_window) * 100.0;
+                    let (start, size) = match threshold_regions.last() {
+                        Some(r) if end == r.end + 1 => (r.start, (end - r.start) as f64),
+                        _ => (i, f_window),
+                    };
+                    let desired_count = prefixes[end] - prefixes[start];
+                    let desired_percent = (desired_count as f64 / size) * 100.0;
                     let index = values[i].0;
                     // if we encounter a discontinuity, switch to a different line
                     if let Some(last_index) = last_index && last_index + 1 != index {
@@ -1641,7 +1645,7 @@ impl App {
                     last_index = Some(index);
 
                     if desired_percent >= self.rng_run_threshold {
-                        if let Some(region) = threshold_regions.last_mut() && i < region.end {
+                        if let Some(region) = threshold_regions.last_mut() && end == region.end + 1 {
                             region.end = end;
                         } else {
                             threshold_regions.push(i..end);
