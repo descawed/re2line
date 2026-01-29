@@ -53,10 +53,10 @@ impl FlightRecorder {
     pub fn apply_patches(&mut self) -> Result<()> {
         let version = self.game.version();
 
-        let rng_track_thunk = self.rng_track.bind(track_rng as usize as mem::IntPtr, version.rng_seed as mem::IntPtr)?;
+        let rng_track_thunk = self.rng_track.bind(track_rng as *const () as usize as mem::IntPtr, version.rng_seed as mem::IntPtr)?;
 
         let frame_hook_mov_address = unsafe { std::ptr::read_unaligned((version.frame_tick_patch + 1) as *const mem::IntPtr) };
-        let frame_tick_thunk = self.frame_tick.bind(frame_hook_mov_address, frame_tick as usize as mem::IntPtr)?;
+        let frame_tick_thunk = self.frame_tick.bind(frame_hook_mov_address, frame_tick as *const () as usize as mem::IntPtr)?;
 
         let rng_track_call = {
             let c = asm::call(version.rng_roll_patch, rng_track_thunk as usize);
