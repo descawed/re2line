@@ -779,6 +779,7 @@ pub static ROLL_DESCRIPTIONS: LazyLock<EnumMap<RollType, RollDescription>> = Laz
         RollType::G2Slash75 => RollDescription::new("rolled to slash (75%)", g2_slash75).with_bool_options(),
         RollType::G2Thrust25 => RollDescription::new("rolled for thrusting strike (25%)", and_three_zero).with_bool_options(),
         RollType::WaterSplash => RollDescription::new("rolled for water splash effect", water_splash),
+        RollType::SherryLegDrop => RollDescription::new("rolled for leg drop (25%)", and_three_zero).with_bool_options(),
         RollType::Partial => RollDescription::simple("Partial roll in a larger series"),
         RollType::Invalid => RollDescription::simple("Invalid roll"),
     }

@@ -86,6 +86,7 @@ pub enum RollType {
     G2Slash75 = 77,
     G2Thrust25 = 78,
     WaterSplash = 79,
+    SherryLegDrop = 80,
     Partial = 0xFFFE, // a roll that's part of a larger series of rolls and not used on its own
     Invalid = 0xFFFF,
 }

@@ -29,7 +29,7 @@ pub struct GameVersion {
     pub script_rng_seed: usize,
     pub sound_flags: usize,
     pub game_flags2: usize,
-    pub known_rng_rolls: [(usize, RollType); 126],
+    pub known_rng_rolls: [(usize, RollType); 127],
 }
 
 const GAME_VERSIONS: [GameVersion; 1] = [
@@ -203,6 +203,8 @@ const GAME_VERSIONS: [GameVersion; 1] = [
             (0x004da26d, RollType::WaterSplash),
             (0x004da558, RollType::WaterSplash),
             (0x004da5a8, RollType::WaterSplash),
+
+            (0x004db802, RollType::SherryLegDrop),
         ],
     },
 ];
