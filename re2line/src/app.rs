@@ -700,7 +700,7 @@ impl App {
                 ui.label(format!("Time:\t{:02}:{:05.2}", minutes, seconds));
                 
                 ui.label(format!("RNG rolls:\t{}", stats.num_rng_rolls));
-                ui.label(format!("RNG position:\t{}", stats.rng_position));
+                ui.label(format!("RNG index:\t{}", stats.rng_position));
             }
             
             if self.current_rdt.is_some() {
@@ -983,7 +983,7 @@ impl App {
                             }
                             
                             ui.label(roll.description.take()).context_menu(|ui| {
-                                ui.label(format!("RNG position: {}", roll.rng_index()));
+                                ui.label(format!("RNG index: {}", roll.rng_index()));
                                 if roll.category == RollCategory::Unknown {
                                     // we don't have any other info to show for unknown rolls
                                     return;
@@ -1532,7 +1532,7 @@ impl App {
                     self.rng_selected_outcomes.clear();
                 }
                 
-                ui.add(egui::Slider::new(&mut self.rng_selected_index, 0..=(RNG_SEQUENCE.len() - 1)).text("RNG position"));
+                ui.add(egui::Slider::new(&mut self.rng_selected_index, 0..=(RNG_SEQUENCE.len() - 1)).text("RNG index"));
                 
                 let roll = match self.rng_selected_roll_type {
                     Some(t) => {
@@ -1669,7 +1669,7 @@ impl App {
                     [RNG_SEQUENCE.len() as f64, self.rng_run_threshold],
                 ]).color(Color32::BLUE);
                 Plot::new("rng_runs")
-                    .x_axis_label("RNG position")
+                    .x_axis_label("RNG index")
                     .y_axis_label("Desired %")
                     .min_size(egui::Vec2::new(200.0, 100.0))
                     .default_y_bounds(0.0, 100.0)

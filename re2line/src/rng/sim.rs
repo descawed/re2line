@@ -559,7 +559,7 @@ pub fn find_runs() {
     print_runs("Mod 3", &threes);
 }
 
-/// rng_index should be the RNG position upon entering Kendo's shop, before the 64 rolls in that
+/// rng_index should be the RNG index upon entering Kendo's shop, before the 64 rolls in that
 /// room are applied.
 const fn simulate_gate_shot(rng_index: usize) -> usize {
     // skip over Kendo rolls and bball court rolls prior to the gate zombie's stagger threshold
