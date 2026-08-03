@@ -384,7 +384,7 @@ impl App {
     }
 
     fn handle_input(&mut self, ctx: &Context) {
-        let egui_wants_kb_input = ctx.wants_keyboard_input();
+        let egui_wants_kb_input = ctx.egui_wants_keyboard_input();
         ctx.input(|i| {
             if i.pointer.middle_down() && !i.pointer.button_pressed(egui::PointerButton::Middle) {
                 self.pan -= i.pointer.delta();
@@ -1823,13 +1823,17 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
+    fn ui(&mut self, ui: &mut Ui, _frame: &mut Frame) {
+        // we're handed a Ui rather than a Context now, but we still need the Context for input
+        // handling, viewport commands, and the windows we show outside the panels
+        let ctx = ui.ctx().clone();
+
         if self.need_title_update {
             ctx.send_viewport_cmd(ViewportCommand::Title(self.title()));
             self.need_title_update = false;
         }
 
-        egui::TopBottomPanel::top("menu").show(ctx, |ui| {
+        egui::Panel::top("menu").show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("Open game folder").clicked() {
@@ -1877,7 +1881,7 @@ impl eframe::App for App {
             });
         });
 
-        egui::SidePanel::left("browser").show(ctx, |ui| {
+        egui::Panel::left("browser").show(ui, |ui| {
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     for tab in BrowserTab::list() {
@@ -1906,7 +1910,7 @@ impl eframe::App for App {
             });
         });
 
-        egui::TopBottomPanel::bottom("detail").show(ctx, |ui| {
+        egui::Panel::bottom("detail").show(ui, |ui| {
             let width = ui.max_rect().width();
             ui.vertical(|ui| {
                 let mut need_toggle = false;
@@ -1952,12 +1956,12 @@ impl eframe::App for App {
             });
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             if ui.ui_contains_pointer() {
-                self.handle_input(ctx);
+                self.handle_input(&ctx);
             }
-            
-            let view_center = self.calculate_origin(ctx);
+
+            let view_center = self.calculate_origin(&ctx);
             let empty_state = State::empty();
             let state = self.active_recording().and_then(Recording::current_state).unwrap_or(&empty_state);
 
@@ -2282,9 +2286,9 @@ impl eframe::App for App {
         });
 
         // display modals if necessary
-        self.error_modal(ctx);
-        self.compare_filter_window(ctx);
-        self.rng_explore_window(ctx);
+        self.error_modal(&ctx);
+        self.compare_filter_window(&ctx);
+        self.rng_explore_window(&ctx);
 
         let repaint_duration = if self.active_recording().is_some() && self.is_recording_playing {
             let now = Instant::now();

@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 anyhow = "1.0.104"
 binrw = "0.15.2"
 chrono = "0.4.45"
-hook86 = { git = "https://github.com/descawed/hook86.git", features = ["crash_logging"], tag = "v0.1.0" }
+hook86 = { git = "https://github.com/descawed/hook86.git" }
 log = "0.4.33"
 re2shared = { path = "../re2shared" }
 residat = { git = "https://github.com/descawed/residat.git", branch = "master" }

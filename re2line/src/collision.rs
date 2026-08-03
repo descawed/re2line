@@ -644,6 +644,7 @@ impl EllipseCollider {
             radius: egui::Vec2::new(radius_x, radius_y),
             fill: draw_params.fill_color,
             stroke: draw_params.stroke,
+            angle: 0.0,
         })
     }
 
