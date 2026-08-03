@@ -5,8 +5,6 @@ members = ["re2line", "re2fr", "re2shared"]
 # opt-in: run cargo from inside re2fr/, where .cargo/config.toml forces the right target.
 default-members = ["re2line", "re2shared"]
 
-[profile.dll-release]
-inherits = "release"
+[profile.release]
 strip = true
 lto = true
-panic = "abort"
