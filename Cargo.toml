@@ -1,6 +1,9 @@
 [workspace]
 resolver = "3"
 members = ["re2line", "re2fr", "re2shared"]
+# re2fr is a 32-bit Windows DLL, so it can't be built for the host target. Building it is
+# opt-in: run cargo from inside re2fr/, where .cargo/config.toml forces the right target.
+default-members = ["re2line", "re2shared"]
 
 [profile.dll-release]
 inherits = "release"
