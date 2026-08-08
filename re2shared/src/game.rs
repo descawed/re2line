@@ -1,17 +1,22 @@
-use anyhow::{Result, bail};
 use hook86::mem::ByteSearcher;
-use re2shared::rng::RollType;
 use residat::re2::{Character, NUM_CHARACTERS, NUM_OBJECTS, OBJECT_CHARACTER_SIZE};
+use thiserror::Error;
+
+use crate::rng::RollType;
 
 const RDT_STRING: &[u8] = b"Pl0\\Rdt\\room1000.rdt\0";
+
+#[derive(Error, Debug)]
+#[error("Unsupported game version: {0}")]
+pub struct UnsupportedVersionError(String);
 
 #[derive(Debug)]
 pub struct GameVersion {
     pub version_name: &'static str,
     pub rdt_path_template: usize,
-    pub char_array: usize,
+    pub characters: usize,
     pub current_char: usize,
-    pub obj_array: usize,
+    pub objects: usize,
     pub last_obj: usize,
     pub rng_seed: usize,
     pub igt_seconds: usize,
@@ -32,13 +37,126 @@ pub struct GameVersion {
     pub known_rng_rolls: [(usize, RollType); 127],
 }
 
+macro_rules! game_val {
+    ($name:ident, $ty:ty) => {
+        pub const fn $name(&self) -> $ty {
+            unsafe {
+                *(self.$name as *const $ty)
+            }
+        }
+    };
+}
+
+macro_rules! game_ptr {
+    ($name:ident, $ty:ty) => {
+        pub const fn $name(&self) -> $ty {
+            self.$name as $ty
+        }
+    };
+}
+
+impl GameVersion {
+    pub unsafe fn detect() -> Result<&'static Self, UnsupportedVersionError> {
+        // find the address of the RDT string in memory
+        let [Some(rdt_path_addr)] = ByteSearcher::find_bytes_anywhere(&[RDT_STRING], None) else {
+            return Err(UnsupportedVersionError(String::from("failed to find RDT string")));
+        };
+
+        log::debug!("Checking for version match");
+        let rdt_path_addr = rdt_path_addr as usize;
+        for version in &GAME_VERSIONS {
+            log::debug!("Checking version {}", version.version_name);
+            if version.rdt_path_template != rdt_path_addr {
+                continue;
+            }
+
+            log::info!("Found RE2 version: {}", version.version_name);
+            return Ok(version);
+        }
+
+        Err(UnsupportedVersionError(format!("RDT address {:08X}", rdt_path_addr)))
+    }
+
+    game_val!(rng_seed, u32);
+    game_val!(script_rng_seed, u32);
+    game_val!(keys_down, u32);
+    game_val!(keys_down_this_frame, u32);
+    game_val!(igt_seconds, u32);
+    game_val!(igt_frames, u8);
+    game_val!(stage_index, u16);
+    game_val!(room_index, u16);
+    game_val!(stage_offset, u32);
+    game_val!(game_flags, u32);
+    game_val!(sound_flags, u8);
+    game_val!(game_flags2, u32);
+    game_val!(last_obj, *const Character);
+    game_val!(current_char, *const Character);
+    game_ptr!(dummy_char, *const Character);
+    game_ptr!(characters, *const *const Character);
+    game_ptr!(objects, *const Character);
+
+    pub fn is_claire(&self) -> bool {
+        self.game_flags() & 0x80000000 != 0
+    }
+
+    pub fn is_b_scenario(&self) -> bool {
+        self.game_flags() & 0x40000000 != 0
+    }
+
+    fn is_char_valid(&self, char: *const Character) -> bool {
+        !char.is_null() && char != self.dummy_char()
+    }
+
+    pub fn is_in_game(&self) -> bool {
+        unsafe {
+            self.is_char_valid(*self.characters())
+        }
+    }
+
+    pub fn iter_characters(&self) -> impl Iterator<Item = Option<*const Character>> {
+        unsafe {
+            (0..NUM_CHARACTERS).map(|i| {
+                let char = *self.characters().add(i);
+                self.is_char_valid(char).then_some(char)
+            })
+        }
+    }
+
+    pub fn iter_objects(&self) -> impl Iterator<Item = Option<*const Character>> {
+        unsafe {
+            (0..NUM_OBJECTS).map(|i| {
+                let obj = self.objects().byte_add(OBJECT_CHARACTER_SIZE * i);
+                (obj < self.last_obj()).then_some(obj)
+            })
+        }
+    }
+
+    pub fn known_rng_rolls(&self) -> &[(usize, RollType)] {
+        &self.known_rng_rolls
+    }
+
+    pub fn current_char_index(&self) -> Option<usize> {
+        if !self.is_char_valid(self.current_char()) {
+            return None;
+        }
+
+        for i in 0..NUM_CHARACTERS {
+            if unsafe { *self.characters().add(i) } == self.current_char() {
+                return Some(i);
+            }
+        }
+
+        None
+    }
+}
+
 const GAME_VERSIONS: [GameVersion; 1] = [
     GameVersion {
         version_name: "sourcenext11",
         rdt_path_template: 0x0053ab98,
-        char_array: 0x0098a10c,
+        characters: 0x0098a10c,
         current_char: 0x00988628,
-        obj_array: 0x0098a61c,
+        objects: 0x0098a61c,
         last_obj: 0x0098e51c,
         rng_seed: 0x00988610,
         igt_seconds: 0x00680588,
@@ -208,213 +326,3 @@ const GAME_VERSIONS: [GameVersion; 1] = [
         ],
     },
 ];
-
-#[derive(Debug)]
-pub struct Game {
-    version: &'static GameVersion,
-    characters: *const *const Character,
-    dummy_char: *const Character,
-    current_char: *const *const Character,
-    objects: *const Character,
-    last_obj: *const *const Character,
-    rng_seed: *const u32,
-    keys_down: *const u32,
-    keys_down_this_frame: *const u32,
-    igt_seconds: *const u32,
-    igt_frames: *const u8,
-    stage_index: *const u16,
-    room_index: *const u16,
-    stage_offset: *const u32,
-    game_flags: *const u32,
-    sound_flags: *const u8,
-    game_flags2: *const u32,
-}
-
-impl Game {
-    pub unsafe fn init() -> Result<Self> {
-        // find the address of the RDT string in memory
-        let [Some(rdt_path_addr)] = ByteSearcher::find_bytes_anywhere(&[RDT_STRING], None) else {
-            bail!("Could not identify RE2 version: failed to find RDT string");
-        };
-
-        log::debug!("Checking for version match");
-        let rdt_path_addr = rdt_path_addr as usize;
-        for version in &GAME_VERSIONS {
-            log::debug!("Checking version {}", version.version_name);
-            if version.rdt_path_template != rdt_path_addr {
-                continue;
-            }
-
-            log::info!("Found RE2 version: {}", version.version_name);
-            let characters = version.char_array as *const *const Character;
-            let dummy_char = version.dummy_char as *const Character;
-            let current_char = version.current_char as *const *const Character;
-            let objects = version.obj_array as *const Character;
-            let last_obj = version.last_obj as *const *const Character;
-            let rng_seed = version.rng_seed as *const u32;
-            let keys_down = version.keys_down as *const u32;
-            let keys_down_this_frame = version.keys_down_this_frame as *const u32;
-            let igt_seconds = version.igt_seconds as *const u32;
-            let igt_frames = version.igt_frames as *const u8;
-            let stage_index = version.stage_index as *const u16;
-            let room_index = version.room_index as *const u16;
-            let stage_offset = version.stage_offset as *const u32;
-            let game_flags = version.game_flags as *const u32;
-            let sound_flags = version.sound_flags as *const u8;
-            let game_flags2 = version.game_flags2 as *const u32;
-
-            return Ok(Self {
-                version,
-                characters,
-                dummy_char,
-                current_char,
-                objects,
-                last_obj,
-                rng_seed,
-                keys_down,
-                keys_down_this_frame,
-                igt_seconds,
-                igt_frames,
-                stage_index,
-                room_index,
-                stage_offset,
-                game_flags,
-                sound_flags,          
-                game_flags2,   
-            });
-        }
-
-        bail!("Unsupported RE2 version (RDT address {:08X})", rdt_path_addr);
-    }
-
-    pub fn version(&self) -> &'static GameVersion {
-        self.version
-    }
-
-    pub fn rng(&self) -> u32 {
-        unsafe {
-            *self.rng_seed
-        }
-    }
-
-    pub fn keys_down(&self) -> u32 {
-        unsafe {
-            *self.keys_down
-        }
-    }
-
-    pub fn keys_down_this_frame(&self) -> u32 {
-        unsafe {
-            *self.keys_down_this_frame
-        }
-    }
-
-    pub fn igt_seconds(&self) -> u32 {
-        unsafe {
-            *self.igt_seconds
-        }
-    }
-
-    pub fn igt_frames(&self) -> u8 {
-        unsafe {
-            *self.igt_frames
-        }
-    }
-
-    pub fn stage_index(&self) -> u16 {
-        unsafe {
-            *self.stage_index
-        }
-    }
-
-    pub fn room_index(&self) -> u16 {
-        unsafe {
-            *self.room_index
-        }
-    }
-
-    pub fn stage_offset(&self) -> u32 {
-        unsafe {
-            *self.stage_offset
-        }
-    }
-    
-    pub fn sound_flags(&self) -> u8 {
-        unsafe {
-            *self.sound_flags
-        }
-    }
-
-    pub fn is_claire(&self) -> bool {
-        unsafe {
-            *self.game_flags & 0x80000000 != 0
-        }
-    }
-
-    pub fn is_b_scenario(&self) -> bool {
-        unsafe {
-            *self.game_flags & 0x40000000 != 0
-        }
-    }
-    
-    pub fn game_flags(&self) -> u32 {
-        unsafe {
-            *self.game_flags
-        }
-    }
-    
-    pub fn game_flags2(&self) -> u32 {
-        unsafe {
-            *self.game_flags2
-        }
-    }
-
-    fn is_char_valid(&self, char: *const Character) -> bool {
-        !char.is_null() && char != self.dummy_char
-    }
-
-    pub fn is_in_game(&self) -> bool {
-        unsafe {
-            self.is_char_valid(*self.characters)
-        }
-    }
-
-    pub fn characters(&self) -> impl Iterator<Item = Option<*const Character>> {
-        unsafe {
-            (0..NUM_CHARACTERS).map(|i| {
-                let char = *self.characters.add(i);
-                self.is_char_valid(char).then_some(char)
-            })
-        }
-    }
-
-    pub fn objects(&self) -> impl Iterator<Item = Option<*const Character>> {
-        unsafe {
-            (0..NUM_OBJECTS).map(|i| {
-                let obj = self.objects.byte_add(OBJECT_CHARACTER_SIZE * i);
-                (obj < *self.last_obj).then_some(obj)
-            })
-        }
-    }
-    
-    pub fn known_rng_rolls(&self) -> &'static [(usize, RollType)] {
-        &self.version.known_rng_rolls
-    }
-    
-    pub fn current_char_index(&self) -> Option<usize> {
-        let current_char = unsafe { *self.current_char };
-        if !self.is_char_valid(current_char) {
-            return None;
-        }
-        
-        for i in 0..NUM_CHARACTERS {
-            if unsafe { *self.characters.add(i) } == current_char {
-                return Some(i);
-            }
-        }
-        
-        None
-    }
-}
-
-unsafe impl Send for Game {}

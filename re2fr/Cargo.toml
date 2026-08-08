@@ -14,7 +14,7 @@ binrw = "0.15.2"
 chrono = "0.4.45"
 hook86 = { git = "https://github.com/descawed/hook86.git" }
 log = "0.4.33"
-re2shared = { path = "../re2shared" }
+re2shared = { path = "../re2shared", features = ["game"] }
 residat = { git = "https://github.com/descawed/residat.git", branch = "master" }
 simplelog = "0.12.2"
 windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_System_Memory", "Win32_System_ProcessStatus", "Win32_System_Kernel", "Win32_System_SystemServices"] }

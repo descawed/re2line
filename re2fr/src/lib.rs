@@ -2,21 +2,19 @@ use std::ffi::c_void;
 use std::fs::File;
 use std::ops::DerefMut;
 use std::path::Path;
-use std::sync::{OnceLock, Mutex};
+use std::sync::{Mutex, OnceLock};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use binrw::BinWriterExt;
 use chrono::Local;
-use hook86::dll_main;
+use hook86::dll::{dll_main, CallReason};
 use hook86::mem;
-use hook86::patch::{patch, Hook};
+use hook86::patch::{Hook, patch};
 use log::LevelFilter;
+use re2shared::game::*;
 use re2shared::record::{GameField, RecordHeader};
 use simplelog::{Config, WriteLogger};
-use windows::Win32::System::SystemServices::DLL_PROCESS_DETACH;
 
-mod game;
-use game::*;
 mod record;
 use record::*;
 
@@ -39,7 +37,7 @@ patch! {
 }
 
 struct FlightRecorder {
-    game: Game,
+    game: &'static GameVersion,
     tracker: GameTracker,
     file: Option<File>,
     rng_track: RngTrack,
@@ -50,7 +48,7 @@ struct FlightRecorder {
 
 impl FlightRecorder {
     pub fn apply_patches(&mut self) -> Result<()> {
-        let version = self.game.version();
+        let version = self.game;
 
         unsafe {
             let rng_track_thunk = self.rng_track.bind(track_rng as *const (), version.rng_seed)?;
@@ -102,7 +100,7 @@ static FLIGHT_RECORDER: OnceLock<Mutex<FlightRecorder>> = OnceLock::new();
 
 extern "C" fn track_rng(_ecx: usize, _return: usize, caller: usize) {
     let mut recorder = recorder();
-    let rng_value = (recorder.game.rng() & 0xffff) as u16;
+    let rng_value = (recorder.game.rng_seed() & 0xffff) as u16;
     for (address, roll_type) in recorder.game.known_rng_rolls() {
         if caller == *address {
             if roll_type.is_character_roll() {
@@ -134,7 +132,7 @@ extern "C" fn frame_tick() {
 fn init_recorder() -> Result<()> {
     log::info!("Initializing recorder");
 
-    let game = unsafe { Game::init() }?;
+    let game = unsafe { GameVersion::detect() }?;
     let tracker = GameTracker::new(&game);
 
     // use the current timestamp in the filename to make it unique
@@ -170,8 +168,8 @@ fn open_log(log_level: LevelFilter, log_path: impl AsRef<Path>) -> Result<()> {
 }
 
 #[dll_main(process)]
-fn main(reason: u32) -> Result<()> {
-    if reason == DLL_PROCESS_DETACH {
+fn main(reason: CallReason) -> Result<()> {
+    if matches!(reason, CallReason::ProcessDetach { .. }) {
         recorder().close();
         return Ok(());
     }

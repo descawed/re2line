@@ -6,4 +6,11 @@ edition = "2024"
 [dependencies]
 binrw = "0.15.2"
 enum-map = "3.1.0"
+hook86 = { git = "https://github.com/descawed/hook86.git", optional = true }
+log = { version = "0.4.33", optional = true }
 residat = { git = "https://github.com/descawed/residat.git", branch = "master" }
+thiserror = "2.0.19"
+
+[features]
+default = []
+game = ["hook86", "log"]

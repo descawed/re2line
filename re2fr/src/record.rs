@@ -1,8 +1,7 @@
+use re2shared::game::*;
 use re2shared::record::*;
 use residat::common::*;
 use residat::re2::{Character, CharacterPart, MAX_PARTS, NUM_CHARACTERS, NUM_OBJECTS};
-
-use crate::game::Game;
 
 #[derive(Debug, Clone)]
 struct Part {
@@ -262,11 +261,11 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn from_game(game: &Game) -> Self {
+    pub fn from_game(game: &GameVersion) -> Self {
         Self {
             game_flags: game.game_flags(),
             game_flags2: game.game_flags2(),
-            rng: game.rng(),
+            rng: game.rng_seed(),
             keys_down: game.keys_down(),
             keys_down_this_frame: game.keys_down_this_frame(),
             stage_index: game.stage_index(),
@@ -277,12 +276,12 @@ impl GameState {
         }
     }
 
-    pub fn track_delta(&mut self, game: &Game) -> Vec<GameField> {
+    pub fn track_delta(&mut self, game: &GameVersion) -> Vec<GameField> {
         let mut fields = Vec::new();
 
         let game_flags = game.game_flags();
         let game_flags2 = game.game_flags2();
-        let rng = game.rng();
+        let rng = game.rng_seed();
         let keys_down = game.keys_down();
         let keys_down_this_frame = game.keys_down_this_frame();
         let stage_index = game.stage_index();
@@ -353,7 +352,7 @@ pub struct GameTracker {
 }
 
 impl GameTracker {
-    pub fn new(game: &Game) -> Self {
+    pub fn new(game: &GameVersion) -> Self {
         Self {
             state: GameState::from_game(game),
             characters: [const { None }; NUM_CHARACTERS],
@@ -384,19 +383,19 @@ impl GameTracker {
         }
     }
 
-    pub fn track_delta(&mut self, game: &Game) -> FrameRecord {
+    pub fn track_delta(&mut self, game: &GameVersion) -> FrameRecord {
         let igt_seconds = game.igt_seconds();
         let igt_frames = game.igt_frames();
 
         let game_changes = self.state.track_delta(game);
 
         let mut character_diffs = Vec::with_capacity(NUM_CHARACTERS);
-        for (i, (char, state)) in game.characters().zip(self.characters.iter_mut()).enumerate() {
+        for (i, (char, state)) in game.iter_characters().zip(self.characters.iter_mut()).enumerate() {
             Self::track_char_change(i, char, state, &mut character_diffs);
         }
         
         let mut object_diffs = Vec::with_capacity(NUM_OBJECTS);
-        for (i, (char, state)) in game.objects().zip(self.objects.iter_mut()).enumerate() {
+        for (i, (char, state)) in game.iter_objects().zip(self.objects.iter_mut()).enumerate() {
             Self::track_char_change(i, char, state, &mut object_diffs);       
         }
 

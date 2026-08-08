@@ -1,10 +1,21 @@
 [workspace]
 resolver = "3"
-members = ["re2line", "re2fr", "re2shared"]
-# re2fr is a 32-bit Windows DLL, so it can't be built for the host target. Building it is
-# opt-in: run cargo from inside re2fr/, where .cargo/config.toml forces the right target.
+members = ["re2line", "re2fr", "re2shared", "re2tas"]
+# re2fr and re2tas are 32-bit Windows DLLs, so they can't be built for the host target. Building them is
+# opt-in: run cargo from inside re2fr/ or re2tas/, where .cargo/config.toml forces the right target.
 default-members = ["re2line", "re2shared"]
 
 [profile.release]
 strip = true
 lto = true
+
+# The Windows DLLs link through wine, and Windows caps a process command line at 32767 chars. A debug
+# build of re2tas emits ~360 codegen-unit object files, which rustc passes to link.exe individually,
+# blowing past that limit. Wine then dies with "command line too long" before it can open the pipes
+# msvc-wine's wrapper script is waiting on, so the build hangs forever instead of reporting an error.
+# One codegen unit means one object file on the link line.
+[profile.dev.package.re2tas]
+codegen-units = 1
+
+[profile.dev.package.re2fr]
+codegen-units = 1

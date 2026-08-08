@@ -4,3 +4,4 @@
 # i686-pc-windows-msvc, because it's a tier 1 target, but it may not be available on Linux. even if it is, it requires
 # an explicit linker directive that we don't want on Windows.
 /re2fr/.cargo/
+/re2tas/.cargo/
