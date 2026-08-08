@@ -1,0 +1,21 @@
+[package]
+name = "re2tas"
+version = "0.1.0"
+authors = ["descawed <github@descawed.com>"]
+edition = "2024"
+description = "A mod/trainer to record speedrun data from Resident Evil 2"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1.0.104"
+axum = "0.8.9"
+binrw = "0.15.2"
+hook86 = { git = "https://github.com/descawed/hook86.git" }
+log = "0.4.33"
+re2shared = { path = "../re2shared", features = ["game"] }
+residat = { git = "https://github.com/descawed/residat.git", branch = "master" }
+simplelog = "0.12.2"
+tokio = { version = "1.53.1", features = ["full"] }
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_System_Memory", "Win32_System_ProcessStatus", "Win32_System_Kernel", "Win32_System_SystemServices"] }
