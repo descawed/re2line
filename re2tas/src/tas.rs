@@ -6,6 +6,7 @@ pub struct TasController {
     game: &'static GameVersion,
     hooks: Vec<Hook>,
     is_paused: bool,
+    frame_counter: usize,
 }
 
 impl TasController {
@@ -14,6 +15,7 @@ impl TasController {
             game,
             hooks,
             is_paused: false,
+            frame_counter: 0,
         }
     }
 
@@ -27,6 +29,14 @@ impl TasController {
 
     pub const fn resume(&mut self) {
         self.is_paused = false;
+    }
+    
+    pub const fn frame_counter(&self) -> usize {
+        self.frame_counter
+    }
+    
+    pub fn frame_tick(&mut self) {
+        self.frame_counter += 1;
     }
 
     pub fn shutdown(&mut self) {

@@ -57,12 +57,14 @@ extern "C" fn frame_tick() {
             Err(TryRecvError::Disconnected) => {
                 log::error!("API thread died; shutting down controller");
                 controller().shutdown();
-                break;
+                return;
             }
         }
 
         // TODO: run message loop
     }
+
+    controller().frame_tick();
 }
 
 fn handle_command(command: &Command) -> Response {
